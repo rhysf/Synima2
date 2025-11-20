@@ -1,0 +1,9 @@
+[package]
+name = "Synima"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5.48", features = ["derive"] }
+colored = "3.0"
+which = "8"
+rayon = "1.10"

@@ -1,0 +1,436 @@
+use crate::logger::Logger;
+use crate::{read_fasta};
+use crate::read_fasta::Fasta;
+use crate::write_fasta;
+use crate::read_gff;
+use crate::write_gff;
+use crate::parse_dna_and_peptide;
+//use crate::read_repo;
+
+//use crate::read_gff::BestFeatureMatchInfo;
+use crate::read_gff::MatchResult;
+use crate::read_gff::MatchFieldCriteria;
+//use crate::read_gff::MatchDetail;
+
+//use core::num;
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
+//use std::path::PathBuf;
+
+//use read_repo::{RepoEntry};
+use read_gff::{GffFeature};
+
+pub fn evaluate_gff_fasta_mappings(
+    gff_features: &[GffFeature],
+    fasta_records: &[Fasta],
+    genome_name: &String,
+    logger: &Logger,
+) -> (Option<MatchResult>, Option<MatchResult>) {
+    logger.information("evaluate_gff_fasta_mappings: Evaluating feature types...");
+
+    let parent_types = vec!["gene", "mRNA"];
+    let subfeature_types = vec!["CDS", "exon", "UTR"];
+
+    // Group features by type
+    let mut feature_map: HashMap<String, Vec<&GffFeature>> = HashMap::new();
+    for feature in gff_features {
+        feature_map.entry(feature.feature_type.clone()).or_default().push(feature);
+    }
+
+    let mut parent_candidates = Vec::new();
+    let mut subfeature_candidates = Vec::new();
+
+    for (feature_type, features) in &feature_map {
+        let gff_lines: Vec<String> = features.iter().map(|f| f.original_line.clone()).collect();
+
+        let result = test_gff_and_fasta_mapping(
+            &gff_lines,
+            fasta_records,
+            genome_name,
+            feature_type,
+            true,
+            None,
+            logger,
+        )
+        .pop()
+        .unwrap_or_else(|| MatchResult {
+            genome: genome_name.clone(),
+            feature_type: feature_type.clone(),
+            //total_matches: 0,
+            unique_matches: 0,
+            match_details: vec![],
+            matched_values: HashSet::new(),
+        });
+
+        if parent_types.iter().any(|t| t.eq_ignore_ascii_case(feature_type)) {
+            parent_candidates.push(result);
+        } else if subfeature_types.iter().any(|t| t.eq_ignore_ascii_case(feature_type)) {
+            subfeature_candidates.push(result);
+        }
+    }
+
+    fn sort_results(results: &mut Vec<MatchResult>) {
+        results.sort_by(|a, b| {
+            let a_priority = a.match_details.get(0).map_or(3, |d| match d.gff_field_name.as_str() {
+                "ID" if d.gff_field_index == 0 => 0,
+                "ID" => 1,
+                "Parent" => 2,
+                _ => 3,
+            });
+
+            let b_priority = b.match_details.get(0).map_or(3, |d| match d.gff_field_name.as_str() {
+                "ID" if d.gff_field_index == 0 => 0,
+                "ID" => 1,
+                "Parent" => 2,
+                _ => 3,
+            });
+
+            a_priority.cmp(&b_priority)
+                .then(b.unique_matches.cmp(&a.unique_matches))
+                .then(a.feature_type.cmp(&b.feature_type)) // final tie-breaker
+        });
+    }
+
+    sort_results(&mut parent_candidates);
+    sort_results(&mut subfeature_candidates);
+
+    let best_parent_result = parent_candidates.first().cloned();
+    let best_subfeature_result = subfeature_candidates.first().cloned();
+
+    match &best_parent_result {
+        //Some(best) => logger.information(&format!("evaluate_gff_fasta_mappings: Best parent feature: '{}' with {} matches", best.feature_type, best.unique_matches)),
+        Some(best) => logger.information(&format!("evaluate_gff_fasta_mappings: Best parent feature: '{}'", best.feature_type)),
+        None => logger.warning("No parent feature type matched."),
+    }
+
+    match &best_subfeature_result {
+        //Some(best) => logger.information(&format!("evaluate_gff_fasta_mappings: Best subfeature feature: '{}' with {} matches", best.feature_type, best.unique_matches)),
+        Some(best) => logger.information(&format!("evaluate_gff_fasta_mappings: Best subfeature feature: '{}'", best.feature_type)),
+        None => logger.warning("No subfeature feature type matched."),
+    }
+
+    logger.information("──────────────────────────────");
+
+    (best_parent_result, best_subfeature_result)
+}
+
+fn test_gff_and_fasta_mapping(
+    gff_lines: &[String],
+    fasta_records: &[Fasta],
+    genome_name: &String,
+    feature_type: &String,
+    sample_only: bool,
+    match_criteria: Option<MatchFieldCriteria>,
+    logger: &Logger
+) -> Vec<MatchResult> {
+
+    //logger.information(&format!("test_gff_and_fasta_mapping: Process {} feature type={}, sample only={}", genome_name, feature_type, sample_only));
+
+    let gff_sample = read_gff::prepare_gff_sample(gff_lines, sample_only);
+    let fasta_index = read_fasta::build_fasta_index(fasta_records, &match_criteria, &logger);
+    //logger.information(&format!("Built FASTA index with {} unique keys", fasta_index.len()));
+
+    let mut all_details = Vec::new();
+    //let mut all_matched_values = HashSet::new();
+
+    for (gff_line_index, line) in gff_sample {
+        if line.starts_with('#') { continue; }
+
+        let (details, _matches) = read_gff::process_gff_line(
+            gff_line_index,
+            line,
+            &fasta_index,
+            fasta_records,
+            feature_type,
+            &match_criteria,
+            &logger,
+        );
+
+        all_details.extend(details);
+        //all_matched_values.extend(matches);
+    }
+
+    // Define your stopword set
+    let stopwords: HashSet<&str> = ["mRNA", "tRNA", "rRNA", "region", "gene", "transcript"].into_iter().collect();
+
+    all_details
+        .into_iter()
+        .filter(|m| !stopwords.contains(m.matched_value.as_str()))
+        .map(|detail| {
+            let matched_value = detail.matched_value.clone();
+            let matched_values = [matched_value.clone()].into_iter().collect();
+
+            MatchResult {
+                genome: genome_name.clone(),
+                feature_type: feature_type.clone(),
+                //total_matches: 1,
+                unique_matches: 1,
+                match_details: vec![detail],
+                matched_values,
+            }
+        })
+        .collect()
+}
+
+pub fn extract_and_write_selected_features(
+    match_result: &MatchResult,
+    all_features: &HashMap<String, Vec<GffFeature>>,
+    all_sequences: &[(String, Fasta)],
+    source_fasta_path: &Path,
+    source_gff_path: &Path,
+    sequence_type: &str,
+    match_threshold: u8,
+    logger: &Logger,
+) -> Result<(Vec<Fasta>, Vec<String>, f32), std::io::Error> {
+
+    let genome = &match_result.genome;
+    let feature_type = &match_result.feature_type;
+
+    logger.information(&format!("extract_and_write_selected_features: Extracting all matched data for genome '{}' and feature '{}'", genome, feature_type));
+
+    // 0. Retrieve the list of GffFeature entries for this specific genome
+    let features = match all_features.get(genome) {
+        Some(f) => f,
+        None => {
+            logger.error(&format!("extract_and_write_selected_features: No features found for genome '{}'", genome));
+            std::process::exit(1);
+        }
+    };
+
+    // 1. Get all GFF lines for this genome and this feature type (e.g., gene)
+    let gff_features: Vec<&GffFeature> = features.iter().filter(|f| f.feature_type == *feature_type).collect();
+
+    // Convert GffFeature → original GFF lines
+    let gff_lines: Vec<String> = gff_features.iter().map(|f| f.original_line.clone()).collect(); 
+
+    logger.information(&format!("extract_and_write_selected_features: gff has {} number of lines", gff_lines.len())); 
+
+    // 2. Get all relevant FASTA records
+    let fasta_records: Vec<Fasta> = all_sequences.iter().filter(|(g, _)| g == genome).map(|(_, f)| f.clone()).collect();
+    logger.information(&format!("extract_and_write_selected_features: fasta has {} number of entries", fasta_records.len())); 
+
+    // 3. Derive match criteria from match_result
+    let mut sorted_details = match_result.match_details.clone();
+    sorted_details.sort_by(|a, b| {
+        let a_score = match a.gff_field_name.as_str() {
+            "ID" if a.gff_field_index == 0 => 0,
+            "ID" => 1,
+            "Parent" => 2,
+            _ => 3,
+        };
+        let b_score = match b.gff_field_name.as_str() {
+            "ID" if b.gff_field_index == 0 => 0,
+            "ID" => 1,
+            "Parent" => 2,
+            _ => 3,
+        };
+        a_score.cmp(&b_score)
+    });
+    let first_detail = sorted_details.first().expect("No match details found");
+
+    let criteria = MatchFieldCriteria {
+        gff_field_index: first_detail.gff_field_index,
+        gff_key: first_detail.gff_field_name.clone(),
+        fasta_field_index: first_detail.fasta_field_index,
+        fasta_source: first_detail.fasta_source.clone(),
+        fasta_key: first_detail.fasta_field_name.clone(),
+    };
+
+    logger.information(&format!(
+        "extract_and_write_selected_features: criteria used is gff_field_index={}, gff_key={}, fasta_field_index={}, fasta_source={}, fasta_key={}",
+        criteria.gff_field_index,
+        criteria.gff_key,
+        criteria.fasta_field_index,
+        criteria.fasta_source,
+        criteria.fasta_key
+    ));
+
+    // 4. Run full mapping with full GFF + derived criteria
+    let full_results = test_gff_and_fasta_mapping(
+        &gff_lines,
+        &fasta_records,
+        genome,
+        feature_type,
+        false, // full run, not sample
+        Some(criteria.clone()),
+        &logger,
+    );
+
+    // 5. Collect matched IDs
+    let matched_ids: HashSet<String> = full_results.iter().flat_map(|r| r.matched_values.iter().cloned()).collect();
+    logger.information(&format!("extract_and_write_selected_features: Matched {} unique values (key = {})", matched_ids.len(), criteria.gff_key));
+
+    // 6. Filter GFF lines using exact match key
+    let filtered_gff = read_gff::filter_and_rewrite_gff_lines(features, genome, feature_type, &matched_ids, &criteria.gff_key);
+    logger.information(&format!("extract_and_write_selected_features: Retained {} filtered GFF lines", filtered_gff.len()));
+
+    // 7. Filter FASTA records
+    let filtered_fasta: Vec<Fasta> = fasta_records
+        .clone()
+        .into_iter()
+        .filter(|record| {
+            matched_ids.contains(&record.id)
+                || matched_ids.iter().any(|id| record.desc.contains(id))
+        })
+        .map(|mut f| {
+            f.id = format!("{}|{}", genome, f.id); // Optional: prefix ID
+            f
+        })
+        .collect();
+
+    logger.information(&format!("extract_and_write_selected_features: Retained {} filtered FASTA entries", filtered_fasta.len()));
+
+    // Check its above the threshold set
+    let fasta_count = filtered_fasta.len();
+    let total_records = fasta_records.len();
+
+    let match_pct = if total_records == 0 {
+        0.0
+    } else {
+        (fasta_count as f32 / total_records as f32) * 100.0
+    };
+
+    if match_pct < match_threshold as f32 {
+        logger.warning(&format!(
+            "extract_and_write_selected_features: GFF and FASTA match rate was below threshold ({} < {}%). Skipping FASTA/GFF output. Will attempt extraction from GFF/genome only.",
+            match_pct.round(),
+            match_threshold
+        ));
+        return Ok((vec![], vec![], match_pct));
+    }
+
+    // Write to disk: write_filtered_files(genome, &filtered_gff, &filtered_fasta);
+    write_fasta::write_filtered_fasta(&filtered_fasta, source_fasta_path, sequence_type, logger)?;
+    write_gff::write_filtered_gff(&filtered_gff, source_gff_path, logger)?;  
+
+    // (Optional) Store or return results
+    Ok((filtered_fasta, filtered_gff, match_pct))
+}
+
+/// Extract CDS or PEP sequences directly from GFF + genome FASTA.
+/// This is used when no PEP/CDS FASTA file exists for a genome.
+/// Returns a Vec<Fasta> representing extracted sequences.
+pub fn extract_genes_from_genome_specified_in_gff(
+    genome: &str,
+    features: &[GffFeature],
+    genome_seqs: &HashMap<String, String>, // contig -> sequence
+    alignment_type: &str,                 // "cds" or "pep"
+    genetic_code: usize, 
+    logger: &Logger,
+) -> (Vec<Fasta>, String, String) {
+
+    // 1. Determine which feature type to extract: prefer CDS, fallback to exon
+    let mut grouped: HashMap<String, Vec<&GffFeature>> = HashMap::new();
+
+    // First try "CDS"
+    for f in features {
+        if f.feature_type.eq_ignore_ascii_case("CDS") {
+            if let Some(parent) = f.attributes.get("Parent") {
+                grouped.entry(parent.clone()).or_default().push(f);
+            }
+        }
+    }
+
+    // Next try "exon"
+    if grouped.is_empty() {
+        logger.warning("extract_alignment_from_gff: No CDS found, falling back to exon");
+
+        for f in features {
+            if f.feature_type.eq_ignore_ascii_case("exon") {
+                if let Some(parent) = f.attributes.get("Parent") {
+                    grouped.entry(parent.clone()).or_default().push(f);
+                }
+            }
+        }
+
+        if grouped.is_empty() {
+            logger.error("extract_alignment_from_gff: No exon features found either.");
+            std::process::exit(1);
+            //return vec![];
+        }
+    }
+    
+    // At this point, grouped contains: parent_id => Vec<&GffFeature>
+    let inferred_parent_type = grouped.keys().filter_map(|id| read_gff::find_parent_feature_type(id, features)).next().unwrap_or("gene").to_string();
+
+    // Try to determine which GFF attribute key was used to match the parent ID
+    let gff_key_used = features
+        .iter()
+        .find(|f| f.feature_type == inferred_parent_type && f.attributes.values().any(|v| grouped.contains_key(v)))
+        .and_then(|f| {
+            f.attributes.iter().find_map(|(k, v)| {
+                if grouped.contains_key(v) {
+                    Some(k.clone())
+                } else {
+                    None
+                }
+            })
+        })
+        .unwrap_or_else(|| "ID".to_string()); // fallback
+
+    let mut extracted_fastas = Vec::new();
+
+    // 2. For each gene (Parent), extract concatenated CDS
+    for (parent_id, cds_list) in grouped {
+        let mut cds_list_sorted = cds_list.clone();
+
+        // Sort by genomic position
+        cds_list_sorted.sort_by_key(|f| f.start);
+
+        // Extract all exons in order
+        let mut nucleotide_seq = String::new();
+        let mut strand: char = '+';
+
+        for cds in &cds_list_sorted {
+            strand = cds.strand;
+
+            let contig = &cds.seqid;
+
+            // Genome must contain the contig sequence
+            let Some(contig_seq) = genome_seqs.get(contig) else {
+                logger.warning(&format!("extract_alignment_from_gff: contig '{}' not found for CDS '{}'", contig, parent_id));
+                continue;
+            };
+
+            // Ensure coordinates are valid
+            if cds.end > contig_seq.len() || cds.start == 0 || cds.start > cds.end {
+                logger.warning(&format!("extract_alignment_from_gff: invalid coordinates {}..{} on contig {}",cds.start, cds.end, contig));
+                continue;
+            }
+
+            // Extract subsequence. Convert 1-based to 0-based.
+            let start = cds.start - 1;
+            let end = cds.end;
+
+            let subseq = &contig_seq[start..end];
+            nucleotide_seq.push_str(subseq);
+        }
+
+        // Reverse complement if needed
+        let nucleotide_seq = if strand == '-' {
+            parse_dna_and_peptide::reverse_complement(&nucleotide_seq)
+        } else {
+            nucleotide_seq
+        };
+
+        // Convert to uppercase
+        let nucleotide_seq = nucleotide_seq.to_uppercase();
+
+        // 3. Translate to peptide if requested
+        let final_seq = if alignment_type == "pep" {
+            parse_dna_and_peptide::translate_dna_to_peptide(&nucleotide_seq, parent_id.as_str(), genetic_code, logger)
+        } else {
+            nucleotide_seq.clone()
+        };
+
+        // 4. Add to results
+        extracted_fastas.push(Fasta {
+            id: format!("{}|{}", genome, parent_id),
+            desc: String::new(),
+            seq: final_seq,
+        });
+    }
+
+    (extracted_fastas, inferred_parent_type, gff_key_used)
+}
+
