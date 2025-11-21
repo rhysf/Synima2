@@ -61,6 +61,7 @@ pub fn create_all_blast_dbs(
     alignment_type: &str,
     db_tool: &Path,
     blast_version: &str,
+    main_output_dir: &Path,
     logger: &Logger,
 ) -> Result<(), String> {
     for entry in repo {
@@ -70,15 +71,23 @@ pub fn create_all_blast_dbs(
             continue;
         }
 
-        let fasta_file = match entry.files.get(&format!("{}_parsed", alignment_type)) {
-            Some(file) => Path::new(&file.path),
-            None => {
-                logger.warning(&format!("Skipping {}: no parsed {} file found.", genome, alignment_type));
-                continue;
-            }
-        };
+        // Check for genome subdirectory inside main_output_dir
+        let genome_dir = main_output_dir.join(genome);
+        if !genome_dir.exists() {
+            logger.error(&format!("create_all_blast_dbs: Expected directory '{}' not found. Please run Step 1 (create-repo-db) before BLAST setup.", genome_dir.display()));
+            std::process::exit(1);
+        }
 
-        create_blast_db(fasta_file, db_tool, blast_version, logger)?;
+        // Expected file: <genome>/<genome>.synima-parsed.<alignment_type>
+        let parsed_filename = format!("{genome}.synima-parsed.{alignment_type}");
+        let parsed_fasta_path = genome_dir.join(parsed_filename);
+
+        if !parsed_fasta_path.exists() {
+            logger.warning(&format!("Skipping {}: no parsed {} file found at '{}'.", genome, alignment_type, parsed_fasta_path.display()));
+            continue;
+        }
+
+        create_blast_db(&parsed_fasta_path, db_tool, blast_version, logger)?;
     }
 
     Ok(())

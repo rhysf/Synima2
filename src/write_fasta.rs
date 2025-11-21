@@ -7,23 +7,18 @@ use crate::logger::Logger;
 
 pub fn write_filtered_fasta(
     filtered_records: &[Fasta],
-    original_fasta_path: &Path,
-    sequence_type: &str,
+    output_path: &Path,
     logger: &Logger,
 ) -> Result<(), std::io::Error> {
-    //let new_path = original_fasta_path.with_extension(".synima-parsed.pep"); // or .pep
-    let original_filename = original_fasta_path.file_name().unwrap().to_string_lossy();
-    let new_filename = format!("{}.synima-parsed.{}", original_filename, sequence_type);
-    let new_path = original_fasta_path.with_file_name(new_filename);
 
-    let mut writer = BufWriter::new(File::create(&new_path)?);
+    let mut writer = BufWriter::new(File::create(&output_path)?);
 
     for fasta in filtered_records {
         writeln!(writer, ">{}", fasta.id)?;
         writeln!(writer, "{}", fasta.seq)?;
     }
 
-    logger.information(&format!("write_filtered_fasta: Wrote parsed FASTA to {}", new_path.display()));
+    logger.information(&format!("write_filtered_fasta: Wrote parsed FASTA to {}", output_path.display()));
     Ok(())
 }
 

@@ -158,24 +158,23 @@ pub fn read_repo_spec(file: &str, alignment_type: &str, logger: &Logger) -> Vec<
     repo_entries
 }
 
-pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, repo_root: &Path, logger: &Logger) {
+pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, main_output_dir: &Path, logger: &Logger) {
     logger.information("update_repo_with_parsed_files...");
 
     for entry in repo.iter_mut() {
         //logger.information(&format!("update_repo_with_parsed_files: Checking genome: {}", entry.name));
+        let genome = &entry.name;
+        let genome_dir = main_output_dir.join(genome);
 
-         let Some(base_dir_str) = &entry.base_dir else {
-            logger.warning(&format!("update_repo_with_parsed_files: Skipped entry {}: no base_dir set", entry.name));
+        if !genome_dir.exists() {
+            logger.warning(&format!("update_repo_with_parsed_files: Genome dir '{}' not found. Skipping {}.", genome_dir.display(), genome));
             continue;
-        };
-
-        let base_dir = repo_root.join(base_dir_str);
-        //logger.information(&format!("🔍 Searching base_dir: {}", base_dir.display()));
+        }
 
         // Step 1: Look for synima-parsed.* inside <base_dir>/<genome_name>
         //let genome_dir = base_dir.join(&entry.name);
         //if let Ok(genome_entries) = fs::read_dir(&genome_dir) {
-        if let Ok(genome_entries) = fs::read_dir(&base_dir) {
+        if let Ok(genome_entries) = fs::read_dir(&genome_dir) {
             for file in genome_entries.flatten() {
                 let path = file.path();
                 if !path.is_file() {
@@ -186,7 +185,7 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, repo_root: &Path
                     let key = match filename {
                         f if f.ends_with("synima-parsed.pep") => "pep_parsed",
                         f if f.ends_with("synima-parsed.cds") => "cds_parsed",
-                        f if f.ends_with("synima-parsed.gff3") => "gff_parsed",
+                        f if f.ends_with("synima-parsed.gff") => "gff_parsed",
                         _ => continue,
                     };
                     //logger.information(&format!("✅ Found {} file: {}", key, path.display()));
@@ -208,7 +207,7 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, repo_root: &Path
     //logger.information(&format!("📦 Searching repo_root for all.* files: {}", repo_root.display()));
     let mut synima_all_files = HashMap::new();
 
-    if let Ok(repo_files) = fs::read_dir(repo_root) {
+    if let Ok(repo_files) = fs::read_dir(main_output_dir) {
         for file in repo_files.flatten() {
             let path = file.path();
             if !path.is_file() {
@@ -219,7 +218,7 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, repo_root: &Path
                 let key = match filename {
                     f if f.ends_with(".all.pep") => "pep_all",
                     f if f.ends_with(".all.cds") => "cds_all",
-                    f if f.ends_with(".all.gff3") => "gff_all",
+                    f if f.ends_with(".all.gff") => "gff_all",
                     _ => continue,
                 };
 
@@ -235,14 +234,14 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, repo_root: &Path
             }
         }
     } else {
-        logger.warning(&format!("update_repo_with_parsed_files: Could not open repo_root: {}", repo_root.display()));
+        logger.warning(&format!("update_repo_with_parsed_files: Could not open repo_root: {}", main_output_dir.display()));
     }
 
     // Only push synthetic genome if we found any all.* files
     if !synima_all_files.is_empty() {
         repo.push(RepoEntry {
             name: "synima_all".to_string(),
-            base_dir: Some(repo_root.to_string_lossy().to_string()),
+            base_dir: Some(main_output_dir.to_string_lossy().to_string()),
             files: synima_all_files,
         });
     }
