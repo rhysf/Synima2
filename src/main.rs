@@ -2,7 +2,7 @@ use clap::Parser;
 use std::path::Path;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-//use std::fs;
+use std::fs;
 
 mod args;
 mod logger;
@@ -38,9 +38,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let repo_base_dir = repo_spec_path.parent().unwrap_or_else(|| Path::new("."));
     let repo_basename = Path::new(&args.repo_spec).file_name().and_then(|s| s.to_str()).unwrap_or("repo_spec.txt");
 
-    // Define blast output dir
-    let blast_dir_name = format!("{}.blast_out", repo_spec_path.file_name().unwrap().to_string_lossy());
-    let blast_out_dir = repo_spec_path.parent().unwrap_or_else(|| Path::new(".")).join(blast_dir_name);
+    // Create main out dir
+    let main_output_dir = repo_base_dir.join(args.output_dir);
+    fs::create_dir_all(&main_output_dir).map_err(|e| format!("Failed to create output directory {}: {}", main_output_dir.display(), e))?;
+
+    // Set output subdirectories
+    let blast_out_dir = main_output_dir.join("blast_out");
+    let omcl_out_dir = main_output_dir.join("omcl_out");
 
     if args.synima_step.contains(&SynimaStep::CreateRepoDb) {
         logger.information("──────────────────────────────");
@@ -97,8 +101,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.information("Running Step 3: blast-to-orthomcl");
         logger.information("─────────────────────────────────");
 
+        // make output director
+        std::fs::create_dir_all(&omcl_out_dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
+
         // Concatenate BLAST results (only 1 direction, thereby avoiding redundant hits)
-        let all_vs_all_path = blast_out_dir.join("all_vs_all.out");
+        let all_vs_all_path = omcl_out_dir.join("all_vs_all.out");
         blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, &logger)?;
 
     }
