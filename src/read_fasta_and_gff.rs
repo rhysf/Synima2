@@ -2,16 +2,11 @@ use crate::logger::Logger;
 use crate::Args;
 use crate::{read_fasta};
 use crate::read_fasta::Fasta;
-//use crate::write_fasta;
 use crate::read_gff;
-//use crate::write_gff;
 use crate::parse_dna_and_peptide;
 use crate::read_repo;
-
-//use crate::read_gff::BestFeatureMatchInfo;
 use crate::read_gff::MatchResult;
 use crate::read_gff::MatchFieldCriteria;
-//use crate::read_gff::MatchDetail;
 
 //use core::num;
 use std::collections::{HashMap, HashSet};

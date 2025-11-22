@@ -18,8 +18,7 @@ pub struct BlastTools {
 
 /// Try to detect usable BLAST+ or legacy BLAST tools.
 /// Returns a struct containing paths to the database builder and blast executor.
-pub fn get_blast_binaries(logger: &Logger) -> BlastTools {
-    let bin_dir = Path::new("bin");
+pub fn get_blast_binaries(bin_dir: &Path, logger: &Logger) -> BlastTools {
 
     // Try BLAST+
     let (found_makeblastdb, makeblastdb_path) =
@@ -200,7 +199,7 @@ pub fn run_all_vs_all_blast(
     })
 }
 
-pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, logger: &Logger) -> Result<(), std::io::Error> {
+pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, run_type: &str, logger: &Logger) -> Result<(), std::io::Error> {
     let mut seen_pairs = HashSet::new();
     let mut writer = File::create(output_file)?;
 
@@ -235,7 +234,7 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
 
         // Ensure we only process one of (A,B) or (B,A)
         let pair = if q <= r { (q.to_string(), r.to_string()) } else { (r.to_string(), q.to_string()) };
-        if seen_pairs.contains(&pair) {
+        if run_type == "orthomcl" && seen_pairs.contains(&pair) {
             logger.information(&format!("concatenate_unique_blast_pairs: Skipping reciprical BLAST pair: {} vs {}", q, r));
             continue;
         }

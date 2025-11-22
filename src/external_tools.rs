@@ -32,24 +32,22 @@ pub fn find_executable_with_fallback(
     };
 
     let fallback_binary = fallback_bin_dir.join(format!("{}.{}", program, suffix));
-    if fallback_binary.exists() && fallback_binary.is_file() {
-        let ok = Command::new(&fallback_binary)
+        if fallback_binary.exists() && fallback_binary.is_file() {
+            let result = Command::new(&fallback_binary)
             .arg("--help")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+            .status();
 
-        if ok {
-            logger.information(&format!("find_executable_with_fallback: Found {} in {}", program, fallback_binary.display()));
-            return (true, Some(fallback_binary));
-        } else {
-            logger.error(&format!("find_executable_with_fallback: Fallback binary found but failed to run: {}", fallback_binary.display()));
+        match result {
+            Ok(_) => {
+                logger.information(&format!("find_executable_with_fallback: Found {} in {}", program, fallback_binary.display()));
+                return (true, Some(fallback_binary));
+            }
+            Err(e) => {
+                logger.error(&format!("find_executable_with_fallback: Failed to run fallback binary {}: {}", fallback_binary.display(), e));
+            }
         }
-    } else {
-        logger.error(&format!("find_executable_with_fallback: {} not found in PATH or as fallback binary in '{}'", program, fallback_bin_dir.display()));
     }
-
     (false, None)
 }

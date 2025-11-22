@@ -159,6 +159,7 @@ pub fn read_repo_spec(file: &str, alignment_type: &str, logger: &Logger) -> Vec<
 }
 
 pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, main_output_dir: &Path, logger: &Logger) {
+    
     logger.information("update_repo_with_parsed_files...");
 
     for entry in repo.iter_mut() {

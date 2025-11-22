@@ -16,6 +16,7 @@ mod blast;
 mod external_tools;
 mod parse_dna_and_peptide;
 mod omcl;
+mod blast_rbh;
 
 //use read_fasta::{read_fasta, Fasta};
 use args::{Args, SynimaStep};
@@ -49,9 +50,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let combined_fasta_path = main_output_dir.join(combined_fasta_filename);
     let combined_gff_path = main_output_dir.join(combined_gff_filename);
 
-    // Set output subdirectories
+    // Set input subdirs
+    let bin_dir = Path::new("bin");
+
+    // Set output subdirs
     let blast_out_dir = main_output_dir.join("synima_blast_out");
     let omcl_out_dir = main_output_dir.join("synima_omcl_out");
+    let rbh_out_dir = main_output_dir.join("synima_rbh_out");
 
     if args.synima_step.contains(&SynimaStep::CreateRepoDb) {
         logger.information("──────────────────────────────");
@@ -99,7 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.information("──────────────────────────");
 
         // Get makeblastdb or formatdb
-        let blast_tools = blast::get_blast_binaries(&logger);
+        let blast_tools = blast::get_blast_binaries(&bin_dir, &logger);
 
         // Create BLAST databases
         blast::create_all_blast_dbs(&repo, &args.alignment_type, &blast_tools.db_tool, &blast_tools.version, &main_output_dir, &logger)?;
@@ -118,7 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Concatenate BLAST results (only 1 direction, thereby avoiding redundant hits)
         let all_vs_all_path = omcl_out_dir.join("all_vs_all.out");
-        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, &logger)?;
+        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, "orthomcl", &logger)?;
 
         // Assign genome codes to genes for omcl
         let genome_set = omcl::parse_genome_map_from_gff(&combined_gff_path, &logger)?;
@@ -140,9 +145,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.information("────────────────────────────");
         logger.information("Running Step 3: blast-to-rbh");
         logger.information("────────────────────────────");
+
+        // get slclust
+        let (_found_slclust, slclust_path) = external_tools::find_executable_with_fallback("slclust", &bin_dir, &logger);
+        let slclust_path = slclust_path.as_ref().ok_or("slclust binary not found")?;
+
+        // make output director
+        std::fs::create_dir_all(&rbh_out_dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
+
+        // Concatenate BLAST results (only 1 direction, thereby avoiding redundant hits)
+        let all_vs_all_path = rbh_out_dir.join("all_vs_all.out");
+        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, "rbh", &logger)?;
+
+        // Save just the first 2 columns
+        let rbh_pairs_path = blast_rbh::write_blast_pairs(&all_vs_all_path)?;
+
+        // Run slclust
+        let slclust_output = blast_rbh::run_slclust_on_pairs(&slclust_path, &rbh_pairs_path, &logger)?;
+
+        // Parse clusters and map genes to their cluster IDs
+        let cluster_map = blast_rbh::parse_clusters(&slclust_output)?;
+        let gene_to_cluster = blast_rbh::map_gene_to_cluster_id(&cluster_map);
+
     }
 
-        if args.synima_step.contains(&SynimaStep::BlastToOrthofinder) {
+    if args.synima_step.contains(&SynimaStep::BlastToOrthofinder) {
         logger.information("────────────────────────────────────");
         logger.information("Running Step 3: blast-to-orthofinder");
         logger.information("────────────────────────────────────");
