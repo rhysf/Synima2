@@ -9,12 +9,12 @@
 ## or parameter variables) in orthomcl_module.pm need to be set, as described in
 ## README.
 
-my $starttime = `date`;
 use strict;
-use Getopt::Long;
-use File::Basename;
+my $starttime = `date`;
 use FindBin qw($Bin);
 use lib "$Bin/perl_modules/";
+use Getopt::Long;
+use File::Basename;
 use Bio::SearchIO;
 use orthomcl_module;
 
