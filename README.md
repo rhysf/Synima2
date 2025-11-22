@@ -1,6 +1,6 @@
-
-<img src="https://github.com/rhysf/Synima/blob/master/resources/logo2.png?raw=true" width="400" height="400" />
-
+<p align="center">
+<img src="https://github.com/rhysf/Synima/blob/master/resources/logo2.png?raw=true" width="200" height="200" />
+</p>
 
 ## Introduction
 
