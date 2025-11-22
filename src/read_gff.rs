@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+//use std::io::BufReader;
 
 use read_repo::{RepoEntry};
 
@@ -50,32 +51,6 @@ pub struct GffFeature {
     pub strand: char,                 // '+' or '-'
     pub attributes: HashMap<String, String>,
     pub original_line: String
-}
-
-// Alias for better readability
-//pub type BestFeatureMatchInfo = (
-//    Option<MatchResult>, // Best parent match result
-//    Option<MatchResult>, // Best subfeature match result
-//);
-
-impl GffFeature {
-    pub fn to_gff_line(&self) -> String {
-        let attr_string = self.attributes
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect::<Vec<_>>()
-            .join(";");
-
-        format!(
-            "{}\t.\t{}\t{}\t{}\t.\t{}\t.\t{}",
-            self.seqid,
-            self.feature_type,
-            self.start,
-            self.end,
-            self.strand,
-            attr_string
-        )
-    }
 }
 
 // used to return HashMap<String, HashMap<String, Vec<String>>>
@@ -460,3 +435,4 @@ pub fn filter_and_rewrite_gff_lines(
         })
         .collect()
 }
+

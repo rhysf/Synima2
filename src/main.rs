@@ -15,6 +15,7 @@ mod read_fasta_and_gff;
 mod blast;
 mod external_tools;
 mod parse_dna_and_peptide;
+mod omcl;
 
 //use read_fasta::{read_fasta, Fasta};
 use args::{Args, SynimaStep};
@@ -30,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let logger = Logger;
 
     // Validate steps
-    validate_step_sequence(&args.synima_step, &logger);
+    args::validate_step_sequence(&args.synima_step, &logger);
 
     // Read the repo_spec file
     let mut repo = read_repo::read_repo_spec(&args.repo_spec, &args.alignment_type, &logger);
@@ -41,6 +42,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create main out dir
     let main_output_dir = repo_base_dir.join(&args.output_dir);
     fs::create_dir_all(&main_output_dir).map_err(|e| format!("Failed to create output directory {}: {}", main_output_dir.display(), e))?;
+
+    // combined data
+    let combined_fasta_filename = format!("{}.all.{}", repo_basename, &args.alignment_type);
+    let combined_gff_filename = format!("{}.all.gff", repo_basename);
+    let combined_fasta_path = main_output_dir.join(combined_fasta_filename);
+    let combined_gff_path = main_output_dir.join(combined_gff_filename);
 
     // Set output subdirectories
     let blast_out_dir = main_output_dir.join("synima_blast_out");
@@ -77,10 +84,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Write combined output files (e.g. repo_spec.txt.all.pep and .gff3)
-        let combined_fasta_filename = format!("{}.all.{}", repo_basename, &args.alignment_type);
-        let combined_gff_filename = format!("{}.all.gff", repo_basename);
-        let combined_fasta_path = main_output_dir.join(combined_fasta_filename);
-        let combined_gff_path = main_output_dir.join(combined_gff_filename);
         write_fasta::write_combined_fasta_file(&combined_fasta_path, &all_filtered_fastas, &logger)?;
         write_gff::write_combined_gff_file(&combined_gff_path, &all_filtered_gffs, &logger)?;
 
@@ -117,52 +120,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let all_vs_all_path = omcl_out_dir.join("all_vs_all.out");
         blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, &logger)?;
 
+        // Assign genome codes to genes for omcl
+        let genome_set = omcl::parse_genome_map_from_gff(&combined_gff_path, &logger)?;
+        let code_out_path = omcl_out_dir.join("genome_codes.tsv");
+        let genome_to_code = omcl::assign_genome_codes(&genome_set, &code_out_path, &logger)?;
+        let blast_m8_output_path = omcl_out_dir.join("all_vs_all.gcoded.m8");
+        omcl::write_gcoded_m8_and_sort(&genome_to_code, &all_vs_all_path, &blast_m8_output_path, &logger)?;
+
+        let omcl_prefix = omcl_out_dir.join("omcl_in"); // will create omcl_in.bpo and omcl_in.gg
+        let (bpo_path, gg_path) = omcl::convert_m8_to_orthomcl_format(&blast_m8_output_path, &omcl_prefix, &genome_to_code, &logger)?;
+
+        // run OrthoMCL
+        let orthomcl_script = std::env::current_dir().expect("Could not get current dir").join("bin").join("OrthoMCL.pl");
+        let omcl_log_path = omcl_out_dir.join("omcl.log");
+        omcl::run_orthomcl_clustering(&orthomcl_script, &bpo_path, &gg_path, &omcl_log_path, &logger)?;
+    }
+
+    if args.synima_step.contains(&SynimaStep::BlastToRbh) {
+        logger.information("────────────────────────────");
+        logger.information("Running Step 3: blast-to-rbh");
+        logger.information("────────────────────────────");
+    }
+
+        if args.synima_step.contains(&SynimaStep::BlastToOrthofinder) {
+        logger.information("────────────────────────────────────");
+        logger.information("Running Step 3: blast-to-orthofinder");
+        logger.information("────────────────────────────────────");
     }
 
     logger.information("Synima: All requested steps completed.");
     Ok(())
-}
-
-/// Validate that steps are sequential and mutually exclusive where needed
-fn validate_step_sequence(steps: &[SynimaStep], logger: &Logger) {
-    use SynimaStep::*;
-
-    // Check that only one of the alternative orthology steps is included
-    let orthology_steps = [
-        BlastToOrthomcl,
-        BlastToRbh,
-        BlastToOrthofinder,
-    ];
-
-    let selected_orthology_steps: Vec<_> = steps.iter().filter(|step| orthology_steps.contains(step)).collect();
-
-    if selected_orthology_steps.len() > 1 {
-        logger.error("Only one of blast_to_orthomcl, blast_to_rbh, or blast_to_orthofinder may be used.");
-        std::process::exit(1);
-    }
-
-    // Build expected step order dynamically
-    let mut expected_order = vec![CreateRepoDb, BlastGrid];
-
-    if let Some(step) = selected_orthology_steps.first() {
-        expected_order.push((*step).clone());
-    }
-
-    expected_order.extend([OrthologSummary, Dagchainer, Synima]);
-
-    // Now check that user steps appear in order, without skipping ahead
-    let mut expected_idx = 0;
-
-    for user_step in steps {
-        while expected_idx < expected_order.len() && expected_order[expected_idx] != *user_step {
-            expected_idx += 1;
-        }
-
-        if expected_idx == expected_order.len() {
-            logger.error(&format!("Step {:?} is out of sequence or unexpected.", user_step));
-            std::process::exit(1);
-        }
-
-        expected_idx += 1; // move forward for next step
-    }
 }

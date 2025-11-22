@@ -1,3 +1,5 @@
+use crate::Logger;
+
 use clap::{Parser, ValueEnum};
 //use num_cpus;
 
@@ -99,4 +101,49 @@ pub enum SynimaStep {
 
     /// Step 6: Generate synteny alignment visualizations with Synima.
     Synima,
+}
+
+
+/// Validate that steps are sequential and mutually exclusive where needed
+pub fn validate_step_sequence(steps: &[SynimaStep], logger: &Logger) {
+    use SynimaStep::*;
+
+    // Check that only one of the alternative orthology steps is included
+    let orthology_steps = [
+        BlastToOrthomcl,
+        BlastToRbh,
+        BlastToOrthofinder,
+    ];
+
+    let selected_orthology_steps: Vec<_> = steps.iter().filter(|step| orthology_steps.contains(step)).collect();
+
+    if selected_orthology_steps.len() > 1 {
+        logger.error("Only one of blast_to_orthomcl, blast_to_rbh, or blast_to_orthofinder may be used.");
+        std::process::exit(1);
+    }
+
+    // Build expected step order dynamically
+    let mut expected_order = vec![CreateRepoDb, BlastGrid];
+
+    if let Some(step) = selected_orthology_steps.first() {
+        expected_order.push((*step).clone());
+    }
+
+    expected_order.extend([OrthologSummary, Dagchainer, Synima]);
+
+    // Now check that user steps appear in order, without skipping ahead
+    let mut expected_idx = 0;
+
+    for user_step in steps {
+        while expected_idx < expected_order.len() && expected_order[expected_idx] != *user_step {
+            expected_idx += 1;
+        }
+
+        if expected_idx == expected_order.len() {
+            logger.error(&format!("Step {:?} is out of sequence or unexpected.", user_step));
+            std::process::exit(1);
+        }
+
+        expected_idx += 1; // move forward for next step
+    }
 }
