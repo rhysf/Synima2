@@ -163,11 +163,7 @@ pub fn build_fasta_index<'a>(
         //logger.warning("criteria?");
         for fasta in fasta_records {
             let parts = split_fasta_id_and_desc_into_fields(&fasta.id, &fasta.desc);
-            //for (i, triple) in parts.iter() {
-            //    println!("Index {} => {:?}", i, triple);
-            //}
-            //logger.warning(&format!("FASTA parts: {:?}", parts));
-            //logger.warning(&format!("Expected fasta_field_index: {}", c.fasta_field_index));
+
             if let Some((_, _, value)) = parts.get(&c.fasta_field_index) {
                 if !value.trim().is_empty() {
                     map.entry(value.clone()).or_default().push(fasta);
@@ -183,9 +179,6 @@ pub fn build_fasta_index<'a>(
     }
     //logger.information(&format!("Built FASTA index with {} unique keys", map.len()));
 
-    //for (key, vals) in map.iter().take(5) {
-    //    logger.information(&format!("Index key: '{}', record count: {}", key, vals.len()));
-    //}
     map
 }
 

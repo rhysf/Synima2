@@ -153,7 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // make output director
         std::fs::create_dir_all(&rbh_out_dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
 
-        // Concatenate BLAST results (only 1 direction, thereby avoiding redundant hits)
+        // Concatenate BLAST results (both directions)
         let all_vs_all_path = rbh_out_dir.join("all_vs_all.out");
         blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, "rbh", &logger)?;
 
@@ -167,6 +167,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let cluster_map = blast_rbh::parse_clusters(&slclust_output)?;
         let gene_to_cluster = blast_rbh::map_gene_to_cluster_id(&cluster_map);
 
+        // Get top BLAST score per orthologous gene
+        let gene_to_top_ortho_blast_score = blast_rbh::get_top_ortho_blast_score(&repo, &blast_out_dir, &logger)?;
+
+        // Get Inparalogs (paralogs within a genome)
+        let cluster_id_to_in_paralogs = blast_rbh::get_inparalogs(&repo, &blast_out_dir, &gene_to_top_ortho_blast_score, &gene_to_cluster, &logger)?;
+    
+        let gene_to_struct = read_repo::build_gene_struct_map(&repo, &logger);
+        let out_file = rbh_out_dir.join(format!("{}.RBH.OrthoClusters", args.alignment_type));
+        blast_rbh::write_final_rbh_clusters(&out_file, &cluster_map, &cluster_id_to_in_paralogs, &gene_to_struct, &logger)?;
     }
 
     if args.synima_step.contains(&SynimaStep::BlastToOrthofinder) {

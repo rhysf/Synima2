@@ -2,6 +2,7 @@ use crate::logger::Logger;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::io::BufRead;
 //use std::process;
 //use std::collections::HashMap;
 
@@ -18,6 +19,12 @@ pub struct RepoEntry {
     pub name: String,
     pub base_dir: Option<String>, // from 'dir' row, if provided
     pub files: HashMap<String, RepoFile>,
+}
+
+pub struct GeneStruct {
+    pub genome: String,
+    pub gene_id: String,
+    pub name: String,
 }
 
 /// Read a repo spec file in the format:
@@ -137,15 +144,6 @@ pub fn read_repo_spec(file: &str, alignment_type: &str, logger: &Logger) -> Vec<
     // Optional: warn if common file types missing
     let required_types = vec!["genome", "gff"]; // Always required
 
-    //match alignment_type {
-    //    "cds" => required_types.push("cds"),
-    //    "pep" => required_types.push("pep"),
-    //    _ => {
-    //        logger.error(&format!("read_repo_spec: Unknown alignment type '{}'. Expected 'cds' or 'pep'.", alignment_type));
-    //        std::process::exit(1);
-    //    }
-    //}
-
     for entry in &repo_entries {
         for &req in &required_types {
             if !entry.files.contains_key(req) {
@@ -154,13 +152,12 @@ pub fn read_repo_spec(file: &str, alignment_type: &str, logger: &Logger) -> Vec<
             }
         }
     }
-
     repo_entries
 }
 
 pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, main_output_dir: &Path, logger: &Logger) {
-    
-    logger.information("update_repo_with_parsed_files...");
+
+    logger.information(&format!("update_repo_with_parsed_files: {}", main_output_dir.display()));
 
     for entry in repo.iter_mut() {
         //logger.information(&format!("update_repo_with_parsed_files: Checking genome: {}", entry.name));
@@ -173,8 +170,6 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, main_output_dir:
         }
 
         // Step 1: Look for synima-parsed.* inside <base_dir>/<genome_name>
-        //let genome_dir = base_dir.join(&entry.name);
-        //if let Ok(genome_entries) = fs::read_dir(&genome_dir) {
         if let Ok(genome_entries) = fs::read_dir(&genome_dir) {
             for file in genome_entries.flatten() {
                 let path = file.path();
@@ -189,7 +184,7 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, main_output_dir:
                         f if f.ends_with("synima-parsed.gff") => "gff_parsed",
                         _ => continue,
                     };
-                    //logger.information(&format!("✅ Found {} file: {}", key, path.display()));
+                    //logger.information(&format!("Found {} file: {}", key, path.display()));
                     entry.files.insert(
                         key.to_string(),
                         RepoFile {
@@ -205,7 +200,7 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, main_output_dir:
     }
 
     // Step 2: Handle repo-wide all.* files into a synthetic 'synima_all' entry (all.cds, all.pep, all.gff3)
-    //logger.information(&format!("📦 Searching repo_root for all.* files: {}", repo_root.display()));
+    //logger.information(&format!("Searching repo_root for all.* files: {}", repo_root.display()));
     let mut synima_all_files = HashMap::new();
 
     if let Ok(repo_files) = fs::read_dir(main_output_dir) {
@@ -223,7 +218,7 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, main_output_dir:
                     _ => continue,
                 };
 
-                //logger.information(&format!("📦 Found {} file in repo_root: {}", key, path.display()));
+                //logger.information(&format!("Found {} file in repo_root: {}", key, path.display()));
 
                 synima_all_files.insert(
                     key.to_string(),
@@ -246,4 +241,53 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, main_output_dir:
             files: synima_all_files,
         });
     }
+}
+
+pub fn build_gene_struct_map(repo: &[RepoEntry], logger: &Logger) -> HashMap<String, GeneStruct> {
+
+    logger.information("build_gene_struct_map: Running...");
+
+    let mut gene_map = HashMap::new();
+
+    for entry in repo {
+        let genome = &entry.name;
+
+        if let Some(gff_file) = entry.files.get("gff_parsed") {
+            if let Ok(file) = std::fs::File::open(&gff_file.path) {
+                let reader = std::io::BufReader::new(file);
+
+                for line in reader.lines().flatten() {
+                    if line.starts_with('#') {
+                        continue;
+                    }
+
+                    let fields: Vec<&str> = line.split('\t').collect();
+                    if fields.len() < 9 {
+                        continue;
+                    }
+
+                    let attr = fields[8];
+                    let parts: Vec<&str> = attr.split('|').collect();
+
+                    if parts.len() != 2 {
+                        logger.error(&format!("build_gene_struct_map: gff {} has incorrectly formatted attributes field: {}", gff_file.path, attr));
+                        std::process::exit(1);
+                    }
+
+                    let gene_id = parts[1].to_string();
+
+                    gene_map.insert(
+                        gene_id.clone(),
+                        GeneStruct {
+                            genome: genome.clone(),
+                            gene_id,
+                            name: parts[1].to_string(), // using gene_id again for name, like in Perl
+                        },
+                    );
+                }
+            }
+        }
+    }
+
+    gene_map
 }
