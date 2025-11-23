@@ -10,7 +10,7 @@ use std::process::{Command, Stdio};
 
 pub fn write_blast_pairs<P: AsRef<Path>>(all_vs_all_path: P) -> Result<PathBuf, String> {
     let input_path = all_vs_all_path.as_ref();
-    let output_path = input_path.with_extension("pairs");
+    let output_path = input_path.with_file_name(format!("{}{}", input_path.file_name().unwrap().to_string_lossy(), ".pairs"));
 
     let infile = File::open(&input_path)
         .map_err(|e| format!("Cannot open input file {}: {}", input_path.display(), e))?;

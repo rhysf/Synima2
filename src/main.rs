@@ -174,7 +174,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let cluster_id_to_in_paralogs = blast_rbh::get_inparalogs(&repo, &blast_out_dir, &gene_to_top_ortho_blast_score, &gene_to_cluster, &logger)?;
     
         let gene_to_struct = read_repo::build_gene_struct_map(&repo, &logger);
-        let out_file = rbh_out_dir.join(format!("{}.RBH.OrthoClusters", args.alignment_type));
+        let out_file = slclust_output.with_file_name(format!("{}{}", slclust_output.file_name().unwrap().to_string_lossy(), ".OrthoClusters"));
         blast_rbh::write_final_rbh_clusters(&out_file, &cluster_map, &cluster_id_to_in_paralogs, &gene_to_struct, &logger)?;
     }
 

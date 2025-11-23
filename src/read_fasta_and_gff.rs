@@ -489,28 +489,21 @@ pub fn match_or_extract_genes_from_gff(
             }
         };
 
-        // get gff path
-        //let Some(gff_file) = entry.files.get("gff") else {
-        //    logger.error(&format!("match_or_extract_genes_from_gff: No GFF file found for '{}'", genome));
-        //    std::process::exit(1);
-        //};
-        //let gff_path = PathBuf::from(&gff_file.path);
-
         if has_sequences {
-            if let Some((filtered_fasta, filtered_gff, match_pct)) = extract_features(entry, features, all_features, alignment_type, match_threshold, logger) {
-                
-                if match_pct >= (match_threshold as f32) {
-                    
-                    // Get output path
-                    //let Some(fasta_file) = entry.files.get(alignment_type) else {
-                    //    logger.error(&format!("match_or_extract_genes_from_gff: No {} file found for '{}'", alignment_type, genome));
-                    //    std::process::exit(1);
-                    //};
-                    //let fasta_path = PathBuf::from(&fasta_file.path);
+            if let Some((mut filtered_fasta, mut filtered_gff, mut match_pct)) = extract_features(entry, features, all_features, alignment_type, match_threshold, logger) {
 
-                    // Write to disk: write_filtered_files(genome, &filtered_gff, &filtered_fasta);
-                    //write_fasta::write_filtered_fasta(&filtered_fasta, &fasta_path, &alignment_type, logger)?;
-                    //write_gff::write_filtered_gff(&filtered_gff, &gff_path, logger)?;
+                // Load original peptide FASTA
+                //let full_pep_fasta = read_fasta::read_fasta_for_genome(entry, alignment_type, logger);
+
+                // Check for unmatched peptides and append them to the filtered results
+                let (unmatched_fasta, unmatched_gff) = check_for_unmatched_peptide_ids(entry, &filtered_fasta, all_features, alignment_type, logger);
+
+                // Merge results
+                match_pct += (unmatched_fasta.len() as f32 / (filtered_fasta.len() + unmatched_fasta.len()) as f32) * 100.0;
+                filtered_fasta.extend(unmatched_fasta);
+                filtered_gff.extend(unmatched_gff);
+
+                if match_pct >= (match_threshold as f32) {
 
                     // Append results to global output collections (if its > match_threshold)
                     all_filtered_fastas.extend(filtered_fasta.clone());
@@ -522,6 +515,8 @@ pub fn match_or_extract_genes_from_gff(
 
                     // Go on to next genome
                     continue; 
+                } else {
+                    logger.warning(&format!("{}: Match percentage {:.2}% < threshold {}", genome, match_pct, match_threshold));
                 }
             }
         } 
@@ -569,4 +564,89 @@ pub fn match_or_extract_genes_from_gff(
     }
 
     Ok((per_genome_fastas, per_genome_gffs, all_filtered_fastas, all_filtered_gffs))
+}
+
+fn check_for_unmatched_peptide_ids(
+    entry: &RepoEntry,
+    matched_fastas: &[Fasta],
+    all_features: &HashMap<String, Vec<GffFeature>>,
+    alignment_type: &str,
+    logger: &Logger,
+) -> (Vec<Fasta>, Vec<String>) {
+
+    let genome = &entry.name;
+    logger.information(&format!("check_for_unmatched_peptide_ids: Checking unmatched peptides for genome '{}'", genome));
+
+    // Load full FASTA
+    let full_fasta_list = read_fasta::read_fasta_for_genome(entry, alignment_type, logger);
+
+    // Get all GFF features for this genome
+    let Some(features) = all_features.get(genome) else {
+        logger.warning(&format!("check_for_unmatched_peptide_ids: No GFF features found for genome '{}'", genome));
+        return (Vec::new(), Vec::new());
+    };
+
+    // Prepare lookup sets that were already matched in extract_features
+    let matched_ids: HashSet<_> = matched_fastas.iter().map(|f| f.id.clone()).collect();
+    let all_fasta_ids: HashMap<_, _> = full_fasta_list.iter().map(|f| (f.id.clone(), f)).collect();
+
+    let allowed_types = ["gene", "mRNA"];
+    
+    // Build a lookup for GFF features by gene ID
+    let all_gff_ids: HashMap<String, &GffFeature> = features.iter()
+        .filter(|f| allowed_types.contains(&f.feature_type.to_lowercase().as_str()))
+        .filter_map(|f| {
+
+        // There should only be one attribute entry per parsed GFF
+        let attr = f.attributes.values().next()?; // safely get the first (and only) value
+
+        // Try '=' first
+        let value = if let Some((_, val)) = attr.split_once('=') { val } else { attr };
+
+        // Now try to split on '|'
+        let id_candidate = value.split('|').nth(1).unwrap_or(value);
+
+        Some((id_candidate.to_string(), f))
+    }).collect();
+
+    let mut extra_fastas = Vec::new();
+    let mut extra_gffs = Vec::new();
+
+    // Iterate over all unmatched FASTA IDs
+    for (id, fasta) in all_fasta_ids.iter().filter(|(id, _)| !matched_ids.contains(*id)) {
+        if let Some(feature) = all_gff_ids.get(id) {
+            logger.information(&format!("check_for_unmatched_peptide_ids: Adding unmatched peptide and GFF for ID '{}'", id));
+            
+            // update fasta
+            let mut updated_fasta = (*fasta).clone();
+            updated_fasta.id = format!("{}|{}", genome, id);
+            //updated_fasta.desc = Some(updated_fasta.id.clone());
+            extra_fastas.push(updated_fasta);
+
+            // updated gff
+            let standardized_line = format!(
+                "{}\t.\t{}\t{}\t{}\t.\t{}\t.\t{}|{}",
+                feature.seqid,
+                feature.feature_type,
+                feature.start,
+                feature.end,
+                feature.strand,
+                genome,
+                id
+            );
+            extra_gffs.push(standardized_line);
+        } 
+        //else {
+        //    logger.warning(&format!("check_for_unmatched_peptide_ids: Unmatched peptide ID '{}' has no GFF entry", id));
+        //}
+    }
+
+    // Log unmatched peptide count
+    logger.information(&format!("check_for_unmatched_peptide_ids: {} unmatched peptide sequences without matches", extra_fastas.len()));
+
+    // Log unmatched GFF count
+    let unmatched_gff_count = all_gff_ids.keys().filter(|id| !all_fasta_ids.contains_key(*id)).count();
+    logger.information(&format!("check_for_unmatched_peptide_ids: {} unmatched GFF features without peptide matches", unmatched_gff_count));
+
+    (extra_fastas, extra_gffs)
 }
