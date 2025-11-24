@@ -80,7 +80,7 @@ cp target/release/phylorust ~/.local/bin/
 
 ## Getting started / examples
 
-TESTING WITH THIS: Synima -r /Users/rhysfarrer/Desktop/synima_test/repo_spec.txt -s create-repo-db,blast-grid,blast-to-orthomcl
+Synima -r examples/repo_spec.txt
 
 ## Description of the pipeline (Creating a sequence database)
 

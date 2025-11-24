@@ -1,0 +1,16 @@
+CNB2	dir	CNB2/
+CNB2	genome	CNB2.genome.fa
+CNB2	gff	CNB2_FINAL_CALLGENES_1.annotation.gff3
+
+IND107	dir	Cryp_gatt_IND107_V2/
+IND107	genome	Cryp_gatt_IND107_V2.genome.fa
+IND107	gff	Cryp_gatt_IND107_V2_FINAL_CALLGENES_1.annotation.gff3
+IND107	pep	Cryp_gatt_IND107_V2_FINAL_CALLGENES_1.annotation.pep
+
+CA1280	dir	Cryp_gatt_CA1280_V1/
+CA1280	genome	Cryp_gatt_CA1280_V1.genome.fa
+CA1280	gff	Cryp_gatt_CA1280_V1_FINAL_CALLGENES_1.annotation.gff3
+
+WM276	dir	CNB_WM276_v2
+WM276	genome	CNB_WM276_v2.genome.fa
+WM276	gff	CNB_WM276_v2_Final_CUSTOMCALLGENES_1.annotation.gff3
