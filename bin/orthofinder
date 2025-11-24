@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "$OS" in
+  Darwin)
+    TARGET="$DIR/env.Darwin/bin/orthofinder"
+    [[ -x "$TARGET" ]] || { echo "Missing $TARGET" >&2; exit 1; }
+    # On Apple Silicon, force native arm64 if available
+    if command -v arch >/dev/null 2>&1 && [[ "$ARCH" == "arm64" ]]; then
+      exec arch -arm64 "$TARGET" "$@"
+    else
+      exec "$TARGET" "$@"
+    fi
+    ;;
+  Linux)
+    TARGET="$DIR/env.Linux/bin/orthofinder"
+    [[ -x "$TARGET" ]] || { echo "Missing $TARGET" >&2; exit 1; }
+    exec "$TARGET" "$@"
+    ;;
+  *)
+    echo "Unsupported OS: $OS" >&2
+    exit 1
+    ;;
+esac

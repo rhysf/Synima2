@@ -1,0 +1,7 @@
+#!/home/rhys/Desktop/Code/Synima2/bin/env-linux/bin/python3.12
+import sys
+from tools.primary_transcript import main
+if __name__ == '__main__':
+    if sys.argv[0].endswith('.exe'):
+        sys.argv[0] = sys.argv[0][:-4]
+    sys.exit(main())

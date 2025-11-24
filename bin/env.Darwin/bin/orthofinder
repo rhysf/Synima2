@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+
+# Find the vendored site-packages and required Python minor (e.g. 3.12)
+SITEPKG=""
+REQ=""
+for p in "$ROOT"/lib/python3.*; do
+  if [ -d "$p/site-packages/orthofinder" ]; then
+    SITEPKG="$p/site-packages"
+    REQ="${p##*/python}"          # "3.12"
+    break
+  fi
+done
+
+if [ -z "$SITEPKG" ] || [ -z "$REQ" ]; then
+  echo "Could not locate bundled site-packages under $ROOT/lib/python3.*" >&2
+  exit 1
+fi
+
+pick_python() {
+  for cmd in "python$REQ" "python${REQ/./}" "python3" "python"; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      ver="$("$cmd" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null || true)"
+      if [ "$ver" = "$REQ" ]; then
+        echo "$cmd"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+PY_CMD="$(pick_python || true)"
+if [ -z "$PY_CMD" ]; then
+  echo "Need Python $REQ on PATH. Please install it." >&2
+  exit 1
+fi
+
+export PYTHONPATH="$SITEPKG${PYTHONPATH:+:$PYTHONPATH}"
+# Optional: avoid user-site interference
+# export PYTHONNOUSERSITE=1
+
+exec "$PY_CMD" \
+  -W ignore::SyntaxWarning \
+  -W ignore::DeprecationWarning \
+  -m orthofinder.run "$@"

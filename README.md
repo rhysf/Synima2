@@ -37,6 +37,10 @@ To build and run Synima2, you’ll need:
     rustc --version
     cargo --version
     ```
+- Python3
+- R
+- (optional) Perl and modules File::Basename, Bio::SearchIO (if OrthoMCL used)
+- (optional) Legacy-BLAST or BLAST+ in $PATH
     
 ---
 
@@ -69,14 +73,6 @@ Alternative (manual install): If you prefer to place the binary in ~/.local/bin
 cargo build --release
 cp target/release/phylorust ~/.local/bin/
 ```
-
-## Prerequisites
-
-* Perl
-* Bio-Perl
-* Python
-* R
-* (optional) Legacy-BLAST or BLAST+ in $PATH
 
 ## Getting started / examples
 

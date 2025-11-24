@@ -197,7 +197,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Run Orthofinder
         logger.information(&format!("Run orthofinder: {}" , &orthofinder_out_dir.display()));
 
-        let output = Command::new("bin/orthofinder.Darwin").arg("-b").arg(orthofinder_out_dir.join("Blast")).output().map_err(|e| format!("run orthofinder: {}", e))?;
+        let output = Command::new("bin/orthofinder").arg("-b").arg(orthofinder_out_dir.join("Blast")).output().map_err(|e| format!("run orthofinder: {}", e))?;
 
         let combined = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
 
