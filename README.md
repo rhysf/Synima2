@@ -94,41 +94,18 @@ each of the genome folders and used later.
 
 The Input Repo_spec files take the format of:
 
-    //  
-    Genome CNB2  
-    Annotation CNB2_FINAL_CALLGENES_1  
-    //  
-    Genome Cryp_gatt_IND107_V2  
-    Annotation Cryp_gatt_IND107_V2_FINAL_CALLGENES_1  
-    //
+    CNB2    dir     CNB2/
+    CNB2    genome  CNB2.genome.fa
+    CNB2    gff     CNB2_FINAL_CALLGENES_1.annotation.gff3
 
-* For each genome ID (E.g. CNB2) listed in the Repo_spec file, a corresponding 
-sub-folder with the same name must be present in the same directory as the 
-Repo_spec. 
-* In each genome folder, a genome.fasta must be present, and named 
-[genome-id].genome.fa E.g. CNB2/CNB2.genome.fa. 
-* In each genome folder, annotation files should also be present, and named according to the details in the Data_repo. e.g., 3 additional files in each genome directory:
+    IND107  dir     Cryp_gatt_IND107_V2/
+    IND107  genome  Cryp_gatt_IND107_V2.genome.fa
+    IND107  gff     Cryp_gatt_IND107_V2_FINAL_CALLGENES_1.annotation.gff3
+    IND107  pep     Cryp_gatt_IND107_V2_FINAL_CALLGENES_1.annotation.pep
 
-    [annotation-id].annotation.gff3  
-    [annotation-id].annotation.cds  
-    [annotation-id].annotation.pep
-
-* The GFF should have gene or mRNA features, with identifiers that are also in the 
-.cds and .pep FASTA files, which contain the Coding sequence (cds) and peptide 
-(pep) sequences respectively. 
-* GFF ID's can be listed as such (or any other way that is specified explicitly for Create_full_repo_sequence_databases.pl): 
-
-    cgbd CNB_WM276_v2 mRNA 450360 453023 . + . ID=012346;Parent=012345;Name=actin
-
-
-* Gene ID's in the two FASTA files can be a single word i.e. >CBBG_0001 or they 
-can have multiple fields e.g. 
-
-    >01 gene_id=02 locus=03 name="ATPS" genome=Esch_coli analysisRun=Esch_coli_Augustus
-
-* If your files are downloaded from Ensembl, then utility scripts Ensembl_feature_table_to_gff.pl and Ensembl_reformat_fasta.pl may help parsing into the correct formats.
-
-* Note: Gene and contig names should be alphanumerical (i.e., avoid symbols such as '=').
+    CA1280  dir     Cryp_gatt_CA1280_V1/
+    CA1280  genome  Cryp_gatt_CA1280_V1.genome.fa
+    CA1280  gff     Cryp_gatt_CA1280_V1_FINAL_CALLGENES_1.annotation.gff3
 
 ## Description of the pipeline (Predicting orthologous genes)
 
