@@ -250,3 +250,10 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
 
     Ok(())
 }
+
+pub fn ensure_blast_dir(out_dir: &Path) -> Result<PathBuf, String> {
+    let blast_dir = out_dir.join("Blast");
+    fs::create_dir_all(&blast_dir)
+        .map_err(|e| format!("create {}: {}", blast_dir.display(), e))?;
+    Ok(blast_dir)
+}

@@ -12,19 +12,16 @@ pub fn write_blast_pairs<P: AsRef<Path>>(all_vs_all_path: P) -> Result<PathBuf, 
     let input_path = all_vs_all_path.as_ref();
     let output_path = input_path.with_file_name(format!("{}{}", input_path.file_name().unwrap().to_string_lossy(), ".pairs"));
 
-    let infile = File::open(&input_path)
-        .map_err(|e| format!("Cannot open input file {}: {}", input_path.display(), e))?;
+    let infile = File::open(&input_path).map_err(|e| format!("Cannot open input file {}: {}", input_path.display(), e))?;
     let reader = BufReader::new(infile);
 
-    let mut outfile = File::create(&output_path)
-        .map_err(|e| format!("Cannot create output file {}: {}", output_path.display(), e))?;
+    let mut outfile = File::create(&output_path).map_err(|e| format!("Cannot create output file {}: {}", output_path.display(), e))?;
 
     for line in reader.lines() {
         let line = line.map_err(|e| format!("Error reading line: {}", e))?;
         let fields: Vec<&str> = line.split('\t').collect();
         if fields.len() >= 2 {
-            writeln!(outfile, "{}\t{}", fields[0], fields[1])
-                .map_err(|e| format!("Error writing line: {}", e))?;
+            writeln!(outfile, "{}\t{}", fields[0], fields[1]).map_err(|e| format!("Error writing line: {}", e))?;
         }
     }
 

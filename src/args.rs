@@ -37,7 +37,7 @@ pub struct Args {
 
     /// Step(s) of the Synima pipeline to run (comma-separated).
     /// e.g., --synima_step create_repo_db,blast_grid,blast_to_orthomcl
-    #[arg(short = 's', long = "synima_step", value_delimiter = ',', default_value = "create-repo-db,blast-grid,blast-to-orthomcl,ortholog-summary,dagchainer,synima")]
+    #[arg(short = 's', long = "synima_step", value_delimiter = ',', default_value = "create-repo-db,blast-grid,blast-to-orthofinder,ortholog-summary,dagchainer,synima")]
     pub synima_step: Vec<SynimaStep>,
 
     /// Type of sequence to use for alignment: either "pep" (protein) or "cds" (nucleotide) [default: pep]

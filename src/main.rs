@@ -3,6 +3,7 @@ use std::path::Path;
 //use std::collections::{HashMap, HashSet};
 //use std::path::PathBuf;
 use std::fs;
+use std::process::Command;
 
 mod args;
 mod logger;
@@ -17,6 +18,7 @@ mod external_tools;
 mod parse_dna_and_peptide;
 mod omcl;
 mod blast_rbh;
+mod orthofinder;
 
 //use read_fasta::{read_fasta, Fasta};
 use args::{Args, SynimaStep};
@@ -57,6 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let blast_out_dir = main_output_dir.join("synima_blast_out");
     let omcl_out_dir = main_output_dir.join("synima_omcl_out");
     let rbh_out_dir = main_output_dir.join("synima_rbh_out");
+    let orthofinder_out_dir = main_output_dir.join("synima_orthofinder_out");
 
     if args.synima_step.contains(&SynimaStep::CreateRepoDb) {
         logger.information("──────────────────────────────");
@@ -140,7 +143,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let omcl_log_path = omcl_out_dir.join("omcl.log");
         omcl::run_orthomcl_clustering(&orthomcl_script, &bpo_path, &gg_path, &omcl_log_path, &logger)?;
     }
-
+ 
     if args.synima_step.contains(&SynimaStep::BlastToRbh) {
         logger.information("────────────────────────────");
         logger.information("Running Step 3: blast-to-rbh");
@@ -182,6 +185,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.information("────────────────────────────────────");
         logger.information("Running Step 3: blast-to-orthofinder");
         logger.information("────────────────────────────────────");
+
+        // make output director
+        std::fs::create_dir_all(&orthofinder_out_dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
+
+        // Prepare Orthofinder input folder
+        if let Err(e) = orthofinder::prepare_orthofinder_blast(&repo, &args.alignment_type, &blast_out_dir, &orthofinder_out_dir, &logger) {
+            logger.information(&format!("Error: unable to prepare orthofinder BLAST folder: {}", e));
+        }
+
+        // Run Orthofinder
+        logger.information(&format!("Run orthofinder: {}" , &orthofinder_out_dir.display()));
+
+        let output = Command::new("bin/orthofinder.Darwin").arg("-b").arg(orthofinder_out_dir.join("Blast")).output().map_err(|e| format!("run orthofinder: {}", e))?;
+
+        let combined = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+
+        // regardless of success, try to harvest if the path was printed
+        match orthofinder::harvest_orthogroups(&combined, &orthofinder_out_dir) {
+            Ok(path) => logger.information(&format!("Orthogroups.tsv saved to {}", path.display())),
+            Err(e) => logger.information(&format!("Did not harvest Orthogroups.tsv: {}", e)),
+        }
+    }
+
+    if args.synima_step.contains(&SynimaStep::OrthologSummary) {
+        logger.information("────────────────────────────────");
+        logger.information("Running Step 4: ortholog-summary");
+        logger.information("────────────────────────────────");
+
     }
 
     logger.information("Synima: All requested steps completed.");
