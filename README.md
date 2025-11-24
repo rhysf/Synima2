@@ -76,7 +76,7 @@ cp target/release/phylorust ~/.local/bin/
 * Bio-Perl
 * Python
 * R
-* Legacy-BLAST or BLAST+
+* (optional) Legacy-BLAST or BLAST+ in $PATH
 
 ## Getting started / examples
 
