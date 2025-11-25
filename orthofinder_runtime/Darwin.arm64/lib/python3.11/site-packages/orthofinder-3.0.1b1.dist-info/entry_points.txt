@@ -1,0 +1,5 @@
+[console_scripts]
+convert_orthofinder_tree_ids = tools.convert_orthofinder_tree_ids:main
+make_ultrametric = tools.make_ultrametric:main
+orthofinder = scripts_of.__main__:main
+primary_transcript = tools.primary_transcript:main

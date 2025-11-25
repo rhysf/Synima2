@@ -1,0 +1,24 @@
+Metadata-Version: 2.1
+Name: orthofinder
+Version: 3.0.1b1
+Summary: Phylogenetic orthology inference for comparative genomics
+Home-page: https://github.com/davidemms/OrthoFinder
+Author: David Emms
+Author-email: david_emms@hotmail.com
+License: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Classifier: License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: biopython
+Requires-Dist: scikit-learn
+
+Phylogenetic orthology inference for comparative genomics

@@ -4,6 +4,7 @@ use std::path::Path;
 //use std::path::PathBuf;
 use std::fs;
 use std::process::Command;
+use std::process::Stdio;
 
 mod args;
 mod logger;
@@ -193,24 +194,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let orthofinder_path = external_tools::find_executable("orthofinder", &bin_dir, &logger);
 
         // make output director
-        std::fs::create_dir_all(&orthofinder_out_dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
+        if let Err(e) = fs::create_dir_all(&orthofinder_out_dir) {
+            logger.error(&format!("Failed to create database directory {}: {}", orthofinder_out_dir.display(), e));
+            std::process::exit(1);
+        }
 
         // Prepare Orthofinder input folder
         if let Err(e) = orthofinder::prepare_orthofinder_blast(&repo, &args.alignment_type, &blast_out_dir, &orthofinder_out_dir, &logger) {
-            logger.information(&format!("Error: unable to prepare orthofinder BLAST folder: {}", e));
+            logger.error(&format!("Error: unable to prepare orthofinder BLAST folder: {}", e));
+            std::process::exit(1);
         }
 
         // Run Orthofinder
         logger.information(&format!("Run orthofinder: {}" , &orthofinder_out_dir.display()));
 
-        //let output = Command::new("bin/orthofinder").arg("-b").arg(orthofinder_out_dir.join("Blast")).output().map_err(|e| format!("run orthofinder: {}", e))?;
-        //let combined = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        let output = Command::new(&orthofinder_path)
+            .arg("-b")
+            .arg(orthofinder_out_dir.join("Blast"))
+            .arg("-og")  // stop after orthogroups
+            // .current_dir(&orthofinder_out_dir)  // optional, if you want cwd there
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| format!("run orthofinder: {}", e))?;
+
+        // Convert to strings
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Log what OrthoFinder said
+        if !stdout.trim().is_empty() {
+            logger.information(&format!("orthofinder stdout:\n{}", stdout));
+        }
+        if !stderr.trim().is_empty() {
+            logger.warning(&format!("orthofinder stderr:\n{}", stderr));
+        }
+
+        // Fail hard if OrthoFinder did not succeed
+        if !output.status.success() {
+            logger.error(&format!("orthofinder exited with status {:?}", output.status.code()));
+            // optional: include stderr again if you want it very visible
+            if !stderr.trim().is_empty() {
+                logger.error("orthofinder stderr was logged above");
+            }
+            std::process::exit(1);
+        }
+    
+        // For harvest_orthogroups, keep the combined string
+        let combined = format!("{}{}", stdout, stderr);
 
         // regardless of success, try to harvest if the path was printed
-        //match orthofinder::harvest_orthogroups(&combined, &orthofinder_out_dir) {
-        //    Ok(path) => logger.information(&format!("Orthogroups.tsv saved to {}", path.display())),
-        //    Err(e) => logger.information(&format!("Did not harvest Orthogroups.tsv: {}", e)),
-        //}
+        match orthofinder::harvest_orthogroups(&combined, &orthofinder_out_dir) {
+            Ok(path) => logger.information(&format!("Orthogroups.tsv saved to {}", path.display())),
+            Err(e) => logger.information(&format!("Did not find Orthogroups.tsv: {}", e)),
+        }
     }
 
     if args.synima_step.contains(&SynimaStep::OrthologSummary) {
