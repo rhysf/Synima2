@@ -72,7 +72,8 @@ pub fn assign_genome_codes<P: AsRef<Path>>(
     }
 
     if genome_to_code.is_empty() {
-        return Err("assign_genome_codes: No genome codes assigned.".to_string());
+        logger.error("assign_genome_codes: No genome codes assigned");
+        std::process::exit(1);
     }
 
     Ok(genome_to_code)
@@ -144,7 +145,8 @@ pub fn write_gcoded_m8_and_sort<P: AsRef<Path>>(
     let status = std::process::Command::new("sh").arg("-c").arg(&sort_cmd).status().map_err(|e| format!("Failed to run sort: {}", e))?;
 
     if !status.success() {
-        return Err("write_gcoded_m8_and_sort: sort command failed".to_string());
+        logger.error("write_gcoded_m8_and_sort: sort command failed");
+        std::process::exit(1);
     }
 
     std::fs::remove_file(tmp_path).ok();
@@ -241,10 +243,10 @@ pub fn run_orthomcl_clustering<P: AsRef<Path>>(
     // Build command
     let mut cmd = std::process::Command::new("perl");
     cmd.arg(orthomcl_script.as_ref())
-    .arg("--mode")
-    .arg("4")
-    .arg("--bpo_file").arg(bpo_file)
-    .arg("--gg_file").arg(gg_file);
+        .arg("--mode")
+        .arg("4")
+        .arg("--bpo_file").arg(bpo_file)
+        .arg("--gg_file").arg(gg_file);
 
     let work_dir = bpo_path.as_ref().parent().ok_or("bpo_path has no parent directory")?;
     cmd.current_dir(work_dir).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write, BufWriter};
 use std::path::{Path, PathBuf};
+use std::process;
 use std::process::{Command, Stdio};
 
 pub fn write_blast_pairs<P: AsRef<Path>>(all_vs_all_path: P) -> Result<PathBuf, String> {
@@ -239,11 +240,19 @@ pub fn write_final_rbh_clusters<P: AsRef<Path>>(
     cluster_id_to_inparalogs: &HashMap<usize, Vec<String>>,
     gene_info: &HashMap<String, GeneStruct>,
     logger: &Logger,
-) -> Result<(), String> {
+) {
 
     logger.information(&format!("write_final_rbh_clusters: {}", out_path.as_ref().display()));
 
-    let file = File::create(&out_path).map_err(|e| format!("Failed to create output file: {}", e))?;
+    // Output file
+    let file = match File::create(&out_path.as_ref()) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("Failed to create output file {}: {}", out_path.as_ref().display(), e));
+            process::exit(1);
+        }
+    };
+    //let file = File::create(&out_path).map_err(|e| format!("Failed to create output file: {}", e))?;
     let mut writer = BufWriter::new(file);
 
     let mut cluster_ids: Vec<_> = cluster_id_to_orthologs.keys().cloned().collect();
@@ -251,50 +260,56 @@ pub fn write_final_rbh_clusters<P: AsRef<Path>>(
 
     for cluster_id in cluster_ids {
 
-        // Write orthologs
-        if let Some(orthologs) = cluster_id_to_orthologs.get(&cluster_id) {
-            for gene_id in orthologs {
-                let gene_id_clean = gene_id.split('|').nth(1).ok_or_else(|| format!("Invalid gene ID format: {}", gene_id))?;
+        //-> Result<(), String> 
+        let mut write_group = |label: &str, gene_ids: &Vec<String>| {
+            for gene_id in gene_ids {
+
+                let gene_id_clean = match gene_id.split('|').nth(1) {
+                    Some(id) => id,
+                    None => {
+                        logger.error(&format!("write_final_rbh_clusters: Invalid gene ID format: {}", gene_id));
+                        process::exit(1);
+                    }
+                };
+
                 match gene_info.get(gene_id_clean) {
                     Some(gene) => {
-                        writeln!(
+                        if let Err(e) = writeln!(
                             writer,
-                            "{}\tOrtho\t{}\t{}\t{}\t{}\t{}",
+                            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
                             cluster_id,
+                            label,
                             gene.genome,
                             gene.gene_id,
                             gene.gene_id,
                             gene.gene_id,
                             gene.name
-                        ).map_err(|e| format!("Write error: {}", e))?;
+                        ) {
+                            logger.error(&format!("write_final_rbh_clusters: Write error for {} {}: {}",label, gene_id_clean, e));
+                            process::exit(1);
+                        }
                     }
                     None => {
-                        logger.warning(&format!("write_final_rbh_clusters: Missing gene info for {}", gene_id_clean));
-                        continue;
+                        logger.warning(&format!("write_final_rbh_clusters: Missing gene info for {}: {}", label, gene_id_clean));
                     }
                 }
             }
+        };
+
+        // Write orthologs
+        if let Some(orthologs) = cluster_id_to_orthologs.get(&cluster_id) {
+            write_group("Ortho", orthologs);
         }
 
         // Write in-paralogs
         if let Some(inparas) = cluster_id_to_inparalogs.get(&cluster_id) {
-            for gene_id in inparas {
-                let gene = gene_info.get(gene_id).ok_or_else(|| format!("Missing gene info for {}", gene_id))?;
-                writeln!(
-                    writer,
-                    "{}\tInPara\t{}\t{}\t{}\t{}\t{}",
-                    cluster_id,
-                    gene.genome,
-                    gene.gene_id,
-                    gene.gene_id,
-                    gene.gene_id,
-                    gene.name
-                ).map_err(|e| format!("Write error: {}", e))?;
-            }
+            write_group("InParalog", inparas);
         }
 
-        writeln!(writer).map_err(|e| format!("Write error: {}", e))?; // spacer
+        // spacer
+        if let Err(e) = writeln!(writer) {
+            logger.error(&format!("write_final_rbh_clusters: Write error for spacer line: {}", e));
+            process::exit(1);
+        }
     }
-
-    Ok(())
 }

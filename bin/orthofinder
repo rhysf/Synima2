@@ -3,26 +3,74 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 OS="$(uname -s)"
-ARCH="$(uname -m)"
 
 case "$OS" in
-  Darwin)
-    TARGET="$DIR/env.Darwin/bin/orthofinder"
-    [[ -x "$TARGET" ]] || { echo "Missing $TARGET" >&2; exit 1; }
-    # On Apple Silicon, force native arm64 if available
-    if command -v arch >/dev/null 2>&1 && [[ "$ARCH" == "arm64" ]]; then
-      exec arch -arm64 "$TARGET" "$@"
-    else
-      exec "$TARGET" "$@"
-    fi
-    ;;
-  Linux)
-    TARGET="$DIR/env.Linux/bin/orthofinder"
-    [[ -x "$TARGET" ]] || { echo "Missing $TARGET" >&2; exit 1; }
-    exec "$TARGET" "$@"
-    ;;
-  *)
-    echo "Unsupported OS: $OS" >&2
-    exit 1
-    ;;
+  Darwin)  ENV_DIR="$DIR/env.Darwin" ;;
+  Linux)   ENV_DIR="$DIR/env.Linux" ;;
+  *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
 esac
+
+# Find packaged site-packages root like env.* /lib/python3.11
+PKG_DIR=""
+for d in "$ENV_DIR"/lib/python3.*; do
+  if [[ -d "$d" ]]; then
+    PKG_DIR="$d"
+    break
+  fi
+done
+
+if [[ -z "${PKG_DIR:-}" ]]; then
+  echo "No python3.* dir under $ENV_DIR/lib" >&2
+  exit 1
+fi
+
+# Extract required minor version from directory name
+base="$(basename "$PKG_DIR")"   # python3.11
+REQ_VER="${base#python}"        # 3.11
+
+if [[ ! "$REQ_VER" =~ ^[0-9]+\.[0-9]+$ ]]; then
+  echo "Could not determine required Python version from $PKG_DIR" >&2
+  exit 1
+fi
+
+SITE="$PKG_DIR/site-packages"
+
+# Pick interpreter from PATH. Prefer exact pythonX.Y, else python3.
+PYEXE="$(command -v "python$REQ_VER" || true)"
+if [[ -z "${PYEXE:-}" ]]; then
+  PYEXE="$(command -v python3 || true)"
+fi
+if [[ -z "${PYEXE:-}" ]]; then
+  echo "Need Python $REQ_VER on PATH. Please install it." >&2
+  exit 1
+fi
+
+# Verify minor version matches what your wheels require
+ACT_VER="$("$PYEXE" -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')"
+if [[ "$ACT_VER" != "$REQ_VER" ]]; then
+  echo "Found $PYEXE ($ACT_VER) but packaged wheels require Python $REQ_VER." >&2
+  echo "Install python$REQ_VER and ensure it is on PATH." >&2
+  exit 1
+fi
+
+# Optional macOS arch sanity check to avoid noisy NumPy import errors
+if [[ "$OS" == "Darwin" ]]; then
+  PY_ARCH="$("$PYEXE" -c 'import platform; print(platform.machine())')"
+  WHEEL_SO=( "$SITE"/numpy/_core/_multiarray_umath*.so )
+  if [[ -e "${WHEEL_SO[0]:-}" ]]; then
+    # file output contains the arch token, catch arm64 or x86_64
+    W_ARCH="$(file -b "${WHEEL_SO[0]}" | sed -E 's/.*(arm64|x86_64).*/\1/')"
+    if [[ -n "${W_ARCH:-}" && -n "${PY_ARCH:-}" && "$W_ARCH" != "$PY_ARCH" ]]; then
+      echo "Interpreter arch ($PY_ARCH) does not match wheels arch ($W_ARCH)." >&2
+      echo "Use a $W_ARCH build of Python $REQ_VER or adjust PATH." >&2
+      exit 1
+    fi
+  fi
+fi
+
+export PYTHONPATH="$SITE${PYTHONPATH+:$PYTHONPATH}"
+
+exec "$PYEXE" \
+  -W ignore::SyntaxWarning \
+  -W ignore::DeprecationWarning \
+  -m orthofinder.run "$@"

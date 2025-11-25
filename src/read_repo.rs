@@ -10,7 +10,7 @@ use std::io::BufRead;
 /// Holds a single genome + annotation pair from the repo spec
 #[derive(Debug)]
 pub struct RepoFile {
-    pub file_type: String, // "cds", "pep", "genome", "gff"
+    //pub file_type: String, // "cds", "pep", "genome", "gff"
     pub path: String,
 }
 
@@ -118,7 +118,7 @@ pub fn read_repo_spec(file: &str, alignment_type: &str, logger: &Logger) -> Vec<
             entry.files.insert(
                 file_type.clone(),
                 RepoFile {
-                    file_type: file_type.clone(),
+                    //file_type: file_type.clone(),
                     path: full_path,
                 },
             );
@@ -188,7 +188,7 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, main_output_dir:
                     entry.files.insert(
                         key.to_string(),
                         RepoFile {
-                            file_type: key.to_string(), // or a more specific type if needed
+                            //file_type: key.to_string(), // or a more specific type if needed
                             path: path.to_string_lossy().to_string(),
                         },
                     );
@@ -223,7 +223,7 @@ pub fn update_repo_with_parsed_files(repo: &mut Vec<RepoEntry>, main_output_dir:
                 synima_all_files.insert(
                     key.to_string(),
                     RepoFile {
-                        file_type: key.to_string(),
+                        //file_type: key.to_string(),
                         path: path.to_string_lossy().to_string(),
                     },
                 );

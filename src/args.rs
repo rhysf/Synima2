@@ -35,9 +35,26 @@ pub struct Args {
             "#)]
         pub repo_spec: String, 
 
-    /// Step(s) of the Synima pipeline to run (comma-separated).
-    /// e.g., --synima_step create_repo_db,blast_grid,blast_to_orthomcl
-    #[arg(short = 's', long = "synima_step", value_delimiter = ',', default_value = "create-repo-db,blast-grid,blast-to-orthofinder,ortholog-summary,dagchainer,synima")]
+    /// Pipeline steps to run (comma separated). See possible values below.
+    ///
+    /// Example:
+    ///   --synima_step create-repo-db,blast-grid,blast-to-orthofinder
+    #[arg(
+        short = 's',
+        long = "synima_step",
+        value_enum,
+        value_delimiter = ',',
+        default_values = [
+            "create-repo-db",
+            "blast-grid",
+            "blast-to-orthofinder",
+            "ortholog-summary",
+            "dagchainer",
+            "synima"
+        ],
+        long_help = "Run one or more Synima pipeline steps in order. \
+                     Accepts a comma separated list."
+    )]
     pub synima_step: Vec<SynimaStep>,
 
     /// Type of sequence to use for alignment: either "pep" (protein) or "cds" (nucleotide) [default: pep]
@@ -47,6 +64,19 @@ pub struct Args {
     /// Match threshold between GFF and CDS/PEP FASTA specified in Repo
     #[arg(long, default_value = "90")]
     pub match_threshold: u8,
+
+    /// Aligner to use for Step 2 all-vs-all
+    /// Options: auto, diamond, blastplus, legacy
+    #[arg(long = "aligner", default_value = "diamond")]
+    pub aligner: String,
+
+    /// Max targets per query for diamond or BLAST
+    #[arg(long = "max_target_seqs", default_value_t = 250)]
+    pub max_target_seqs: usize,
+
+    /// DIAMOND sensitivity preset (empty for default; examples: "fast", "sensitive", "very-sensitive")
+    #[arg(long = "diamond_sensitivity", default_value = "fast")]
+    pub diamond_sensitivity: String,
 
     /// BLAST e-value cutoff (default: 1e-10)
     #[arg(short = 'e', long, default_value = "1e-10")]
@@ -77,29 +107,31 @@ pub struct Args {
 /// Steps of the Synima pipeline, in execution order.
 /// Only one of the 'blast_to_*' options (3a/3b/3c) should be used in a given run.
 #[derive(Debug, Clone, ValueEnum, PartialEq, Eq)]
+#[clap(rename_all = "kebab-case")]
 pub enum SynimaStep {
-    /// Step 1: Create full sequence databases for all genomes defined in the repo spec.
+    #[value(name = "create-repo-db", help = "Parse repo spec, validate GFF and FASTA, and write parsed .pep/.cds files")]
     CreateRepoDb,
 
-    /// Step 2: Perform an all-vs-all BLAST using a grid-based approach.
+    #[value(name = "blast-grid", help = "Run all-vs-all BLAST on parsed sequences and write tabular results")]
     BlastGrid,
 
-    /// Step 3a: Format BLAST output for use with OrthoMCL.
+    #[value(name = "blast-to-orthofinder", help = "Rewrite FASTA and BLAST to OrthoFinder format, run OrthoFinder")]
+    BlastToOrthofinder,
+
+    #[value(name = "blast-to-orthomcl", help = "Format BLAST output for use with OrthoMCL, run OrthoMCL")]
     BlastToOrthomcl,
 
     /// Step 3b: Format BLAST output for use with a Reciprocal Best Hit (RBH) pipeline.
+    #[value(name = "blast-to-rbh", help = "Format BLAST output to use with a Reciprocal Best Hit (RBH) pipeline")]
     BlastToRbh,
 
-    /// Step 3c: Format BLAST output for use with OrthoFinder.
-    BlastToOrthofinder,
-
-    /// Step 4: Summarize ortholog predictions into a unified cluster file.
+    #[value(name = "ortholog-summary", help = "Collect Orthogroups.tsv and produce orthology summaries")]
     OrthologSummary,
 
-    /// Step 5: Run DAGchainer on gene clusters to identify syntenic blocks.
+    #[value(name = "dagchainer", help = "Run DAGChainer to call synteny blocks")]
     Dagchainer,
 
-    /// Step 6: Generate synteny alignment visualizations with Synima.
+    #[value(name = "synima", help = "Generate Synima plots from orthology and synteny results")]
     Synima,
 }
 

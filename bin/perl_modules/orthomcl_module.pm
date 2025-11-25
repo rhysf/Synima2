@@ -78,11 +78,16 @@ our $BLAST_FORMAT                        = "compact";  # "compact" corresponds t
 our $BLAST_NOCPU                         = 1;          # Useful when running BLAST on multi-processor machine
 our $FORMATDB                            = "formatdb";
 
+# RF add MCL path for Synima2
 #my $uname = $ENV{HOSTTYPE};
-my $uname = `uname`;
-chomp $uname;
-warn "Using $uname : $Bin/mcl.$uname\n";
-our $MCL = "$Bin/mcl.$uname";
+my $os = `uname`;
+my $arch = `uname -m`;
+chomp $os;
+chomp $arch;
+our $MCL = "$Bin/$os.$arch/mcl";
+die "Error: $0 cannot locate mcl" if(! -e $MCL);
+warn "Using $MCL\n";
+
 
 # path
 our $PATH_TO_ORTHOMCL                    = "./";   # must end with "/" 
