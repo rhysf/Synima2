@@ -3,6 +3,7 @@ use crate::Args;
 use crate::RepoEntry;
 use crate::external_tools;
 
+use std::process;
 use std::process::Command;
 use std::path::Path;
 use std::collections::{HashSet}; //HashMap, 
@@ -10,13 +11,8 @@ use std::path::PathBuf;
 //use rayon::prelude::*;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};
-//use std::io::{Error, ErrorKind};
 use std::ffi::OsStr;
-//use std::ffi::OsString;
 use std::process::Stdio;
-
-//#[derive(Debug, Clone, Copy)]
-//pub enum AlignerKind { Diamond, BlastPlus, Legacy }
 
 struct Species {
     name: String,
@@ -420,12 +416,37 @@ pub fn run_all_vs_all(
     }
 }
 
-pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, run_type: &str, logger: &Logger) -> Result<(), std::io::Error> {
+pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, run_type: &str, logger: &Logger) {
     let mut seen_pairs = HashSet::new();
-    let mut writer = File::create(output_file)?;
 
-    for entry in fs::read_dir(blast_out_dir)? {
-        let path = entry?.path();
+    // Create output file
+    let mut writer = match File::create(output_file) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("concatenate_unique_blast_pairs: Failed to create output file {}: {}", output_file.display(),e));
+            process::exit(1);
+        }
+    };
+
+    // Read directory
+    let read_dir = match fs::read_dir(blast_out_dir) {
+        Ok(rd) => rd,
+        Err(e) => {
+            logger.error(&format!("concatenate_unique_blast_pairs: Failed to read directory {}: {}",blast_out_dir.display(), e));
+            process::exit(1);
+        }
+    };
+
+    for entry in read_dir {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                logger.warning(&format!("concatenate_unique_blast_pairs: Skipping unreadable dir entry: {}", e));
+                continue;
+            }
+        };
+
+        let path = entry.path();
         if !path.is_file() {
             continue;
         }
@@ -463,13 +484,36 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
         logger.information(&format!("concatenate_unique_blast_pairs: Including BLAST result: {} vs {}", q, r));
         seen_pairs.insert(pair);
 
-        let reader = BufReader::new(File::open(&path)?);
+        // Open the BLAST file
+        let file = match File::open(&path) {
+            Ok(f) => f,
+            Err(e) => {
+                logger.warning(&format!(
+                    "concatenate_unique_blast_pairs: Failed to open {}: {}",
+                    path.display(),
+                    e
+                ));
+                continue;
+            }
+        };
+
+        let reader = BufReader::new(file);
+
         for line in reader.lines() {
-            writeln!(writer, "{}", line?)?;
+            let line = match line {
+                Ok(l) => l,
+                Err(e) => {
+                    logger.warning(&format!("concatenate_unique_blast_pairs: Failed to read from {}: {}", path.display(), e));
+                    break;
+                }
+            };
+
+            if let Err(e) = writeln!(writer, "{}", line) {
+                logger.error(&format!("concatenate_unique_blast_pairs: Failed to write to {}: {}", output_file.display(), e));
+                process::exit(1);
+            }
         }
     }
-
-    Ok(())
 }
 
 pub fn ensure_blast_dir(out_dir: &Path) -> Result<PathBuf, String> {

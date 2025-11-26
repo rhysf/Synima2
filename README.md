@@ -37,10 +37,41 @@ To build and run Synima2, you’ll need:
     rustc --version
     cargo --version
     ```
-- Python3
+- Python3 (used only for the OrthoFinder step: Note, OrthoMCL and RBH do not require Python)
+
+  Synima2 ships with its own Python site-packages for OrthoFinder under
+  `orthofinder_runtime/<platform>/lib/python3.X/site-packages`.  
+  You only need a system Python whose major.minor matches the runtime that is
+  bundled for your platform:
+
+  - macOS arm64 and x86_64: Python **3.11** on `PATH`
+  - Linux x86_64: Python **3.12** on `PATH`
+
+  The bundled `bin/<platform>/orthofinder` wrapper will check this and print an
+  error if the version does not match.  
+  If you install a different Python version and want to use that instead, you
+  will need to rebuild the corresponding `orthofinder_runtime/<platform>` tree.
+
 - R
-- (optional) Perl and modules File::Basename, Bio::SearchIO (if OrthoMCL used)
-- (optional) Legacy-BLAST or BLAST+ in $PATH
+
+  Required for the plotting / downstream visualisation steps.
+
+- Optional dependencies
+
+  - Perl with modules `File::Basename` and `Bio::SearchIO`  
+    Only needed if you want to run the OrthoMCL pipeline.
+
+  - External aligners and search tools (BLAST, DIAMOND, etc.)
+
+    Synima2 bundles several binaries under `bin/<platform>` and will try those
+    first. If a bundled binary is not available or fails, Synima2 falls back to
+    tools found on `PATH`. You may therefore want to ensure at least one of the
+    following is available on your system:
+
+    - BLAST+ or legacy BLAST (for `--aligner blastplus` or `--aligner blastlegacy`)
+    - DIAMOND (for `--aligner diamond`)
+    - MAFFT, FastTree, MCL, etc, if you plan to run OrthoFinder outside of the
+      bundled setup or extend the workflow
     
 ---
 
@@ -78,17 +109,23 @@ cp target/release/phylorust ~/.local/bin/
 
 Synima -r examples/repo_spec.txt
 
-## Description of the pipeline (Creating a sequence database)
+## Pipeline overview
 
-* Synima visualises the output files from DAGChainer (aligncoords and aligncoords.spans files), which are tab delimited text files detailing the coordinates of sub-genomic regions of 
-synteny between two or more genomes. 
-* Having cloned a local copy of all the code using git clone, and navigated to the examples sub-folder, the first step is to create a 'repo sequence database'. 
-* Create_full_repo_sequence_databases.pl reads in a Repository specification file (example Repo_spec file provided in examples) and outputs two fasta files 
-(Repo_spec.txt.all.cds and Repo_spec.txt.all.pep) which are merged from 
-each of the genome folders and used later.
-* This first step is the most tricky - requiring that IDs in the GFF match the FASTA files. Warnings will alert the user to what ID's are being matched, and how many are matching. This step may need to be re-run until the correct settings or formatted files have been used.
+Synima2 takes annotated genomes, calls orthologous genes, and then visualises synteny blocks between genomes.
 
-The Input Repo_spec files take the format of:
+The high level stages are:
+	1.	Prepare a repository of genomes and parsed feature FASTA files.
+	2.	Run an all vs all sequence search (BLAST or DIAMOND).
+	3.	Infer orthologous groups with OrthoFinder, OrthoMCL, or an RBH pipeline, and summarise them.
+	4.	Run DAGChainer on the orthologs to call synteny blocks and generate Synima plots.
+
+All of these stages can be run using: Synima -r Repo_spec.txt -s <step-name> or Synima -r Repo_spec.txt -s <step-name1>,<step-name2>,...
+
+## Preparing the repository
+
+Synima2 works from a repository specification file that tells it where each genome and its annotations live.
+
+Example Repo_spec.txt:
 
     CNB2    dir     CNB2/
     CNB2    genome  CNB2.genome.fa
@@ -103,44 +140,73 @@ The Input Repo_spec files take the format of:
     CA1280  genome  Cryp_gatt_CA1280_V1.genome.fa
     CA1280  gff     Cryp_gatt_CA1280_V1_FINAL_CALLGENES_1.annotation.gff3
 
-## Description of the pipeline (Predicting orthologous genes)
+Each genome is given a short code (first column) and one or more entries that define:
 
-* With the sequence database made, the second step is to run all vs all BLAST hits using Blast_grid_all_vs_all.pl.
+	•	dir - directory containing that genome
+	•	genome - genomic FASTA
+	•	gff - annotation in GFF3 format
+	•	optional pep or cds FASTA files if you already have them
 
-* Peptide or nucleotide alignments are possible, although peptide is generally recommended.
+Run the repository preparation step:
 
-* BLAST searches can take a long time (especially with many genomes, or many predicted gene or proteins. Therefore, the option of distributing jobs 
-to a cluster via LSF, SGE and UGE is provided (if available). 
+Synima -r Repo_spec.txt -s create-repo
 
-* This step will create folders in each of the genome folders called RBH_blast_[PEP/CDS]. This 
-step requires BLAST+ (makeblastdb and blastn/p) or BLAST legacy (formatdb and blastall) 
-to be in $PATH.
+This will:
+	•	read and validate the repo spec
+	•	match features in the GFF to the genome FASTA
+	•	extract and write parsed .pep and/or .cds FASTA files in a standard layout
 
-* Next run either OrthoMCL, ORthofinder or reciprocal best hits (RBH) on the BLAST output 
-using Blast_all_vs_all_repo_to_OrthoMCL.pl, Blast_all_vs_all_repo_to_Orthofinder.pl or Blast_all_vs_all_repo_to_RBH.pl,
-respectively. 
+Getting this step correct is the most important part of the pipeline. The tool will log which GFF attributes are used for matching, how many genes are successfully mapped, and will warn about any missing or mismatched IDs. You can fix the input GFF or FASTA, or adjust the repo spec, and rerun create-repo until the parsing statistics look sane.
 
-* This will create an OMCL_outdir or RBH_outdir, containing all_orthomcl.out or PEP.RBH.OrthoClusters. 
+## Orthology inference and summary
 
-* RBH will likely be less accurate than OrthoMCL or Orthofinder, but OrthoMCL at least has a limited number of genomes/genes that can be compared 
-due to memory constraints.
+Once the parsed FASTA files exist, run an all vs all sequence search:
 
-* Next, summarise the OrthoMCL output (OMCL_outdir/all_orthomcl.out), 
-or RBH output (RBH_outdir/PEP.RBH.OrthoClusters) or Orthofinder output (Orthofinder_outdir/
-Orthogroups.csv) using Orthologs_to_summary.pl. 
+Synima -r Repo_spec.txt -s align-all
 
-* This step will create ortholog predictions in the output folders GENE_CLUSTERS_SUMMARIES.OMCL or 
-GENE_CLUSTERS_SUMMARIES.RBH or GENE_CLUSTERS_SUMMARIES.Orthofinder respectively.
+This step:
+	•	chooses the appropriate aligner based on --aligner (BLAST+, legacy BLAST, or DIAMOND) and --alignment-type (pep or cds)
+	•	builds per species databases
+	•	runs all vs all searches and writes tabular output (.out) for each genome pair
 
-* The output of this step will also include some summary plots of the orthologs identified, and useful files for phylogenetics etc.
+For peptide data DIAMOND or BLASTP are recommended. For nucleotide data BLASTN is used.
 
-## Description of the pipeline (Visualising synteny)
+Next, choose an orthology method:
 
-* Run DAGChainer on the ortholog summary using DAGchainer_from_gene_clusters.pl.
+# OrthoFinder (default and recommended for many genomes)
+Synima -r Repo_spec.txt -s orthofinder
+
+# OrthoMCL
+Synima -r Repo_spec.txt -s orthomcl
+
+# Reciprocal best hits
+Synima -r Repo_spec.txt -s rbh
+
+These steps:
+	•	reformat the all vs all search output as needed for the chosen method
+	•	run OrthoFinder, OrthoMCL, or the RBH pipeline
+	•	write orthology results into method specific output folders
+
+Next, summarise orthologs into a common format used by the downstream synteny and plotting steps:
+
+Synima -r Repo_spec.txt -s ortholog-summary
+
+The ortholog-summary step will:
+	•	detect which orthology output is present (OrthoFinder first, then OrthoMCL, then RBH)
+	•	parse the corresponding orthogroup or cluster files
+	•	produce a set of summary tables and basic plots in a GENE_CLUSTERS_SUMMARIES.* output directory, suitable for phylogenetic and synteny analysis
+
+Finally, identify chains of orthologs using dagchainer
+
+Synima -r Repo_spec.txt -s dagchainer
+
+The output from dachainer will then be used to generate the final visualisations.
+
+## Visualising synteny
 
 * The final step is to run SynIma.pl on the aligncoords and aligncoords.spans output from DAGChainer. 
 
-## Description of the pipeline (refining synteny plot)
+## Refining synteny plot
 
 * Once you have identified orthologs with the previous steps 1-5, you can re-run 
 only this step with updated parameters to generate new figures. 

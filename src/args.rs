@@ -109,20 +109,20 @@ pub struct Args {
 #[derive(Debug, Clone, ValueEnum, PartialEq, Eq)]
 #[clap(rename_all = "kebab-case")]
 pub enum SynimaStep {
-    #[value(name = "create-repo-db", help = "Parse repo spec, validate GFF and FASTA, and write parsed .pep/.cds files")]
+    #[value(name = "create-repo", alias = "create-repo-db", help = "Parse repo spec, validate GFF and FASTA, and write parsed .pep/.cds files")]
     CreateRepoDb,
 
-    #[value(name = "blast-grid", help = "Run all-vs-all BLAST on parsed sequences and write tabular results")]
+    #[value(name = "align-all", alias = "blast-grid", help = "Run all-vs-all BLAST on parsed sequences and write tabular results")]
     BlastGrid,
 
-    #[value(name = "blast-to-orthofinder", help = "Rewrite FASTA and BLAST to OrthoFinder format, run OrthoFinder")]
+    #[value(name = "orthofinder", alias = "blast-to-orthofinder", help = "Rewrite FASTA and BLAST to OrthoFinder format, run OrthoFinder")]
     BlastToOrthofinder,
 
-    #[value(name = "blast-to-orthomcl", help = "Format BLAST output for use with OrthoMCL, run OrthoMCL")]
+    #[value(name = "orthomcl", alias = "blast-to-orthomcl", help = "Format BLAST output for use with OrthoMCL, run OrthoMCL")]
     BlastToOrthomcl,
 
     /// Step 3b: Format BLAST output for use with a Reciprocal Best Hit (RBH) pipeline.
-    #[value(name = "blast-to-rbh", help = "Format BLAST output to use with a Reciprocal Best Hit (RBH) pipeline")]
+    #[value(name = "rbh", alias = "blast-to-rbh", help = "Format BLAST output to use with a Reciprocal Best Hit (RBH) pipeline")]
     BlastToRbh,
 
     #[value(name = "ortholog-summary", help = "Collect Orthogroups.tsv and produce orthology summaries")]

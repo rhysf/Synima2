@@ -20,6 +20,7 @@ mod parse_dna_and_peptide;
 mod omcl;
 mod blast_rbh;
 mod orthofinder;
+mod ortholog_summary;
 
 use args::{Args, SynimaStep};
 use logger::Logger;
@@ -134,7 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let omcl_log_path = omcl_out_dir.join("omcl.log");
 
         // Concatenate BLAST results (only 1 direction, thereby avoiding redundant hits)
-        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, "orthomcl", &logger)?;
+        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, "orthomcl", &logger);
 
         // Assign genome codes to genes for omcl
         let genome_set = omcl::parse_genome_map_from_gff(&combined_gff_path, &logger)?;
@@ -163,7 +164,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Concatenate BLAST results (both directions)
         let all_vs_all_path = rbh_out_dir.join("all_vs_all.out");
-        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, "rbh", &logger)?;
+        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, "rbh", &logger);
 
         // Save just the first 2 columns
         let rbh_pairs_path = blast_rbh::write_blast_pairs(&all_vs_all_path)?;
@@ -262,7 +263,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(1);
         }
 
-        
+        // Detect which ortholog clustering was used:
+        let source = ortholog_summary::detect_orthology_source(&orthofinder_out_dir, &omcl_out_dir, &rbh_out_dir, &logger);
+
+        /* 
+        match source {
+            OrthologySource::OrthoFinder(path) => {
+                ortholog_summary::from_orthofinder(&path, &logger);
+            }
+            OrthologySource::OrthoMcl(path) => {
+                ortholog_summary::from_orthomcl(&path, &logger);
+            }
+            OrthologySource::Rbh(path) => {
+                ortholog_summary::from_rbh(&path, &logger);
+            }
+        }
+        */
+
 
     }
 
