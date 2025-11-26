@@ -1,51 +1,49 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env python3.12
+import os
+import sys
 
-HERE="$(cd "$(dirname "$0")" && pwd)"
-# Go from bin/Darwin.arm64/orthofinder to orthofinder_runtime/Linux.x86_64
-RUNTIME_ROOT="$(cd "$HERE/../../orthofinder_runtime/Linux.x86_64" && pwd)"
+HERE = os.path.dirname(os.path.abspath(__file__))           # .../bin/Darwin.arm64
+platform_dir = os.path.basename(HERE)                       # "Darwin.arm64"
+root = os.path.normpath(os.path.join(HERE, "..", ".."))     # Synima2 root
+runtime_root = os.path.join(root, "orthofinder_runtime", platform_dir)
 
-SITEPKG=""
-REQ=""
+# 1. Put this bin dir first in PATH so bundled mafft, fasttree, etc are found
+old_path = os.environ.get("PATH", "")
+os.environ["PATH"] = HERE + (os.pathsep + old_path if old_path else "")
 
-# Look for python3.* under this runtime and extract required minor version
-for p in "$RUNTIME_ROOT"/python3.*; do
-  if [ -d "$p/site-packages/orthofinder" ]; then
-    SITEPKG="$p/site-packages"
-    REQ="${p##*/python}"   # "3.11"
-    break
-  fi
-done
+# 2. Locate site-packages
+lib_base = os.path.join(runtime_root, "lib")
 
-if [ -z "$SITEPKG" ] || [ -z "$REQ" ]; then
-  echo "Could not locate bundled site-packages under $RUNTIME_ROOT/python3.*" >&2
-  exit 1
-fi
+if not os.path.isdir(lib_base):
+    sys.stderr.write(f"orthofinder wrapper: missing lib/ under {runtime_root}\n")
+    sys.exit(1)
 
-pick_python() {
-  for cmd in "python$REQ" "python${REQ/./}" "python3" "python"; do
-    if command -v "$cmd" >/dev/null 2>&1; then
-      ver="$("$cmd" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null || true)"
-      if [ "$ver" = "$REQ" ]; then
-        echo "$cmd"
-        return 0
-      fi
-    fi
-  done
-  return 1
-}
+site_packages = None
+for name in os.listdir(lib_base):
+    if name.startswith("python3."):
+        candidate = os.path.join(lib_base, name, "site-packages")
+        if os.path.isdir(candidate):
+            site_packages = candidate
+            break
 
-PY_CMD="$(pick_python || true)"
-if [ -z "$PY_CMD" ]; then
-  echo "Need Python $REQ on PATH. Please install it." >&2
-  exit 1
-fi
+if site_packages is None:
+    sys.stderr.write(
+        f"orthofinder wrapper: could not find python3.X/site-packages under {lib_base}\n"
+    )
+    sys.exit(1)
 
-export PYTHONPATH="$SITEPKG${PYTHONPATH:+:$PYTHONPATH}"
-# Optionally avoid user site packages interfering:
-# export PYTHONNOUSERSITE=1
+# Optional: enforce the Python version to match the runtime you built (3.12 here)
+required = "3.12"
+current = f"{sys.version_info[0]}.{sys.version_info[1]}"
+if current != required:
+    sys.stderr.write(
+        f"orthofinder wrapper: requires Python {required}, got {current}\n"
+    )
+    sys.exit(1)
 
-exec "$PY_CMD" \
-  -W ignore::SyntaxWarning \
-  -W ignore::DeprecationWarning \
-  -m orthofinder.run "$@"
+# Put site-packages first on sys.path so scripts_of and deps are found
+sys.path.insert(0, site_packages)
+
+if __name__ == "__main__":
+    from scripts_of.__main__ import main
+    sys.exit(main())
