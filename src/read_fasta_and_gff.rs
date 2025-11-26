@@ -478,6 +478,11 @@ pub fn match_or_extract_genes_from_gff(
 
     for entry in repo {
         let genome = &entry.name;
+
+        if genome == "synima_all" {
+            continue;
+        }
+
         let has_sequences = entry.files.contains_key(alignment_type);
 
         // get parsed Vec<GffFeature> from that file, already in memory

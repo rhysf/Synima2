@@ -8,6 +8,7 @@ use std::io::{BufRead, BufReader, Write, BufWriter};
 //use std::process::{Command, Stdio};
 use std::path::PathBuf;
 use regex::Regex;
+use std::process;
 
 // for OMCL
 pub fn parse_genome_map_from_gff<P: AsRef<Path>>(
@@ -84,23 +85,29 @@ pub fn write_gcoded_m8_and_sort<P: AsRef<Path>>(
     m8_input_path: P,
     m8_output_path: P,
     logger: &Logger,
-) -> Result<(), String> {
+) {
 
     let input_path = m8_input_path.as_ref();
     let output_path = m8_output_path.as_ref();
     let tmp_path = output_path.with_extension("tmp");
 
     // Open input
-    let input_file = File::open(input_path).map_err(|e| {
-        logger.error(&format!("write_gcoded_m8_and_sort: Cannot open BLAST m8 input: {}", e));
-        format!("Cannot open BLAST m8 input {}: {}", input_path.display(), e)
-    })?;
+    let input_file = match File::open(input_path) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("write_gcoded_m8_and_sort: Cannot open BLAST m8 input: {}", e));
+            std::process::exit(1);
+        }
+    };
 
     // Create temp output file
-    let output_file = File::create(&tmp_path).map_err(|e| {
-        logger.error(&format!("write_gcoded_m8_and_sort: Cannot create temp output: {}", e));
-        format!("Cannot create temp output {}: {}", tmp_path.display(), e)
-    })?;
+    let output_file = match File::create(&tmp_path) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("write_gcoded_m8_and_sort: Cannot create temp output: {}", e));
+            std::process::exit(1);
+        }
+    };
 
     let reader = BufReader::new(input_file);
     let mut writer = BufWriter::new(output_file);
@@ -108,8 +115,15 @@ pub fn write_gcoded_m8_and_sort<P: AsRef<Path>>(
     //logger.information(&format!("write_gcoded_m8_and_sort: {} -> {} (tmp {})", input_path.display(), output_path.display(), tmp_path.display()));
     logger.information(&format!("write_gcoded_m8_and_sort: {}", input_path.display()));
 
-    for line in reader.lines() {
-        let line = line.map_err(|e| format!("Error reading m8: {}", e))?;
+    for line_res in reader.lines() {
+        let line = match line_res {
+            Ok(l) => l,
+            Err(e) => {
+                logger.error(&format!("write_gcoded_m8_and_sort: Error reading m8: {}", e));
+                std::process::exit(1);
+            }
+        };
+
         let mut fields: Vec<String> = line.split('\t').map(|s| s.to_string()).collect();
         if fields.len() < 12 {
             continue;
@@ -118,19 +132,48 @@ pub fn write_gcoded_m8_and_sort<P: AsRef<Path>>(
         let acc_a = fields[0].clone();
         let acc_b = fields[1].clone();
 
-       // Split field[0] into genome|id
-        let (genome_a, gene_id_a) = acc_a.split_once('|').ok_or_else(|| format!("Invalid format in query ID: {}", fields[0]))?;
-        let (genome_b, gene_id_b) = acc_b.split_once('|').ok_or_else(|| format!("Invalid format in subject ID: {}", fields[1]))?;
+        // Split field[0] into genome|id
+        let (genome_a, gene_id_a) = match acc_a.split_once('|') {
+            Some(t) => t,
+            None => {
+                logger.error(&format!("write_gcoded_m8_and_sort: invalid query ID format: {}", fields[0]));
+                continue;
+            }
+        };
+
+        let (genome_b, gene_id_b) = match acc_b.split_once('|') {
+            Some(t) => t,
+            None => {
+                logger.error(&format!("write_gcoded_m8_and_sort: invalid subject ID format: {}", fields[1]));
+                continue;
+            }
+        };
 
         // Look up code for genome
-        let code_a = genome_to_code.get(genome_a).ok_or_else(|| format!("Missing genome code for genome: {}", genome_a))?;
-        let code_b = genome_to_code.get(genome_b).ok_or_else(|| format!("Missing genome code for genome: {}", genome_b))?;
+        let code_a = match genome_to_code.get(genome_a) {
+            Some(c) => c,
+            None => {
+                logger.error(&format!("write_gcoded_m8_and_sort: missing genome code for {}", genome_a));
+                continue;
+            }
+        };
+
+        let code_b = match genome_to_code.get(genome_b) {
+            Some(c) => c,
+            None => {
+                logger.error(&format!("write_gcoded_m8_and_sort: missing genome code for {}", genome_b));
+                continue;
+            }
+        };
 
         // Replace with Gcoded format: G001|gene_id
         fields[0] = format!("{}|{}", code_a, gene_id_a);
         fields[1] = format!("{}|{}", code_b, gene_id_b);
 
-        writeln!(writer, "{}", fields.join("\t")).map_err(|e| format!("Write error: {}", e))?;
+        if let Err(e) = writeln!(writer, "{}", fields.join("\t")) {
+            logger.error(&format!("write_gcoded_m8_and_sort: write error to {}: {}", tmp_path.display(), e));
+            std::process::exit(1);
+        }
     }
 
     drop(writer); // flush temp file
@@ -142,7 +185,13 @@ pub fn write_gcoded_m8_and_sort<P: AsRef<Path>>(
     let out_path_str = m8_output_path.as_ref().to_string_lossy();
     let sort_cmd = format!("sort -T . -S 2G -k1,1 -k12,12gr {} > {}", tmp_path_str, out_path_str);
 
-    let status = std::process::Command::new("sh").arg("-c").arg(&sort_cmd).status().map_err(|e| format!("Failed to run sort: {}", e))?;
+    let status = match std::process::Command::new("sh").arg("-c").arg(&sort_cmd).status() {
+        Ok(s) => s,
+        Err(e) => {
+            logger.error(&format!("write_gcoded_m8_and_sort: failed to run sort: {}", e));
+            std::process::exit(1);
+        }
+    };
 
     if !status.success() {
         logger.error("write_gcoded_m8_and_sort: sort command failed");
@@ -151,74 +200,122 @@ pub fn write_gcoded_m8_and_sort<P: AsRef<Path>>(
 
     std::fs::remove_file(tmp_path).ok();
     logger.information(&format!("write_gcoded_m8_and_sort: Finished with {}", out_path_str));
-
-    Ok(())
 }
 
 pub fn convert_m8_to_orthomcl_format(
     m8_path: &Path,
     out_prefix: &Path,
-    genome_to_code: &HashMap<String, String>,
+    _genome_to_code: &HashMap<String, String>, // kept only to match call-site
     logger: &Logger,
 ) -> Result<(PathBuf, PathBuf), String> {
 
     logger.information(&format!("convert_m8_to_orthomcl_format: reading {}", m8_path.display()));
 
-    let org_code_len = genome_to_code.values().next().ok_or("convert_m8_to_orthomcl_format: No genome codes available")?.len();
-
-    let input = File::open(m8_path).map_err(|e| format!("convert_m8_to_orthomcl_format: Failed to open m8 input: {}", e))?;
+    // Open input m8
+    let input = match File::open(m8_path) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("convert_m8_to_orthomcl_format: failed to open m8 input {}: {}", m8_path.display(), e));
+            std::process::exit(1);
+        }
+    };
     let reader = BufReader::new(input);
 
+    // Output paths
     let bpo_path = out_prefix.with_extension("bpo");
-    let bpo_file = File::create(&bpo_path).map_err(|e| format!("convert_m8_to_orthomcl_format: Failed to create bpo output: {}", e))?;
-    let mut bpo_writer = BufWriter::new(bpo_file);
-
     let gg_path = out_prefix.with_extension("gg");
-    let gg_file = File::create(&gg_path).map_err(|e| format!("convert_m8_to_orthomcl_format: Failed to create gg output: {}", e))?;
+
+    let bpo_file = match File::create(&bpo_path) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("convert_m8_to_orthomcl_format: failed to create bpo output {}: {}", bpo_path.display(), e));
+            std::process::exit(1);
+        }
+    };
+    let gg_file = match File::create(&gg_path) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("convert_m8_to_orthomcl_format: failed to create gg output {}: {}", gg_path.display(), e));
+            std::process::exit(1);
+        }
+    };
+
+    let mut bpo_writer = BufWriter::new(bpo_file);
     let mut gg_writer = BufWriter::new(gg_file);
 
-    let mut seen = HashSet::new();
+    // For .gg: genome code -> set of gene IDs
     let mut org_to_accs: HashMap<String, HashSet<String>> = HashMap::new();
-    let mut sim_counter = 0;
 
-    for line in reader.lines() {
-        let line = line.map_err(|e| format!("convert_m8_to_orthomcl_format: Error reading m8 file: {}", e))?;
-        let fields: Vec<&str> = line.split('\t').collect();
-        if fields.len() < 12 {
+    // For deduping m8 rows
+    let mut seen: HashSet<String> = HashSet::new();
+
+    let mut sim_counter: u64 = 0;
+
+    //let org_code_len = genome_to_code.values().next().ok_or("convert_m8_to_orthomcl_format: No genome codes available")?.len();
+
+    for (lineno, line_res) in reader.lines().enumerate() {
+        let line = match line_res {
+            Ok(l) => l,
+            Err(e) => {
+                logger.error(&format!("convert_m8_to_orthomcl_format: error reading m8 at line {} in {}: {}", lineno + 1, m8_path.display(), e));
+                std::process::exit(1);
+            }
+        };
+
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
             continue;
         }
 
-        let acc_a = fields[0];
-        let acc_b = fields[1];
-        let per_id: f32 = fields[2].parse().unwrap_or(0.0);
-        let lend_a = fields[6];
-        let rend_a = fields[7];
-        let lend_b = fields[8];
-        let rend_b = fields[9];
-        let evalue = fields[10];
-
-        let key = format!("{}{}{}", acc_a, '\0', acc_b);
-        if !seen.insert(key) {
-            continue; // duplicate
+        let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() < 12 {
+            logger.warning(&format!("convert_m8_to_orthomcl_format: skipping malformed m8 line {} ({} columns)", lineno + 1, fields.len()));
+            continue;
         }
 
-        let org_a = &acc_a[0..org_code_len.min(acc_a.len())];
-        let org_b = &acc_b[0..org_code_len.min(acc_b.len())];
+        // m8 fields:
+        // 0 qseqid, 1 sseqid, 2 pident, 3 length, 10 evalue, 11 bitscore
+        let acc_a = fields[0];
+        let acc_b = fields[1];
+        let aln_len = fields[3];     // numeric
+        let evalue = fields[10];     // "1e-50", "0.0", etc
+        let bit_score = fields[11];  // numeric
 
-        org_to_accs.entry(org_a.to_string()).or_default().insert(acc_a.to_string());
-        org_to_accs.entry(org_b.to_string()).or_default().insert(acc_b.to_string());
+        // Deduplicate exact q/s pairs
+        let key = format!("{acc_a}\0{acc_b}");
+        if !seen.insert(key) {
+            continue;
+        }
 
-        let per_id_int = (per_id + 0.5).floor() as u32;
+        // Record genes for .gg (we assume write_gcoded_m8_and_sort has already
+        // turned CNB2|id into G00X|id, so "genome code" is the prefix before '|').
+        if let Some((gcode, _)) = acc_a.split_once('|') {
+            org_to_accs.entry(gcode.to_string()).or_default().insert(acc_a.to_string());
+        }
+        if let Some((gcode, _)) = acc_b.split_once('|') {
+            org_to_accs.entry(gcode.to_string()).or_default().insert(acc_b.to_string());
+        }
 
         sim_counter += 1;
-        writeln!(bpo_writer, "{};{};0;{};0;{};{};1:{}-{}:{}-{}", sim_counter, acc_a, acc_b, evalue, per_id_int, lend_a, rend_a, lend_b, rend_b)
-        .map_err(|e| format!("Failed to write to bpo: {}", e))?;
+
+        // Keep all the fields numeric (OrthoMCL expects them to be numeric)
+        // id ; q_id ; q_idx ; s_id ; s_idx ; pval ; bitscore ; aln_len
+        let bpo_line = format!("{};{};0;{};0;{};{};{}", sim_counter, acc_a, acc_b, evalue, bit_score, aln_len);
+
+        if let Err(e) = writeln!(bpo_writer, "{bpo_line}") {
+            logger.error(&format!("convert_m8_to_orthomcl_format: write error to {}: {}", bpo_path.display(), e));
+            std::process::exit(1);
+        }
     }
 
+    // Write .gg in a deterministic order
     for (org, accs) in org_to_accs {
-        let mut genes: Vec<_> = accs.into_iter().collect();
+        let mut genes: Vec<String> = accs.into_iter().collect();
         genes.sort();
-        writeln!(gg_writer, "{}: {}", org, genes.join(" ")).map_err(|e| format!("Failed to write to gg: {}", e))?;
+        if let Err(e) = writeln!(gg_writer, "{}: {}", org, genes.join(" ")) {
+            logger.error(&format!("convert_m8_to_orthomcl_format: write error to {}: {}", gg_path.display(), e));
+            std::process::exit(1);
+        }
     }
 
     logger.information(&format!("convert_m8_to_orthomcl_format: OMCL .bpo and .gg written to {}.*", out_prefix.display()));
@@ -298,4 +395,65 @@ pub fn run_orthomcl_clustering<P: AsRef<Path>>(
     }
 
     Ok(())
+}
+
+/// Load genome code → genome name mapping from genome_codes.tsv.
+/// Expected format: `CNB2<TAB>G001` (additional columns ignored).
+pub fn load_genome_codes(codes_path: &Path, logger: &Logger) -> HashMap<String, String> {
+
+    if !codes_path.is_file() {
+        logger.error(&format!("from_orthomcl: could not find genome_codes.tsv at {}", codes_path.display()));
+        process::exit(1);
+    }
+
+    let file = match File::open(codes_path) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("from_orthomcl: failed to open genome_codes.tsv {}: {}", codes_path.display(), e));
+            process::exit(1);
+        }
+    };
+
+    let reader = BufReader::new(file);
+    let mut map = HashMap::<String, String>::new();
+
+    for line_res in reader.lines() {
+        let line = match line_res {
+            Ok(l) => l,
+            Err(e) => {
+                logger.error(&format!("from_orthomcl: read error in {}: {}", codes_path.display(), e));
+                process::exit(1);
+            }
+        };
+
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        // Allow either strict TSV or generic whitespace-separated
+        let parts: Vec<&str> = trimmed.split('\t').collect();
+        let parts = if parts.len() >= 2 {
+            parts
+        } else {
+            trimmed.split_whitespace().collect()
+        };
+
+        if parts.len() < 2 {
+            logger.error(&format!("from_orthomcl: expected at least 2 columns in genome_codes.tsv, got: {}", trimmed));
+            process::exit(1);
+        }
+
+        let genome = parts[0].to_string();
+        let code = parts[1].to_string();
+
+        map.insert(code, genome);
+    }
+
+    if map.is_empty() {
+        logger.error(&format!("from_orthomcl: genome_codes.tsv at {} parsed as empty", codes_path.display()));
+        process::exit(1);
+    }
+
+    map
 }

@@ -6,7 +6,7 @@ use crate::external_tools;
 use std::process;
 use std::process::Command;
 use std::path::Path;
-use std::collections::{HashSet}; //HashMap, 
+//use std::collections::{HashSet}; //HashMap, 
 use std::path::PathBuf;
 //use rayon::prelude::*;
 use std::fs::{self, File};
@@ -416,8 +416,8 @@ pub fn run_all_vs_all(
     }
 }
 
-pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, run_type: &str, logger: &Logger) {
-    let mut seen_pairs = HashSet::new();
+pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, logger: &Logger) {
+    //let mut seen_pairs = HashSet::new();
 
     // Create output file
     let mut writer = match File::create(output_file) {
@@ -475,24 +475,20 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
         };
 
         // Ensure we only process one of (A,B) or (B,A)
-        let pair = if q <= r { (q.to_string(), r.to_string()) } else { (r.to_string(), q.to_string()) };
-        if run_type == "orthomcl" && seen_pairs.contains(&pair) {
-            logger.information(&format!("concatenate_unique_blast_pairs: Skipping reciprical BLAST pair: {} vs {}", q, r));
-            continue;
-        }
+        //let pair = if q <= r { (q.to_string(), r.to_string()) } else { (r.to_string(), q.to_string()) };
+        //if run_type == "orthomcl" && seen_pairs.contains(&pair) {
+        //    logger.information(&format!("concatenate_unique_blast_pairs: Skipping reciprical BLAST pair: {} vs {}", q, r));
+        //    continue;
+        //}
 
         logger.information(&format!("concatenate_unique_blast_pairs: Including BLAST result: {} vs {}", q, r));
-        seen_pairs.insert(pair);
+        //seen_pairs.insert(pair);
 
         // Open the BLAST file
         let file = match File::open(&path) {
             Ok(f) => f,
             Err(e) => {
-                logger.warning(&format!(
-                    "concatenate_unique_blast_pairs: Failed to open {}: {}",
-                    path.display(),
-                    e
-                ));
+                logger.warning(&format!("concatenate_unique_blast_pairs: Failed to open {}: {}", path.display(), e));
                 continue;
             }
         };

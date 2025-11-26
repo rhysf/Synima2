@@ -53,15 +53,17 @@ pub struct GffFeature {
     pub original_line: String
 }
 
-// used to return HashMap<String, HashMap<String, Vec<String>>>
-// now returns HashMap<String, Vec<GffFeature>>  // genome_name -> features
+// returns HashMap<String, Vec<GffFeature>>  // genome_name -> features
 pub fn save_all_features(repo_entries: &[RepoEntry], logger: &Logger,) -> HashMap<String, Vec<GffFeature>> {
     let mut all_gff_maps: HashMap<String, Vec<GffFeature>> = HashMap::new();
-    //let mut all_gff_maps: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
 
     logger.information("──────────────────────────────");
     for entry in repo_entries {
         let genome_name = &entry.name;
+
+        if genome_name == "synima_all" {
+            continue;
+        }
 
         if let Some(gff_file) = entry.files.get("gff") {
             let gff_path = Path::new(&gff_file.path);
@@ -74,7 +76,6 @@ pub fn save_all_features(repo_entries: &[RepoEntry], logger: &Logger,) -> HashMa
             //logger.information(&format!("Loaded {} feature types from genome '{}'", feature_map.len(), genome_name));
 
             //let mut counts: Vec<_> = feature_map.iter().map(|(feature, entries)| (feature, entries.len())).collect();
-
             // Sort descending by count
             //counts.sort_by(|a, b| b.1.cmp(&a.1));
 
