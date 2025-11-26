@@ -59,6 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let omcl_out_dir = main_output_dir.join("synima_omcl_out");
     let rbh_out_dir = main_output_dir.join("synima_rbh_out");
     let orthofinder_out_dir = main_output_dir.join("synima_orthofinder_out");
+    let gene_clusters_out_dir = main_output_dir.join("synima_gene_clusters_out");
 
     if args.synima_step.contains(&SynimaStep::CreateRepoDb) {
         logger.information("──────────────────────────────");
@@ -254,6 +255,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.information("────────────────────────────────");
         logger.information("Running Step 4: ortholog-summary");
         logger.information("────────────────────────────────");
+
+        // make output director
+        if let Err(e) = fs::create_dir_all(&gene_clusters_out_dir) {
+            logger.error(&format!("Failed to create database directory {}: {}", gene_clusters_out_dir.display(), e));
+            std::process::exit(1);
+        }
+
+        
 
     }
 

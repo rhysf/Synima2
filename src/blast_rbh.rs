@@ -276,14 +276,15 @@ pub fn write_final_rbh_clusters<P: AsRef<Path>>(
                     Some(gene) => {
                         if let Err(e) = writeln!(
                             writer,
-                            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                            //"{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                            "{}\t{}\t{}\t{}",
                             cluster_id,
                             label,
                             gene.genome,
                             gene.gene_id,
-                            gene.gene_id,
-                            gene.gene_id,
-                            gene.name
+                            //gene.gene_id,
+                            //gene.gene_id,
+                            //gene.name
                         ) {
                             logger.error(&format!("write_final_rbh_clusters: Write error for {} {}: {}",label, gene_id_clean, e));
                             process::exit(1);

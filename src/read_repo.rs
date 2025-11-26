@@ -24,7 +24,7 @@ pub struct RepoEntry {
 pub struct GeneStruct {
     pub genome: String,
     pub gene_id: String,
-    pub name: String,
+    //pub name: String,
 }
 
 /// Read a repo spec file in the format:
@@ -281,7 +281,7 @@ pub fn build_gene_struct_map(repo: &[RepoEntry], logger: &Logger) -> HashMap<Str
                         GeneStruct {
                             genome: genome.clone(),
                             gene_id,
-                            name: parts[1].to_string(), // using gene_id again for name, like in Perl
+                            //name: parts[1].to_string(), // using gene_id again for name, like in Perl
                         },
                     );
                 }
