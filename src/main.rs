@@ -41,26 +41,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let repo_base_dir = repo_spec_path.parent().unwrap_or_else(|| Path::new("."));
     let repo_basename = Path::new(&args.repo_spec).file_name().and_then(|s| s.to_str()).unwrap_or("repo_spec.txt");
 
-    // Create main out dir
+    // Output dirs
     let main_output_dir = repo_base_dir.join(&args.output_dir);
-    fs::create_dir_all(&main_output_dir).map_err(|e| format!("Failed to create output directory {}: {}", main_output_dir.display(), e))?;
+    let repo_out_dir = main_output_dir.join("synima_step1_create-repo");
+    let blast_out_dir = main_output_dir.join("synima_step2-align-all");
+    let rbh_out_dir = main_output_dir.join("synima_step3-rbh");
+    let omcl_out_dir = main_output_dir.join("synima_step3-orthomcl");
+    let orthofinder_out_dir = main_output_dir.join("synima_step3-orthofinder");
+    let gene_clusters_out_dir = main_output_dir.join("synima_step4-ortholog-summary");
+    if let Err(e) = fs::create_dir_all(&main_output_dir) {
+        logger.error(&format!("Failed to create output directory {}: {}", main_output_dir.display(), e));
+        std::process::exit(1);
+    }
 
     // combined data
     let combined_fasta_filename = format!("{}.all.{}", repo_basename, &args.alignment_type);
     let combined_gff_filename = format!("{}.all.gff", repo_basename);
-    let combined_fasta_path = main_output_dir.join(combined_fasta_filename);
-    let combined_gff_path = main_output_dir.join(combined_gff_filename);
+    let combined_fasta_path = repo_out_dir.join(combined_fasta_filename);
+    let combined_gff_path = repo_out_dir.join(combined_gff_filename);
 
     // Set input subdirs
     let (bin_name, bin_dir) = external_tools::locate_bin_folder("bin", &logger)?;
     logger.information(&format!("Bin name and path: {} and {}", bin_name, bin_dir.display()));
-
-    // Set output subdirs
-    let blast_out_dir = main_output_dir.join("synima_blast_out");
-    let omcl_out_dir = main_output_dir.join("synima_omcl_out");
-    let rbh_out_dir = main_output_dir.join("synima_rbh_out");
-    let orthofinder_out_dir = main_output_dir.join("synima_orthofinder_out");
-    let gene_clusters_out_dir = main_output_dir.join("synima_gene_clusters_out");
 
     // GFF's filtered to memory (need for steps 1 and 4)
     let genomes = read_fasta::load_genomic_fastas(&repo, &logger);
@@ -82,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for genome in genome_to_genes.keys() {
 
             // Create output dir: main_output_dir/genome/
-            let genome_dir = main_output_dir.join(genome);
+            let genome_dir = repo_out_dir.join(genome);
             if let Err(e) = fs::create_dir_all(&genome_dir) {
                 logger.error(&format!("Failed to create database directory {}: {}", genome_dir.display(), e));
                 std::process::exit(1);
@@ -105,7 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Update repo (only do once)
-    read_repo::update_repo_with_parsed_files(&mut repo, &main_output_dir, &logger);
+    read_repo::update_repo_with_parsed_files(&mut repo, &repo_out_dir, &logger);
     
     if args.synima_step.contains(&SynimaStep::BlastGrid) {
         logger.information("──────────────────────────");
