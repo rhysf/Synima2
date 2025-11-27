@@ -24,7 +24,7 @@ fn run_and_capture(cmd: &str, args: &[&str], logger: &Logger) -> String {
 }
 
 /// Locates "<outdir>/<OS>.<ARCH>" and returns the folder name and full path.
-pub fn locate_bin_folder(outdir: impl AsRef<Path>, logger: &Logger) -> std::io::Result<(String, PathBuf)> {
+pub fn locate_bin_folder(outdir: impl AsRef<Path>, logger: &Logger) -> (String, PathBuf) {
     let os = run_and_capture("uname", &[], &logger);       // Example: "Darwin"
     let arch = run_and_capture("uname", &["-m"], &logger); // Example: "arm64"
 
@@ -36,7 +36,7 @@ pub fn locate_bin_folder(outdir: impl AsRef<Path>, logger: &Logger) -> std::io::
         std::process::exit(1);
     }
 
-    Ok((folder_name, full_path))
+    (folder_name, full_path)
 }
 
 pub fn find_executable(program: &str, bin_dir: &Path, logger: &Logger) -> PathBuf {

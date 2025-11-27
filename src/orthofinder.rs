@@ -1,6 +1,7 @@
 use crate::logger::Logger;
 use crate::RepoEntry;
 use crate::write_fasta;
+use crate::mkdir;
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
@@ -9,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 
 /// Build SpeciesIDs.txt and return species name to ID map
-fn generate_species_ids(blast_dir: &Path, out_dir: &Path) -> Result<BTreeMap<String, usize>, String> {
+fn generate_species_ids(blast_dir: &Path, out_dir: &Path, logger: &Logger) -> Result<BTreeMap<String, usize>, String> {
     let mut species_set = BTreeMap::new();
 
     for entry in fs::read_dir(blast_dir).map_err(|e| format!("Failed to read blast dir: {e}"))? {
@@ -28,7 +29,8 @@ fn generate_species_ids(blast_dir: &Path, out_dir: &Path) -> Result<BTreeMap<Str
     let species_id_map: BTreeMap<String, usize> = species_list.iter().enumerate().map(|(i, s)| (s.clone(), i)).collect();
 
     let blast_subdir = out_dir.join("Blast");
-    fs::create_dir_all(&blast_subdir).map_err(|e| format!("Failed to create Blast dir: {e}"))?;
+    mkdir(&blast_subdir, &logger, "generate_species_ids");
+
     let file_path = blast_subdir.join("SpeciesIDs.txt");
     let mut f = BufWriter::new(File::create(&file_path).map_err(|e| format!("Failed to create SpeciesIDs.txt: {e}"))?);
 
@@ -48,10 +50,13 @@ pub fn rewrite_blast_files(
     blast_dir: &Path,
     of_out_dir: &Path,
     species_ids: &BTreeMap<String, usize>,
-    seq_id_map: &HashMap<String, String>
+    seq_id_map: &HashMap<String, String>,
+    logger: &Logger
 ) -> Result<(), String> {
+
+    // Out directory
     let of_blast = of_out_dir.join("Blast");
-    fs::create_dir_all(&of_blast).map_err(|e| format!("Failed to create Blast dir: {e}"))?;
+    mkdir(&of_blast, &logger, "rewrite_blast_files");
 
     for entry in fs::read_dir(blast_dir).map_err(|e| format!("Failed to read blast dir: {e}"))? {
         let path = entry.map_err(|e| format!("Dir entry error: {e}"))?.path();
@@ -106,7 +111,7 @@ pub fn prepare_orthofinder_blast(
 
     // speciesID.txt
     logger.information(&format!("prepare_orthofinder_blast: generate species ids: {}", orthofinder_out_dir.display()));
-    let species_ids = generate_species_ids(blast_out_dir, orthofinder_out_dir)?;
+    let species_ids = generate_species_ids(blast_out_dir, orthofinder_out_dir, &logger)?;
 
     // Process FASTAs -> Blast/Species<ID>.fa and SequenceIDs.txt, and build seq map
     logger.information(&format!("prepare_orthofinder_blast: rewrite FASTA files with species codes: {}", orthofinder_out_dir.display()));
@@ -114,7 +119,7 @@ pub fn prepare_orthofinder_blast(
 
     // Rewrite BLAST files using sequence map
     logger.information(&format!("prepare_orthofinder_blast: rewrite BLAST files with species codes: {}", orthofinder_out_dir.display()));
-    rewrite_blast_files(blast_out_dir, orthofinder_out_dir, &species_ids, &seq_id_map)?;
+    rewrite_blast_files(blast_out_dir, orthofinder_out_dir, &species_ids, &seq_id_map, &logger)?;
 
    Ok(())
 }

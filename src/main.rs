@@ -7,6 +7,7 @@ use std::process::Stdio;
 
 mod args;
 mod logger;
+mod util;
 mod read_repo;
 mod read_fasta;
 mod read_gff;
@@ -22,11 +23,12 @@ mod orthofinder;
 mod ortholog_summary;
 mod ortholog_summary_plot;
 
-use args::{Args, SynimaStep};
+use args::{Args, SynimaStep}; //
 use logger::Logger;
 use read_repo::{RepoEntry};
 use crate::ortholog_summary::OrthologySource;
 use crate::ortholog_summary::OrthologyMethod;
+use crate::util::mkdir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
@@ -50,10 +52,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let omcl_out_dir = main_output_dir.join("synima_step3-orthomcl");
     let orthofinder_out_dir = main_output_dir.join("synima_step3-orthofinder");
     let gene_clusters_out_dir = main_output_dir.join("synima_step4-ortholog-summary");
-    if let Err(e) = fs::create_dir_all(&main_output_dir) {
-        logger.error(&format!("Failed to create output directory {}: {}", main_output_dir.display(), e));
-        std::process::exit(1);
-    }
+    let tree_out_dir = main_output_dir.join("synima_step5-tree");
+    let dagchainer_out_dir = main_output_dir.join("synima_step6-dagchainer");
+
+    mkdir(&main_output_dir, &logger, "main");
 
     // combined data
     let combined_fasta_filename = format!("{}.all.{}", repo_basename, &args.alignment_type);
@@ -62,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let combined_gff_path = repo_out_dir.join(combined_gff_filename);
 
     // Set input subdirs
-    let (bin_name, bin_dir) = external_tools::locate_bin_folder("bin", &logger)?;
+    let (bin_name, bin_dir) = external_tools::locate_bin_folder("bin", &logger);
     logger.information(&format!("Bin name and path: {} and {}", bin_name, bin_dir.display()));
 
     // GFF's filtered to memory (need for steps 1 and 4)
@@ -78,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let features = read_gff::save_all_features(&repo, &logger);
 
         // Extract gene sequences either from GFF & genome, or match GFF & CDS/PEP
-        let (genome_to_genes, genome_to_features, all_genes, all_features) = read_fasta_and_gff::match_or_extract_genes_from_gff(&repo, &args, &features, &genomes, &logger)?;
+        let (genome_to_genes, genome_to_features, all_genes, all_features) = read_fasta_and_gff::match_or_extract_genes_from_gff(&repo, &args, &features, &genomes, &logger);
         genome_to_features2 = Some(genome_to_features.clone());
 
         // Write individual output files
@@ -86,10 +88,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Create output dir: main_output_dir/genome/
             let genome_dir = repo_out_dir.join(genome);
-            if let Err(e) = fs::create_dir_all(&genome_dir) {
-                logger.error(&format!("Failed to create database directory {}: {}", genome_dir.display(), e));
-                std::process::exit(1);
-            }
+            mkdir(&genome_dir, &logger, "main (reate-repo-db)");
 
             // Write outputs
             let fasta_entries = &genome_to_genes[genome];
@@ -129,10 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.information("─────────────────────────────────");
 
         // make output directory
-        if let Err(e) = fs::create_dir_all(&omcl_out_dir) {
-            logger.error(&format!("Failed to create database directory {}: {}", omcl_out_dir.display(), e));
-            std::process::exit(1);
-        }
+        mkdir(&omcl_out_dir, &logger, "main (blast-to-orthomcl)");
 
         // output files
         let all_vs_all_path = omcl_out_dir.join("all_vs_all.out");
@@ -164,23 +160,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let slclust_path = external_tools::find_executable("slclust", &bin_dir, &logger);
 
         // make output directory
-        if let Err(e) = fs::create_dir_all(&rbh_out_dir) {
-            logger.error(&format!("Failed to create database directory {}: {}", rbh_out_dir.display(), e));
-            std::process::exit(1);
-        }
+        mkdir(&rbh_out_dir, &logger, "main (blast-to-rbh)");
 
         // Concatenate BLAST results
         let all_vs_all_path = rbh_out_dir.join("all_vs_all.out");
         blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, &logger);
 
         // Save just the first 2 columns
-        let rbh_pairs_path = blast_rbh::write_blast_pairs(&all_vs_all_path)?;
+        let rbh_pairs_path = blast_rbh::write_blast_pairs(&all_vs_all_path, &logger)?;
 
         // Run slclust
         let slclust_output = blast_rbh::run_slclust_on_pairs(&slclust_path, &rbh_pairs_path, &logger)?;
 
         // Parse clusters and map genes to their cluster IDs
-        let cluster_map = blast_rbh::parse_clusters(&slclust_output)?;
+        let cluster_map = blast_rbh::parse_clusters(&slclust_output.as_ref(), &logger)?;
         let gene_to_cluster = blast_rbh::map_gene_to_cluster_id(&cluster_map);
 
         // Get top BLAST score per orthologous gene
@@ -203,10 +196,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let orthofinder_path = external_tools::find_executable("orthofinder", &bin_dir, &logger);
 
         // make output director
-        if let Err(e) = fs::create_dir_all(&orthofinder_out_dir) {
-            logger.error(&format!("Failed to create database directory {}: {}", orthofinder_out_dir.display(), e));
-            std::process::exit(1);
-        }
+        mkdir(&orthofinder_out_dir, &logger, "main (blast-to-orthofinder)");
 
         // Prepare Orthofinder input folder
         if let Err(e) = orthofinder::prepare_orthofinder_blast(&repo, &args.alignment_type, &blast_out_dir, &orthofinder_out_dir, &logger) {
@@ -265,10 +255,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.information("────────────────────────────────");
 
         // make output director
-        if let Err(e) = fs::create_dir_all(&gene_clusters_out_dir) {
-            logger.error(&format!("Failed to create database directory {}: {}", gene_clusters_out_dir.display(), e));
-            std::process::exit(1);
-        }
+        mkdir(&gene_clusters_out_dir, &logger, "main (ortholog-summary)");
 
         // Get all features
         let all_features = match genome_to_features2 {
@@ -280,7 +267,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // store it back into all_features if you want to reuse again
                 let features = read_gff::save_all_features(&repo, &logger);
                 // Extract gene sequences either from GFF & genome, or match GFF & CDS/PEP
-                let (_genome_to_genes, genome_to_features, _all_genes, _all_features) = read_fasta_and_gff::match_or_extract_genes_from_gff(&repo, &args, &features, &genomes, &logger)?;
+                let (_genome_to_genes, genome_to_features, _all_genes, _all_features) = read_fasta_and_gff::match_or_extract_genes_from_gff(&repo, &args, &features, &genomes, &logger);
                 genome_to_features2 = Some(genome_to_features);
                 genome_to_features2.as_ref().unwrap()
             }
@@ -323,6 +310,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // barchart of orthologs
         ortholog_summary_plot::write_cluster_dist_stats_and_plot(&cluster_dist_path, &gene_clusters_out_dir, &logger);
 
+    }
+
+    if args.synima_step.contains(&SynimaStep::Tree) {
+        logger.information("────────────────────");
+        logger.information("Running Step 5: tree");
+        logger.information("────────────────────");
+
+        // make output director
+        mkdir(&tree_out_dir, &logger, "main (tree)");
+    }
+
+    if args.synima_step.contains(&SynimaStep::Dagchainer) {
+        logger.information("──────────────────────────");
+        logger.information("Running Step 6: dagchainer");
+        logger.information("──────────────────────────");
+
+        // make output director
+        mkdir(&dagchainer_out_dir, &logger, "dagchainer");
     }
 
     logger.information("Synima: All requested steps completed.");

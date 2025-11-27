@@ -1,46 +1,42 @@
 use crate::logger::Logger;
 use crate::RepoEntry;
 use crate::read_repo::GeneStruct;
+use crate::util::{open_bufread,open_bufwrite,open_file_read,open_file_write};
 
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Write, BufWriter};
+use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::process::{Command, Stdio};
 
-pub fn write_blast_pairs<P: AsRef<Path>>(all_vs_all_path: P) -> Result<PathBuf, String> {
+pub fn write_blast_pairs<P: AsRef<Path>>(all_vs_all_path: P, logger: &Logger) -> Result<PathBuf, String> {
+
+    // input/output
     let input_path = all_vs_all_path.as_ref();
+    let reader = open_bufread(&input_path, &logger, "write_blast_pairs");
     let output_path = input_path.with_file_name(format!("{}{}", input_path.file_name().unwrap().to_string_lossy(), ".pairs"));
+    let mut writer = open_bufwrite(&output_path, &logger, "write_blast_pairs");
 
-    let infile = File::open(&input_path).map_err(|e| format!("Cannot open input file {}: {}", input_path.display(), e))?;
-    let reader = BufReader::new(infile);
-
-    let mut outfile = File::create(&output_path).map_err(|e| format!("Cannot create output file {}: {}", output_path.display(), e))?;
-
+    // copy over first 2 columns
     for line in reader.lines() {
         let line = line.map_err(|e| format!("Error reading line: {}", e))?;
         let fields: Vec<&str> = line.split('\t').collect();
         if fields.len() >= 2 {
-            writeln!(outfile, "{}\t{}", fields[0], fields[1]).map_err(|e| format!("Error writing line: {}", e))?;
+            writeln!(writer, "{}\t{}", fields[0], fields[1]).map_err(|e| format!("Error writing line: {}", e))?;
         }
     }
 
     Ok(output_path)
 }
 
-pub fn run_slclust_on_pairs(
-    slclust_path: &Path,
-    pairs_file: &Path,
-    logger: &Logger,
-) -> Result<PathBuf, String> {
-    let output_path = pairs_file.with_extension("pairs.slclust");
+pub fn run_slclust_on_pairs(slclust_path: &Path, pairs_file: &Path, logger: &Logger) -> Result<PathBuf, String> {
 
     logger.information(&format!("run_slclust_on_pairs: {}", pairs_file.display()));
 
     // Open input and output files
-    let input_file = File::open(pairs_file).map_err(|e| format!("Failed to open pairs file {}: {}", pairs_file.display(), e))?;
-    let output_file = File::create(&output_path).map_err(|e| format!("Failed to create output file {}: {}", output_path.display(), e))?;
+    let output_path = pairs_file.with_extension("pairs.slclust");
+    let input_file = open_file_read(&pairs_file, &logger, "run_slclust_on_pairs");
+    let output_file = open_file_write(&output_path, &logger, "run_slclust_on_pairs");
 
     // Pipe input and output to slclust
     let mut child = Command::new(slclust_path)
@@ -59,9 +55,10 @@ pub fn run_slclust_on_pairs(
     Ok(output_path)
 }
 
-pub fn parse_clusters<P: AsRef<Path>>(cluster_file: P) -> Result<HashMap<usize, Vec<String>>, String> {
-    let file = File::open(&cluster_file).map_err(|e| format!("Failed to open cluster file {}: {}", cluster_file.as_ref().display(), e))?;
-    let reader = BufReader::new(file);
+pub fn parse_clusters(cluster_file: &Path, logger: &Logger) -> Result<HashMap<usize, Vec<String>>, String> {
+
+    // input
+    let reader = open_bufread(&cluster_file, &logger, "parse_clusters");
 
     let mut clusters = HashMap::new();
     for (index, line) in reader.lines().enumerate() {
@@ -111,15 +108,10 @@ pub fn get_top_ortho_blast_score(
                 continue;
             }
 
+            // input
             let file_name = format!("{}_vs_{}.out", genome_a, genome_b);
             let rbh_file = blast_out_dir.join(file_name);
-
-            if !rbh_file.exists() {
-                logger.error(&format!("get_top_ortho_blast_score: {} does not exist (rerun step 2: blast-grid)", rbh_file.display()));
-                return Err(format!("Error: {} does not exist", rbh_file.display()));
-            }
-
-            let reader = BufReader::new(File::open(&rbh_file).map_err(|e| format!("Error opening {}: {}", rbh_file.display(), e))?);
+            let reader = open_bufread(&rbh_file, &logger, "get_top_ortho_blast_score");
 
             for line in reader.lines() {
                 let line = line.map_err(|e| format!("Error reading {}: {}", rbh_file.display(), e))?;
@@ -165,13 +157,10 @@ pub fn get_inparalogs(
             continue;
         }
 
+        // input
         let self_blast_file_name = format!("{}_vs_{}.out", genome, genome);
         let self_blast_file = blast_out_dir.join(self_blast_file_name);
-
-        let file = File::open(&self_blast_file)
-            .map_err(|e| format!("Failed to open self-BLAST file {}: {}", self_blast_file.display(), e))?;
-
-        let reader = BufReader::new(file);
+        let reader = open_bufread(&self_blast_file, &logger, "get_inparalogs");
 
         for line in reader.lines() {
             let line = line.map_err(|e| format!("Error reading line: {}", e))?;
@@ -245,15 +234,7 @@ pub fn write_final_rbh_clusters<P: AsRef<Path>>(
     logger.information(&format!("write_final_rbh_clusters: {}", out_path.as_ref().display()));
 
     // Output file
-    let file = match File::create(&out_path.as_ref()) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("Failed to create output file {}: {}", out_path.as_ref().display(), e));
-            process::exit(1);
-        }
-    };
-    //let file = File::create(&out_path).map_err(|e| format!("Failed to create output file: {}", e))?;
-    let mut writer = BufWriter::new(file);
+    let mut writer = open_bufwrite(&out_path.as_ref(), &logger, "write_final_rbh_clusters");
 
     let mut cluster_ids: Vec<_> = cluster_id_to_orthologs.keys().cloned().collect();
     cluster_ids.sort_unstable();

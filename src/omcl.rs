@@ -1,28 +1,26 @@
 use crate::Logger;
+use crate::util::{open_bufread, open_bufwrite}; //mkdir,open_file_read,open_file_write
 
 use std::path::Path;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Write, BufWriter};
+use std::io::{BufRead, Write};
 //use std::process::{Command, Stdio};
 use std::path::PathBuf;
 use regex::Regex;
 use std::process;
 
 // for OMCL
-pub fn parse_genome_map_from_gff<P: AsRef<Path>>(
-    gff_path: P,
-    logger: &Logger,
-) -> Result<HashSet<String>, String> {
+pub fn parse_genome_map_from_gff(gff_path: &Path, logger: &Logger) -> Result<HashSet<String>, String> {
 
     //let mut trans_id_to_genome = HashMap::new();
     let mut genome_set = HashSet::new();
 
-    logger.information(&format!("parse_id_to_genome_map_from_gff: {}",gff_path.as_ref().display()));
+    logger.information(&format!("parse_id_to_genome_map_from_gff: {}",gff_path.display()));
 
-    let file = File::open(&gff_path).map_err(|e| format!("Cannot open GFF: {}", e))?;
-    let reader = BufReader::new(file);
+    // input
+    let reader = open_bufread(&gff_path, &logger, "parse_genome_map_from_gff");
 
     for line in reader.lines() {
         let line = line.map_err(|e| format!("Read error: {}", e))?;
@@ -58,7 +56,6 @@ pub fn assign_genome_codes<P: AsRef<Path>>(
     logger: &Logger,
 ) -> Result<HashMap<String, String>, String> {
     
-
     let mut genome_to_code = HashMap::new();
     let mut sorted_genomes: Vec<_> = genome_set.iter().cloned().collect();
     sorted_genomes.sort();
@@ -87,32 +84,13 @@ pub fn write_gcoded_m8_and_sort<P: AsRef<Path>>(
     logger: &Logger,
 ) {
 
+    // input/output
     let input_path = m8_input_path.as_ref();
     let output_path = m8_output_path.as_ref();
     let tmp_path = output_path.with_extension("tmp");
+    let reader = open_bufread(&input_path, &logger, "write_gcoded_m8_and_sort");
+    let mut writer = open_bufwrite(&tmp_path, &logger, "write_gcoded_m8_and_sort");
 
-    // Open input
-    let input_file = match File::open(input_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("write_gcoded_m8_and_sort: Cannot open BLAST m8 input: {}", e));
-            std::process::exit(1);
-        }
-    };
-
-    // Create temp output file
-    let output_file = match File::create(&tmp_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("write_gcoded_m8_and_sort: Cannot create temp output: {}", e));
-            std::process::exit(1);
-        }
-    };
-
-    let reader = BufReader::new(input_file);
-    let mut writer = BufWriter::new(output_file);
-
-    //logger.information(&format!("write_gcoded_m8_and_sort: {} -> {} (tmp {})", input_path.display(), output_path.display(), tmp_path.display()));
     logger.information(&format!("write_gcoded_m8_and_sort: {}", input_path.display()));
 
     for line_res in reader.lines() {
@@ -211,37 +189,12 @@ pub fn convert_m8_to_orthomcl_format(
 
     logger.information(&format!("convert_m8_to_orthomcl_format: reading {}", m8_path.display()));
 
-    // Open input m8
-    let input = match File::open(m8_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("convert_m8_to_orthomcl_format: failed to open m8 input {}: {}", m8_path.display(), e));
-            std::process::exit(1);
-        }
-    };
-    let reader = BufReader::new(input);
-
-    // Output paths
+    // Input/Output
+    let reader = open_bufread(&m8_path, &logger, "convert_m8_to_orthomcl_format");
     let bpo_path = out_prefix.with_extension("bpo");
     let gg_path = out_prefix.with_extension("gg");
-
-    let bpo_file = match File::create(&bpo_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("convert_m8_to_orthomcl_format: failed to create bpo output {}: {}", bpo_path.display(), e));
-            std::process::exit(1);
-        }
-    };
-    let gg_file = match File::create(&gg_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("convert_m8_to_orthomcl_format: failed to create gg output {}: {}", gg_path.display(), e));
-            std::process::exit(1);
-        }
-    };
-
-    let mut bpo_writer = BufWriter::new(bpo_file);
-    let mut gg_writer = BufWriter::new(gg_file);
+    let mut bpo_writer = open_bufwrite(&bpo_path, &logger, "convert_m8_to_orthomcl_format");
+    let mut gg_writer = open_bufwrite(&gg_path, &logger, "convert_m8_to_orthomcl_format");
 
     // For .gg: genome code -> set of gene IDs
     let mut org_to_accs: HashMap<String, HashSet<String>> = HashMap::new();
@@ -324,28 +277,28 @@ pub fn convert_m8_to_orthomcl_format(
 }
 
 pub fn run_orthomcl_clustering<P: AsRef<Path>>(
-    orthomcl_script: P,
-    bpo_path: P,
+    orthomcl_script: &Path,
+    bpo_path: &Path,
     gg_path: P,
-    log_path: P,
+    log_path: &Path,
     logger: &Logger,
 ) -> Result<(), String> {
 
     // Convert full paths to filenames for in-place output
-    let bpo_file = bpo_path.as_ref().file_name().ok_or("Invalid BPO file path")?;
+    let bpo_file = bpo_path.file_name().ok_or("Invalid BPO file path")?;
     let gg_file = gg_path.as_ref().file_name().ok_or("Invalid GG file path")?;
 
     logger.information(&format!("run_orthomcl_clustering: {} and {}", bpo_file.to_string_lossy(), gg_file.to_string_lossy()));
 
     // Build command
     let mut cmd = std::process::Command::new("perl");
-    cmd.arg(orthomcl_script.as_ref())
+    cmd.arg(orthomcl_script)
         .arg("--mode")
         .arg("4")
         .arg("--bpo_file").arg(bpo_file)
         .arg("--gg_file").arg(gg_file);
 
-    let work_dir = bpo_path.as_ref().parent().ok_or("bpo_path has no parent directory")?;
+    let work_dir = bpo_path.parent().ok_or("bpo_path has no parent directory")?;
     cmd.current_dir(work_dir).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
 
     // Run and capture output
@@ -361,8 +314,7 @@ pub fn run_orthomcl_clustering<P: AsRef<Path>>(
     logger.information(&format!("OrthoMCL output:\n{}", log_contents));
 
     // read the log output to find location of output, and then move file and delete tmp folder
-    let log_file = File::open(&log_path).map_err(|e| format!("Cannot re-read log file: {}", e))?;
-    let reader = BufReader::new(log_file);
+    let reader = open_bufread(&log_path, &logger, "run_orthomcl_clustering");
 
     let mut orthomcl_out_path: Option<PathBuf> = None;
     let pattern = Regex::new(r"Final ORTHOMCL Result: (\S+)").unwrap();
@@ -401,20 +353,9 @@ pub fn run_orthomcl_clustering<P: AsRef<Path>>(
 /// Expected format: `CNB2<TAB>G001` (additional columns ignored).
 pub fn load_genome_codes(codes_path: &Path, logger: &Logger) -> HashMap<String, String> {
 
-    if !codes_path.is_file() {
-        logger.error(&format!("from_orthomcl: could not find genome_codes.tsv at {}", codes_path.display()));
-        process::exit(1);
-    }
+    // Input
+    let reader = open_bufread(&codes_path, &logger, "load_genome_codes");
 
-    let file = match File::open(codes_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_orthomcl: failed to open genome_codes.tsv {}: {}", codes_path.display(), e));
-            process::exit(1);
-        }
-    };
-
-    let reader = BufReader::new(file);
     let mut map = HashMap::<String, String>::new();
 
     for line_res in reader.lines() {

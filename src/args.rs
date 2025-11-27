@@ -49,6 +49,7 @@ pub struct Args {
             "blast-grid",
             "blast-to-orthofinder",
             "ortholog-summary",
+            "tree",
             "dagchainer",
             "synima"
         ],
@@ -128,6 +129,9 @@ pub enum SynimaStep {
     #[value(name = "ortholog-summary", help = "Collect Orthogroups.tsv and produce orthology summaries")]
     OrthologSummary,
 
+    #[value(name = "tree", help = "Construct a phylogenetic tree with FastTree")]
+    Tree,
+
     #[value(name = "dagchainer", help = "Run DAGChainer to call synteny blocks")]
     Dagchainer,
 
@@ -135,47 +139,83 @@ pub enum SynimaStep {
     Synima,
 }
 
-
-/// Validate that steps are sequential and mutually exclusive where needed
+/// Validate that steps are in logical pipeline order,
+/// and that at most one orthology method is selected.
 pub fn validate_step_sequence(steps: &[SynimaStep], logger: &Logger) {
     use SynimaStep::*;
 
-    // Check that only one of the alternative orthology steps is included
-    let orthology_steps = [
-        BlastToOrthomcl,
-        BlastToRbh,
-        BlastToOrthofinder,
-    ];
-
-    let selected_orthology_steps: Vec<_> = steps.iter().filter(|step| orthology_steps.contains(step)).collect();
-
-    if selected_orthology_steps.len() > 1 {
-        logger.error("Only one of blast_to_orthomcl, blast_to_rbh, or blast_to_orthofinder may be used.");
+    if steps.is_empty() {
+        logger.error("No pipeline steps selected via --synima_step.");
         std::process::exit(1);
     }
 
-    // Build expected step order dynamically
-    let mut expected_order = vec![CreateRepoDb, BlastGrid];
+    // 1. Orthology-step mutual exclusivity (for now)
+    let orthology_steps = [BlastToOrthomcl, BlastToRbh, BlastToOrthofinder];
 
-    if let Some(step) = selected_orthology_steps.first() {
-        expected_order.push((*step).clone());
+    let selected_orthology_steps: Vec<_> = steps
+        .iter()
+        .filter(|s| orthology_steps.contains(s))
+        .collect();
+
+    if selected_orthology_steps.len() > 1 {
+        logger.error(
+            "Only one of blast-to-orthomcl, blast-to-rbh, or blast-to-orthofinder \
+             may be used at a time in a single run.",
+        );
+        std::process::exit(1);
     }
 
-    expected_order.extend([OrthologSummary, Dagchainer, Synima]);
+    // 2. Canonical pipeline order, including Tree
+    let pipeline_order = [
+        CreateRepoDb,
+        BlastGrid,
+        BlastToOrthomcl,
+        BlastToRbh,
+        BlastToOrthofinder,
+        OrthologSummary,
+        Tree,
+        Dagchainer,
+        Synima,
+    ];
 
-    // Now check that user steps appear in order, without skipping ahead
-    let mut expected_idx = 0;
+    let index_of = |step: &SynimaStep| -> usize {
+        pipeline_order
+            .iter()
+            .position(|s| s == step)
+            .unwrap_or_else(|| {
+                logger.error(&format!(
+                    "Internal error: step {:?} not found in pipeline_order.",
+                    step
+                ));
+                std::process::exit(1);
+            })
+    };
 
-    for user_step in steps {
-        while expected_idx < expected_order.len() && expected_order[expected_idx] != *user_step {
-            expected_idx += 1;
-        }
-
-        if expected_idx == expected_order.len() {
-            logger.error(&format!("Step {:?} is out of sequence or unexpected.", user_step));
+    // Enforce non-decreasing indices
+    let mut last_idx = 0usize;
+    for step in steps {
+        let idx = index_of(step);
+        if idx < last_idx {
+            logger.error(&format!(
+                "Step {:?} appears out of order in --synima_step. \
+                 The allowed order is: create-repo-db -> blast-grid -> \
+                 blast-to-(orthofinder|orthomcl|rbh) -> ortholog-summary -> \
+                 tree -> dagchainer -> synima.",
+                step
+            ));
             std::process::exit(1);
         }
+        last_idx = idx;
+    }
 
-        expected_idx += 1; // move forward for next step
+    // 3. Optional “sanity” warning for Tree without ortholog-summary
+    let has_tree = steps.contains(&Tree);
+    let has_orthosummary = steps.contains(&OrthologSummary);
+
+    if has_tree && !has_orthosummary {
+        logger.warning(
+            "Tree step selected without ortholog-summary. \
+             Tree step will probably fail because it expects orthology summaries.",
+        );
     }
 }

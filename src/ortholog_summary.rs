@@ -1,5 +1,6 @@
 use crate::logger::Logger;
 use crate::omcl;
+use crate::mkdir;
 
 use std::path::{Path, PathBuf};
 use std::process;
@@ -118,10 +119,7 @@ pub fn from_orthofinder(
     }
 
     // 2. Ensure output directory exists
-    if let Err(e) = fs::create_dir_all(gene_clusters_out_dir) {
-        logger.error(&format!("from_orthofinder: failed to create output directory {}: {}", gene_clusters_out_dir.display(), e));
-        process::exit(1);
-    }
+    mkdir(&gene_clusters_out_dir, &logger, "from_orthofinder");
 
     // 3. Output paths
     let clusters_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.orthofinder.clusters", alignment_type));
@@ -398,10 +396,7 @@ pub fn from_orthomcl(
     let code_to_genome = omcl::load_genome_codes(&codes_path, logger);
 
     // 3. Make output directory
-    if let Err(e) = fs::create_dir_all(gene_clusters_out_dir) {
-        logger.error(&format!("from_orthomcl: failed to create output directory {} : {}", gene_clusters_out_dir.display(), e));
-        std::process::exit(1);
-    }
+    mkdir(&gene_clusters_out_dir, &logger, "from_orthomcl");
 
     // 4. Output files
     let clusters_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.OMCL.clusters", alignment_type));
@@ -633,10 +628,7 @@ pub fn from_rbh(
     }
 
     // Make output directory
-    if let Err(e) = fs::create_dir_all(gene_clusters_out_dir) {
-        logger.error(&format!("from_rbh: failed to create output directory {} : {}", gene_clusters_out_dir.display(), e));
-        std::process::exit(1);
-    }
+    mkdir(&gene_clusters_out_dir, &logger, "from_rbh");
 
     // Output files
     let clusters_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.RBH.clusters", alignment_type));

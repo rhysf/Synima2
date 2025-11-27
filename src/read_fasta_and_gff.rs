@@ -477,7 +477,7 @@ pub fn match_or_extract_genes_from_gff(
     args: &Args,
     all_features: &HashMap<String, Vec<GffFeature>>,
     all_genome_sequences: &HashMap<String, HashMap<String, String>>, 
-    logger: &Logger) -> Result<(HashMap<String, Vec<Fasta>>, HashMap<String, Vec<String>>, Vec<Fasta>, Vec<String>), std::io::Error> {
+    logger: &Logger) -> (HashMap<String, Vec<Fasta>>, HashMap<String, Vec<String>>, Vec<Fasta>, Vec<String>) {
 
     logger.information("match_or_extract_genes_from_gff: Determine if gene FASTA provided");
 
@@ -556,9 +556,9 @@ pub fn match_or_extract_genes_from_gff(
                 f.id.split('|').nth(1).unwrap_or(&f.id).to_string()
             }).collect();
 
-            // Rewrite GFF lines exactly like in extract_and_write_selected_features
-            // • Keep only features whose ID/Parent ∈ extracted_ids
-            // • Replace attribute column with genome|ID
+            // Rewrite GFF lines exactly like in extract_and_write_selected_features:
+            // 1) Keep only features whose ID/Parent ∈ extracted_ids
+            // 2) Replace attribute column with genome|ID
             let rewritten_gff_lines = read_gff::filter_and_rewrite_gff_lines(
                 features,
                 genome,
@@ -570,19 +570,13 @@ pub fn match_or_extract_genes_from_gff(
             // Append results to global output collections
             all_filtered_fastas.extend(extracted_fasta.clone());
             all_filtered_gffs.extend(rewritten_gff_lines.clone());
-
-            //write individual fasta's
-            //write_fasta::write_filtered_fasta(&extracted_fasta, &gff_path, alignment_type, logger)?;
-            //write_gff::write_filtered_gff(&rewritten_gff_lines, &gff_path, logger)?;
             
             // append to per-genome
             per_genome_fastas.insert(genome.clone(), extracted_fasta);
             per_genome_gffs.insert(genome.clone(), rewritten_gff_lines);
-
         }
     }
-
-    Ok((per_genome_fastas, per_genome_gffs, all_filtered_fastas, all_filtered_gffs))
+    (per_genome_fastas, per_genome_gffs, all_filtered_fastas, all_filtered_gffs)
 }
 
 fn check_for_unmatched_peptide_ids(

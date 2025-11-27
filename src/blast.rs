@@ -2,6 +2,7 @@ use crate::logger::Logger;
 use crate::Args;
 use crate::RepoEntry;
 use crate::external_tools;
+use crate::util::{mkdir, open_bufread, open_bufwrite}; //,open_file_read,open_file_write
 
 use std::process;
 use std::process::Command;
@@ -9,8 +10,8 @@ use std::path::Path;
 //use std::collections::{HashSet}; //HashMap, 
 use std::path::PathBuf;
 //use rayon::prelude::*;
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Write};
+use std::fs::{self};
+use std::io::{BufRead, Write};
 use std::ffi::OsStr;
 use std::process::Stdio;
 
@@ -117,10 +118,7 @@ pub fn create_all_dbs(
     };
 
     let db_dir = out_dir.join("databases");
-    if let Err(e) = fs::create_dir_all(&db_dir) {
-        logger.error(&format!("create_all_dbs: failed to create database directory {}: {}", db_dir.display(), e));
-        std::process::exit(1);
-    }
+    mkdir(&db_dir, &logger, "create_all_dbs");
 
     let mut species: Vec<Species> = Vec::new();
 
@@ -420,13 +418,7 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
     //let mut seen_pairs = HashSet::new();
 
     // Create output file
-    let mut writer = match File::create(output_file) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("concatenate_unique_blast_pairs: Failed to create output file {}: {}", output_file.display(),e));
-            process::exit(1);
-        }
-    };
+    let mut writer = open_bufwrite(&output_file, &logger, "concatenate_unique_blast_pairs");
 
     // Read directory
     let read_dir = match fs::read_dir(blast_out_dir) {
@@ -485,15 +477,7 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
         //seen_pairs.insert(pair);
 
         // Open the BLAST file
-        let file = match File::open(&path) {
-            Ok(f) => f,
-            Err(e) => {
-                logger.warning(&format!("concatenate_unique_blast_pairs: Failed to open {}: {}", path.display(), e));
-                continue;
-            }
-        };
-
-        let reader = BufReader::new(file);
+        let reader = open_bufread(&path, &logger, "concatenate_unique_blast_pairs");
 
         for line in reader.lines() {
             let line = match line {

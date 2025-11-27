@@ -16,7 +16,14 @@ pub fn write_filtered_fasta(
     logger: &Logger,
 ) -> Result<(), std::io::Error> {
 
-    let mut writer = BufWriter::new(File::create(&output_path)?);
+    let file = match File::create(&output_path) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("failed to create output file {}: {}", output_path.display(), e));
+            std::process::exit(1);
+        }
+    };
+    let mut writer = BufWriter::new(file);
 
     for fasta in filtered_records {
         writeln!(writer, ">{}", fasta.id)?;
