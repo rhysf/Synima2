@@ -442,18 +442,12 @@ pub fn concatenate_aligncoords_and_make_spans(
     logger: &Logger,
 ) {
     // Base name from repo_spec, e.g. Repo_spec.txt -> Repo_spec.txt.dagchainer.aligncoords
-    let repo_base = repo_spec
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("synima");
+    let repo_base = repo_spec.file_name().and_then(|s| s.to_str()).unwrap_or("synima");
 
     let combined_aligncoords = output_dir.join(format!("{repo_base}.dagchainer.aligncoords"));
     let combined_spans = output_dir.join(format!("{repo_base}.dagchainer.aligncoords.spans"));
 
-    logger.information(&format!(
-        "dagchainer: collecting *.aligncoords under {}",
-        pairwise_dir.display()
-    ));
+    logger.information(&format!("dagchainer: collecting *.aligncoords under {}", pairwise_dir.display()));
 
     // 1) Collect all *.aligncoords paths recursively under pairwise_dir
     let mut align_files: Vec<PathBuf> = Vec::new();
@@ -464,58 +458,33 @@ pub fn concatenate_aligncoords_and_make_spans(
         return;
     }
 
-    logger.information(&format!(
-        "dagchainer: found {} aligncoords files, writing combined file to {}",
-        align_files.len(),
-        combined_aligncoords.display()
-    ));
+    logger.information(&format!("dagchainer: found {} aligncoords files, writing combined file to {}", align_files.len(), combined_aligncoords.display()));
 
     // 2) Concatenate into a single combined_aligncoords file
     {
         let mut writer = open_bufwrite(&combined_aligncoords, logger, "concatenate_aligncoords");
 
         for path in &align_files {
-            logger.information(&format!(
-                "dagchainer: appending {} to {}",
-                path.display(),
-                combined_aligncoords.display()
-            ));
+            logger.information(&format!("dagchainer: appending {} to {}", path.display(), combined_aligncoords.display()));
 
             let mut reader = open_bufread(path, logger, "concatenate_aligncoords");
             if let Err(e) = io::copy(&mut reader, &mut writer) {
-                logger.error(&format!(
-                    "dagchainer: failed to copy {} into {}: {}",
-                    path.display(),
-                    combined_aligncoords.display(),
-                    e
-                ));
+                logger.error(&format!("dagchainer: failed to copy {} into {}: {}", path.display(), combined_aligncoords.display(), e));
                 std::process::exit(1);
             }
         }
     }
 
     // 3) Run dagchainer_to_chain_spans.pl on the combined file
-    logger.information(&format!(
-        "dagchainer: running {} to create spans {}",
-        dagchainer_to_spans.display(),
-        combined_spans.display()
-    ));
+    logger.information(&format!("dagchainer: running {} to create spans {}", dagchainer_to_spans.display(), combined_spans.display()));
 
     let input_file = std::fs::File::open(&combined_aligncoords).unwrap_or_else(|e| {
-        logger.error(&format!(
-            "dagchainer: failed to open {} for reading: {}",
-            combined_aligncoords.display(),
-            e
-        ));
+        logger.error(&format!("dagchainer: failed to open {} for reading: {}", combined_aligncoords.display(), e));
         std::process::exit(1);
     });
 
     let output_file = std::fs::File::create(&combined_spans).unwrap_or_else(|e| {
-        logger.error(&format!(
-            "dagchainer: failed to create {}: {}",
-            combined_spans.display(),
-            e
-        ));
+        logger.error(&format!("dagchainer: failed to create {}: {}", combined_spans.display(), e));
         std::process::exit(1);
     });
 
@@ -528,22 +497,14 @@ pub fn concatenate_aligncoords_and_make_spans(
 
     match status {
         Ok(s) if s.success() => {
-            logger.information(&format!(
-                "dagchainer: spans written to {}",
-                combined_spans.display()
-            ));
+            logger.information(&format!("dagchainer: spans written to {}", combined_spans.display()));
         }
         Ok(s) => {
-            logger.error(&format!(
-                "dagchainer: dagchainer_to_chain_spans.pl exited with status {s}"
-            ));
+            logger.error(&format!("dagchainer: dagchainer_to_chain_spans.pl exited with status {s}"));
             std::process::exit(1);
         }
         Err(e) => {
-            logger.error(&format!(
-                "dagchainer: failed to run dagchainer_to_chain_spans.pl: {}",
-                e
-            ));
+            logger.error(&format!("dagchainer: failed to run dagchainer_to_chain_spans.pl: {}", e));
             std::process::exit(1);
         }
     }
@@ -554,11 +515,7 @@ fn collect_aligncoords_files(dir: &Path, acc: &mut Vec<PathBuf>, logger: &Logger
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(e) => {
-            logger.error(&format!(
-                "dagchainer: failed to read directory {}: {}",
-                dir.display(),
-                e
-            ));
+            logger.error(&format!("dagchainer: failed to read directory {}: {}", dir.display(), e));
             std::process::exit(1);
         }
     };
