@@ -6,7 +6,7 @@ use std::process;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
-
+use std::collections::BTreeSet;
 
 pub enum OrthologySource {
     OrthoFinder(PathBuf),
@@ -808,4 +808,148 @@ pub fn from_rbh(
     logger.information(&format!("from_rbh: wrote {} cluster groups and {} unique genes", next_cluster_id, uniq_counter.saturating_sub(1)));
 
     clusters_and_unique
+}
+
+pub fn write_cluster_dist_per_genome(
+    combined_clusters_path: &Path,  // GENE_CLUSTERS_SUMMARIES.*.clusters_and_uniques
+    output_path: &Path,             // *.cluster_dist_per_genome.txt
+    logger: &Logger,
+) {
+    logger.information(&format!("cluster_dist_per_genome: reading {}", combined_clusters_path.display()));
+    logger.information(&format!("cluster_dist_per_genome: writing {}", output_path.display()));
+
+    // Open input
+    let infile = match File::open(combined_clusters_path) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("cluster_dist_per_genome: failed to open {}: {}", combined_clusters_path.display(), e));
+            process::exit(1);
+        }
+    };
+    let reader = BufReader::new(infile);
+
+    // Open output
+    let outfile = match File::create(output_path) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("cluster_dist_per_genome: failed to create {}: {}", output_path.display(), e));
+            process::exit(1);
+        }
+    };
+    let mut writer = BufWriter::new(outfile);
+
+    // Data structures (Rust equivalents of Perl hashes)
+    let mut cluster_to_genome_count: HashMap<String, HashMap<String, u64>> = HashMap::new();
+    //let mut cluster_to_name_count: HashMap<String, HashMap<String, u64>> = HashMap::new();
+    let mut genome_to_gene_count: HashMap<String, u64> = HashMap::new();
+    let mut genomes: BTreeSet<String> = BTreeSet::new();
+
+    // Parse combined file: cluster_id, genome, Ortho, gene_id
+    for line_res in reader.lines() {
+        let line = match line_res {
+            Ok(l) => l,
+            Err(e) => {
+                logger.error(&format!("cluster_dist_per_genome: read error in {}: {}", combined_clusters_path.display(), e));
+                process::exit(1);
+            }
+        };
+
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let cols: Vec<&str> = trimmed.split('\t').collect();
+        if cols.len() < 4 {
+            logger.error(&format!("cluster_dist_per_genome: expected at least 4 columns, got {}: {}", cols.len(), trimmed));
+            process::exit(1);
+        }
+
+        let cluster_id = cols[0].to_string();
+        let genome = cols[1].to_string();
+        // cols[2] is "Ortho" (not used here)
+        //let gene_id = cols[3].to_string();
+
+        genomes.insert(genome.clone());
+
+        // cluster_to_genome_count{cluster}{genome}++
+        let genome_counts = cluster_to_genome_count.entry(cluster_id.clone()).or_insert_with(HashMap::new);
+        *genome_counts.entry(genome.clone()).or_insert(0) += 1;
+
+        // cluster_to_name_count{cluster}{name}++ (we use gene_id as 'name' proxy)
+        //let name_counts = cluster_to_name_count.entry(cluster_id.clone()).or_insert_with(HashMap::new);
+        //*name_counts.entry(gene_id.clone()).or_insert(0) += 1;
+
+        // genome_to_gene_count{genome}++
+        *genome_to_gene_count.entry(genome).or_insert(0) += 1;
+    }
+
+    // Sorted list of genomes
+    let mut genome_list: Vec<String> = genomes.into_iter().collect();
+    genome_list.sort();
+
+    // Sorted list of cluster IDs
+    let mut cluster_ids: Vec<String> = cluster_to_genome_count.keys().cloned().collect();
+    cluster_ids.sort();
+
+    // First header line: #genome=count
+    let mut header_counts = String::from("#");
+    let mut genome_keys: Vec<&String> = genome_to_gene_count.keys().collect();
+    genome_keys.sort();
+    for g in genome_keys {
+        let count = genome_to_gene_count.get(g).unwrap_or(&0);
+        header_counts.push_str(&format!("{}={}\t", g, count));
+    }
+    if header_counts.ends_with('\t') {
+        header_counts.pop();
+    }
+    if let Err(e) = writeln!(writer, "{}", header_counts) {
+        logger.error(&format!("cluster_dist_per_genome: write error (header counts): {}", e));
+        process::exit(1);
+    }
+
+    // Second header line: #cluster_id\tname\t<genomes...>
+    if let Err(e) = writeln!(writer, "#cluster_id\tname\t{}", genome_list.join("\t")) {
+        logger.error(&format!("cluster_dist_per_genome: write error (header line): {}", e));
+        process::exit(1);
+    }
+
+    // Body lines
+    for cluster_id in cluster_ids {
+        //let name_counts = match cluster_to_name_count.get(&cluster_id) {
+        //    Some(n) if !n.is_empty() => n,
+        //    _ => continue,
+        //};
+
+        // Pick most frequent "name" (here: gene_id) as representative
+        //let mut name_vec: Vec<(&String, &u64)> = name_counts.iter().collect();
+        //name_vec.sort_by_key(|(_, count)| *count);
+        //let (best_name, _) = name_vec[name_vec.len() - 1];
+
+        // Sanitize non-word chars -> '_'
+        //let clean_name: String = best_name.chars().map(|c| { if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' } }).collect();
+        let clean_name = "hypothetical protein";
+
+        let mut line = format!("{}\t{}", cluster_id, clean_name);
+
+        if let Some(genome_counts) = cluster_to_genome_count.get(&cluster_id) {
+            for g in &genome_list {
+                let c = genome_counts.get(g).cloned().unwrap_or(0);
+                line.push('\t');
+                line.push_str(&c.to_string());
+            }
+        } else {
+            // Should not really happen, but keep behaviour defined
+            for _ in &genome_list {
+                line.push_str("\t0");
+            }
+        }
+
+        if let Err(e) = writeln!(writer, "{}", line) {
+            logger.error(&format!("cluster_dist_per_genome: write error (cluster row): {}", e));
+            process::exit(1);
+        }
+    }
+
+    logger.information(&format!("cluster_dist_per_genome: wrote {} clusters for {} genomes to {}", cluster_to_genome_count.len(), genome_list.len(), output_path.display()));
 }

@@ -20,6 +20,7 @@ mod omcl;
 mod blast_rbh;
 mod orthofinder;
 mod ortholog_summary;
+mod ortholog_summary_plot;
 
 use args::{Args, SynimaStep};
 use logger::Logger;
@@ -298,17 +299,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Detect which ortholog clustering was used:
         let source = ortholog_summary::detect_orthology_source(preferred_method, &orthofinder_out_dir, &omcl_out_dir, &rbh_out_dir, &logger);
 
-        match source {
+        let (method_label, clusters_and_unique) = match source {
             OrthologySource::OrthoFinder(dir) => {
-                let _clusters_and_unique = ortholog_summary::from_orthofinder(&dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger);
+                let path = ortholog_summary::from_orthofinder(&dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger);
+                ("orthofinder", path)
             }
             OrthologySource::OrthoMcl(dir) => {
-                let _clusters_and_unique = ortholog_summary::from_orthomcl(&dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger);
+                let path = ortholog_summary::from_orthomcl(&dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger);
+                ("orthomcl", path)
             }
             OrthologySource::Rbh(dir) => {
-                let _clusters_and_unique = ortholog_summary::from_rbh(&dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger);
+                let path = ortholog_summary::from_rbh(&dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger);
+                ("rbh", path)
             }
-        }
+        };
+
+        // Write cluster dist per genome
+        let cluster_dist_path = gene_clusters_out_dir.join(
+            format!("GENE_CLUSTERS_SUMMARIES.{}.{}.cluster_dist_per_genome.txt", &args.alignment_type, method_label)
+        );
+        ortholog_summary::write_cluster_dist_per_genome(&clusters_and_unique, &cluster_dist_path, &logger);
+
+        // barchart of orthologs
+        ortholog_summary_plot::write_cluster_dist_stats_and_plot(&cluster_dist_path, &gene_clusters_out_dir, &logger);
 
     }
 

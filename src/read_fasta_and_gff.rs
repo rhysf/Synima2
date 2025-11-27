@@ -426,13 +426,27 @@ fn extract_selected_features(
     let filtered_fasta: Vec<Fasta> = fasta_records
         .clone()
         .into_iter()
-        .filter(|record| {
-            matched_ids.contains(&record.id)
-                || matched_ids.iter().any(|id| record.desc.contains(id))
-        })
-        .map(|mut f| {
-            f.id = format!("{}|{}", genome, f.id); // Optional: prefix ID
-            f
+        .filter_map(|mut record| {
+            // Case 1: record.id itself is the matched key
+            if matched_ids.contains(&record.id) {
+                let canonical = record.id.clone();
+                record.id = format!("{}|{}", genome, canonical);
+                return Some(record);
+            }
+
+            // Case 2: one of the matched IDs appears in the description
+            // (e.g. gene_id=<ID> in IND107)
+            if let Some(canonical) = matched_ids
+                .iter()
+                .find(|id| record.desc.contains(id.as_str()))
+                .cloned()
+            {
+                record.id = format!("{}|{}", genome, canonical);
+                return Some(record);
+            }
+
+            // No link to any canonical ID: drop this record
+            None
         })
         .collect();
 
