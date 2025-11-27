@@ -9,11 +9,12 @@ use std::process::Command;
 use std::path::Path;
 //use std::collections::{HashSet}; //HashMap, 
 use std::path::PathBuf;
-//use rayon::prelude::*;
 use std::fs::{self};
 use std::io::{BufRead, Write};
 use std::ffi::OsStr;
 use std::process::Stdio;
+use rayon::prelude::*;
+use rayon::ThreadPoolBuilder;
 
 struct Species {
     name: String,
@@ -21,10 +22,22 @@ struct Species {
     db_prefix: PathBuf, // base path (no ext)
 }
 
+struct BlastJob {
+    q_name: String,
+    s_name: String,
+    q_fasta: PathBuf,
+    db_prefix: PathBuf,
+    out_path: PathBuf,
+}
+
 #[derive(Debug, Clone)]
 pub struct AlignerTools {
     pub db_builder: PathBuf,
     pub searcher: PathBuf,
+}
+
+fn dmnd_path(prefix: &Path) -> PathBuf {
+    prefix.with_extension("dmnd")
 }
 
 pub fn resolve_aligner_tools(
@@ -225,7 +238,7 @@ pub fn create_all_dbs(
     }
 }
 
-pub fn find_fasta(entry: &RepoEntry, alignment_type: &str) -> Option<PathBuf> {
+fn find_fasta(entry: &RepoEntry, alignment_type: &str) -> Option<PathBuf> {
 
     let want_pep = matches!(alignment_type.to_ascii_lowercase().as_str(), "pep" | "protein");
     let suffix = if want_pep { "synima-parsed.pep" } else { "synima-parsed.cds" };
@@ -251,14 +264,13 @@ pub fn run_all_vs_all(
     let aligner = args.aligner.as_str();                 // "diamond" | "blastplus" | "blastlegacy"
     let alignment_type = args.alignment_type.as_str();   // "pep" | "cds" | "protein" | "nucl"
     let evalue = args.evalue.as_str();
-    let threads = args.threads;
     let max_target_seqs = args.max_target_seqs;
     let diamond_sensitivity = args.diamond_sensitivity.as_str();    
 
-    if let Err(e) = fs::create_dir_all(out_dir) {
-        logger.error(&format!("run_all_vs_all: failed to create output directory {}: {}", out_dir.display(), e));
-        std::process::exit(1);
-    }
+    let total_threads = args.threads.max(1);
+
+    // Make sure output dir exists
+    mkdir(&out_dir, logger, "run_all_vs_all");
 
     // This must match create_all_dbs: databases are under out_dir/databases with prefix = FASTA stem
     let db_dir = out_dir.join("databases");
@@ -266,55 +278,74 @@ pub fn run_all_vs_all(
 
     for entry in repo {
         if let Some(fasta) = find_fasta(entry, alignment_type) {
-            // stem like "CA1280.synima-parsed"
-            //let stem = Path::new(&fasta)
-            //    .file_stem()
-            //    .and_then(|s| s.to_str())
-            //    .unwrap_or_else(|| {
-            //        logger.error(&format!("run_all_vs_all: could not get file stem for FASTA {}", fasta.display()));
-            //        std::process::exit(1);
-            //    })
-            //    .to_string();
-
-            //logger.information(&format!("run_all_vs_all: stem for {} = {}", entry.name.clone(), stem));
-
             species.push(Species {
                 name: entry.name.clone(),            // used in output filenames
                 fasta: PathBuf::from(&fasta),
-                //db_prefix: db_dir.join(&stem),       // must match create_all_dbs
                 db_prefix: db_dir.join(&entry.name)
             });
         }
     }
 
-    // Helper for diamond: .dmnd file from prefix
-    fn dmnd_path(prefix: &Path) -> PathBuf {
-        prefix.with_extension("dmnd")
+    if species.is_empty() {
+        logger.error("run_all_vs_all: no species sequences found for the requested alignment_type");
+        std::process::exit(1);
     }
+
+    // Build list of jobs: all pairwise (including self)
+    let mut jobs: Vec<BlastJob> = Vec::new();
 
     for q in &species {
         for s in &species {
-            let out_path = out_dir.join(format!("{}_vs_{}.out", q.name, s.name)); // <— desired filenames
+            let out_path = out_dir.join(format!("{}_vs_{}.out", q.name, s.name));
+
+            jobs.push(BlastJob {
+                q_name: q.name.clone(),
+                s_name: s.name.clone(),
+                q_fasta: q.fasta.clone(),
+                db_prefix: s.db_prefix.clone(),
+                out_path,
+            });
+        }
+    }
+
+    logger.information(&format!("run_all_vs_all: {} pairwise searches to run with aligner '{}'", jobs.len(), aligner));
+
+    // Copy searcher path into an owned PathBuf so it can be shared in the closure
+    let searcher_path = searcher.to_path_buf();
+
+    // Build a local rayon pool constrained to total_threads
+    let pool = ThreadPoolBuilder::new()
+        .num_threads(total_threads)
+        .build()
+        .expect("run_all_vs_all: failed to build rayon thread pool");
+
+    // Run jobs in parallel
+    // Install the parallel computation in that pool
+    pool.install(|| {
+        jobs.par_iter().for_each(|job| {
+            // Decide how many threads the external tool gets.
+            // Safe choice: 1 per job, rayon handles concurrency.
+            let job_threads = 1;
 
             match aligner {
                 "diamond" => {
                     // diamond blastp --db sdb -q qfasta -o out -p threads -k max_target_seqs -e evalue -f 6
                     let program = if matches!(alignment_type, "pep" | "protein") { "blastp" } else { "blastn" };
-                    let dmnd = dmnd_path(&s.db_prefix);
+                    let dmnd = dmnd_path(&job.db_prefix);
 
                     // Optional sanity check so failures are obvious
                     if !dmnd.exists() {
-                        logger.error(&format!("run_all_vs_all: missing DIAMOND DB {} (expected for {})", dmnd.display(), s.name));
+                        logger.error(&format!("run_all_vs_all: missing DIAMOND DB {} (expected for {})", dmnd.display(), job.s_name));
                         std::process::exit(1);
                     }
 
-                    let mut cmd = Command::new(searcher);
+                    let mut cmd = Command::new(&searcher_path);
 
                     cmd.arg(program)
-                        .arg("-d").arg(&s.db_prefix)   // diamond takes prefix without .dmnd
-                        .arg("-q").arg(&q.fasta)
-                        .arg("-o").arg(&out_path)
-                        .arg("-p").arg(threads.to_string()) // threads
+                        .arg("-d").arg(&job.db_prefix)   // diamond takes prefix without .dmnd
+                        .arg("-q").arg(&job.q_fasta)
+                        .arg("-o").arg(&job.out_path)
+                        .arg("-p").arg(job_threads.to_string()) // threads
                         .arg("-k").arg(max_target_seqs.to_string())
                         .arg("-e").arg(format!("{}", evalue))
                         .arg("-f").arg("6") // standard 12 columns
@@ -337,40 +368,40 @@ pub fn run_all_vs_all(
                     let status = match cmd.status() {
                         Ok(st) => st,
                         Err(e) => {
-                            logger.error(&format!("run_all_vs_all: failed to run diamond for {} vs {}: {}", q.name, s.name, e));
+                            logger.error(&format!("run_all_vs_all: failed to run diamond for {} vs {}: {}", job.q_name, job.s_name, e));
                             std::process::exit(1);
                         }
                     };
 
                     if !status.success() {
-                        logger.error(&format!("run_all_vs_all: diamond search failed for {} vs {}", q.name, s.name));
+                        logger.error(&format!("run_all_vs_all: diamond search failed for {} vs {}", job.q_name, job.s_name));
                         std::process::exit(1);
                     }
                 }
 
                 "blastplus" => {
                     // searcher is blastp or blastn
-                    let mut cmd = std::process::Command::new(searcher);
-                    cmd.arg("-query").arg(&q.fasta)
-                        .arg("-db").arg(&s.db_prefix)
-                        .arg("-num_threads").arg(threads.to_string())
+                    let mut cmd = std::process::Command::new(&searcher_path);
+                    cmd.arg("-query").arg(&job.q_fasta)
+                        .arg("-db").arg(&job.db_prefix)
+                        .arg("-num_threads").arg(job_threads.to_string())
                         .arg("-evalue").arg(format!("{}", evalue))
                         .arg("-max_target_seqs").arg(max_target_seqs.to_string())
                         .arg("-outfmt").arg("6")
-                        .arg("-out").arg(&out_path);
+                        .arg("-out").arg(&job.out_path);
 
                     logger.information(&format!("run_all_vs_all: Running {}", render_cmd(&cmd)));
 
                     let status = match cmd.status() {
                         Ok(st) => st,
                         Err(e) => {
-                            logger.error(&format!("run_all_vs_all: failed to run BLAST+ for {} vs {}: {}", q.name, s.name, e));
+                            logger.error(&format!("run_all_vs_all: failed to run BLAST+ for {} vs {}: {}", job.q_name, job.s_name, e));
                             std::process::exit(1);
                         }
                     };
 
                     if !status.success() {
-                        logger.error(&format!("run_all_vs_all: BLAST+ search failed for {} vs {}", q.name, s.name));
+                        logger.error(&format!("run_all_vs_all: BLAST+ search failed for {} vs {}", job.q_name, job.s_name));
                         std::process::exit(1);
                     }
                 }
@@ -379,12 +410,12 @@ pub fn run_all_vs_all(
                     // blastall -p blastp|blastn -d sdb -i qfasta -o out -a threads -e evalue -m 8
                     let program = if matches!(alignment_type, "pep" | "protein") { "blastp" } else { "blastn" };
 
-                    let mut cmd = Command::new(searcher);
+                    let mut cmd = Command::new(&searcher_path);
                     cmd.args(["-p", program])
-                        .args(["-d"]).arg(&s.db_prefix)
-                        .args(["-i"]).arg(&q.fasta)
-                        .args(["-o"]).arg(&out_path)
-                        .args(["-a", &threads.to_string()])
+                        .args(["-d"]).arg(&job.db_prefix)
+                        .args(["-i"]).arg(&job.q_fasta)
+                        .args(["-o"]).arg(&job.out_path)
+                        .args(["-a", &job_threads.to_string()])
                         .args(["-e", &format!("{}", evalue)])
                         .args(["-m", "8"]); // tabular
 
@@ -393,13 +424,13 @@ pub fn run_all_vs_all(
                     let status = match cmd.status() {
                         Ok(st) => st,
                         Err(e) => {
-                            logger.error(&format!("run_all_vs_all: failed to run legacy BLAST for {} vs {}: {}", q.name, s.name, e));
+                            logger.error(&format!("run_all_vs_all: failed to run legacy BLAST for {} vs {}: {}", job.q_name, job.s_name, e));
                             std::process::exit(1);
                         }
                     };
 
                     if !status.success() {
-                        logger.error(&format!("run_all_vs_all: legacy BLAST search failed for {} vs {}", q.name, s.name));
+                        logger.error(&format!("run_all_vs_all: legacy BLAST search failed for {} vs {}", job.q_name, job.s_name));
                         std::process::exit(1);
                     }
                 }
@@ -409,9 +440,9 @@ pub fn run_all_vs_all(
                     std::process::exit(1);
                 }
             }
-            logger.information(&format!("run_all_vs_all: wrote {}", out_path.display()));
-        }
-    }
+            logger.information(&format!("run_all_vs_all: wrote {}", job.out_path.display()));
+        });
+    });
 }
 
 pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, logger: &Logger) {

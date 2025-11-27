@@ -1,6 +1,6 @@
 //use std::sync::{Arc, Mutex};
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Logger;
 
 use colored::*;

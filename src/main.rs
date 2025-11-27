@@ -4,6 +4,7 @@ use std::collections::{HashMap};
 use std::fs;
 use std::process::Command;
 use std::process::Stdio;
+use rayon::prelude::*;
 
 mod args;
 mod logger;
@@ -55,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gene_clusters_out_dir = main_output_dir.join("synima_step4-ortholog-summary");
     let tree_out_dir = main_output_dir.join("synima_step5-tree");
     let dagchainer_out_dir = main_output_dir.join("synima_step6-dagchainer");
-    let synima_out_dir = main_output_dir.join("synima_step6-synima");
+    let synima_out_dir = main_output_dir.join("synima_step7-synima");
 
     mkdir(&main_output_dir, &logger, "main");
 
@@ -354,15 +355,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &genomes_parsed,
             &genome_paths,
             &genome_pair_to_gene_pairs,
-            "-v y", // or build this from args
+            "-v n", // or build this from args
             4,
             &logger,
         );
 
-        // Run DAGchainer commands sequentially for now
-        for cmd in &dagchainer_cmds {
-            util::run_shell_cmd(cmd, &logger, "dagchainer");
-        }
+        // Run DAGchainer commands in parallel
+        let total_threads = args.threads.max(1);
+
+        logger.information(&format!("dagchainer: running {} DAGchainer jobs in parallel (rayon threads = {})", dagchainer_cmds.len(), total_threads));
+
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(total_threads)
+            .build()
+            .expect("dagchainer: failed to build Rayon thread pool")
+            .install(|| {
+                dagchainer_cmds.par_iter().for_each(|cmd| {
+                    util::run_shell_cmd(cmd, &logger, "dagchainer");
+                });
+            });
 
         // Concatenate
         dagchainer::concatenate_aligncoords_and_make_spans(&dagchainer_out_subdir, &dagchainer_out_dir, Path::new(&args.repo_spec), &dagchainer_wrapper2, &logger);

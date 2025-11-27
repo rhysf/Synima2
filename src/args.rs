@@ -96,7 +96,7 @@ pub struct Args {
     #[arg(short = 'g', long, default_value_t = 1)]
     pub genetic_code: usize,
 
-    #[arg(short = 't', long, default_value = "4")]
+    #[arg(short = 't', long, default_value = "8")]
     pub threads: usize,
 
     /// Output directory 
