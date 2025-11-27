@@ -1,6 +1,7 @@
 use crate::logger::Logger;
 use crate::omcl;
 use crate::util::{mkdir, open_bufread, open_bufwrite};
+use crate::SynimaStep;
 
 use std::path::{Path, PathBuf};
 use std::process;
@@ -15,12 +16,43 @@ pub enum OrthologySource {
     Rbh(PathBuf),
 }
 
+impl OrthologySource {
+    pub fn method_label(&self) -> &'static str {
+        match self {
+            OrthologySource::OrthoFinder(_) => "orthofinder",
+            OrthologySource::OrthoMcl(_)    => "orthomcl",
+            OrthologySource::Rbh(_)         => "rbh",
+        }
+    }
+
+    //pub fn dir(&self) -> &std::path::Path {
+    //    match self {
+    //        OrthologySource::OrthoFinder(p) => p.as_path(),
+    //        OrthologySource::OrthoMcl(p)    => p.as_path(),
+    //        OrthologySource::Rbh(p)         => p.as_path(),
+    //    }
+    //}
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum OrthologyMethod {
     OrthoFinder,
     OrthoMcl,
     Rbh,
 }
+
+pub fn infer_preferred_method(steps: &[SynimaStep]) -> Option<OrthologyMethod> {
+    steps.iter().find_map(|step| {
+        match step {
+            SynimaStep::BlastToRbh         => Some(OrthologyMethod::Rbh),
+            SynimaStep::BlastToOrthomcl    => Some(OrthologyMethod::OrthoMcl),
+            SynimaStep::BlastToOrthofinder => Some(OrthologyMethod::OrthoFinder),
+            _ => None,
+        }
+    })
+}
+
+
 
 pub fn detect_orthology_source(
     preferred: Option<OrthologyMethod>,

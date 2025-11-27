@@ -22,12 +22,13 @@ mod blast_rbh;
 mod orthofinder;
 mod ortholog_summary;
 mod ortholog_summary_plot;
+mod tree;
+mod dagchainer;
 
 use args::{Args, SynimaStep}; //
 use logger::Logger;
 use read_repo::{RepoEntry};
 use crate::ortholog_summary::OrthologySource;
-use crate::ortholog_summary::OrthologyMethod;
 use crate::util::mkdir;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,6 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gene_clusters_out_dir = main_output_dir.join("synima_step4-ortholog-summary");
     let tree_out_dir = main_output_dir.join("synima_step5-tree");
     let dagchainer_out_dir = main_output_dir.join("synima_step6-dagchainer");
+    let synima_out_dir = main_output_dir.join("synima_step6-synima");
 
     mkdir(&main_output_dir, &logger, "main");
 
@@ -70,6 +72,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // GFF's filtered to memory (need for steps 1 and 4)
     let genomes = read_fasta::load_genomic_fastas(&repo, &logger);
     let mut genome_to_features2: Option<HashMap<String, Vec<String>>> = None;
+
+    // Orthology step for ortholog-summaries and steps after
+    let preferred_method = ortholog_summary::infer_preferred_method(&args.synima_step);
 
     if args.synima_step.contains(&SynimaStep::CreateRepoDb) {
         logger.information("──────────────────────────────");
@@ -229,7 +234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             logger.warning(&format!("orthofinder stderr:\n{}", stderr));
         }
 
-        // Fail hard if OrthoFinder did not succeed
+        // Fail if OrthoFinder did not succeed
         if !output.status.success() {
             logger.error(&format!("orthofinder exited with status {:?}", output.status.code()));
             // optional: include stderr again if you want it very visible
@@ -273,38 +278,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
-        // // Infer requested orthology method from the selected steps
-        let preferred_method: Option<OrthologyMethod> = args.synima_step.iter().find_map(|step| {
-            match step {
-                SynimaStep::BlastToRbh => Some(OrthologyMethod::Rbh),
-                SynimaStep::BlastToOrthomcl => Some(OrthologyMethod::OrthoMcl),
-                SynimaStep::BlastToOrthofinder => Some(OrthologyMethod::OrthoFinder),
-                _ => None,
-            }
-        });
-
         // Detect which ortholog clustering was used:
         let source = ortholog_summary::detect_orthology_source(preferred_method, &orthofinder_out_dir, &omcl_out_dir, &rbh_out_dir, &logger);
+        let method_label = source.method_label();
 
-        let (method_label, clusters_and_unique) = match source {
+        let clusters_and_unique = match &source {
             OrthologySource::OrthoFinder(dir) => {
-                let path = ortholog_summary::from_orthofinder(&dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger);
-                ("orthofinder", path)
+                ortholog_summary::from_orthofinder(dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger)
             }
             OrthologySource::OrthoMcl(dir) => {
-                let path = ortholog_summary::from_orthomcl(&dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger);
-                ("orthomcl", path)
+                ortholog_summary::from_orthomcl(dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger)
             }
             OrthologySource::Rbh(dir) => {
-                let path = ortholog_summary::from_rbh(&dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger);
-                ("rbh", path)
+                ortholog_summary::from_rbh(dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger)
             }
         };
 
         // Write cluster dist per genome
-        let cluster_dist_path = gene_clusters_out_dir.join(
-            format!("GENE_CLUSTERS_SUMMARIES.{}.{}.cluster_dist_per_genome.txt", &args.alignment_type, method_label)
-        );
+        let cluster_dist_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.{}.cluster_dist_per_genome.txt", &args.alignment_type, method_label));
         ortholog_summary::write_cluster_dist_per_genome(&clusters_and_unique, &cluster_dist_path, &logger);
 
         // barchart of orthologs
@@ -326,8 +317,65 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.information("Running Step 6: dagchainer");
         logger.information("──────────────────────────");
 
-        // make output director
+        // make output directors
         mkdir(&dagchainer_out_dir, &logger, "dagchainer");
+        let dagchainer_out_subdir = dagchainer_out_dir.join("pairwise_comparisons");
+        mkdir(&dagchainer_out_subdir, &logger, "dagchainer");
+
+        // Save clusters
+        let source = ortholog_summary::detect_orthology_source(preferred_method, &orthofinder_out_dir, &omcl_out_dir, &rbh_out_dir, &logger);
+        let method_label = source.method_label();
+
+        //let cluster_dist_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.{}.cluster_dist_per_genome.txt", &args.alignment_type, method_label));
+        let clusters_and_unique_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.{}.clusters_and_uniques", args.alignment_type, method_label));
+        if !clusters_and_unique_path.is_file() {
+            logger.error(&format!("Dagchainer step requires {}. Run --synima_step ortholog-summary first.", clusters_and_unique_path.display()));
+            std::process::exit(1);
+        }
+        let (cluster_to_genes, genomes_parsed) = dagchainer::save_gene_ids_from_ortholog_file(&clusters_and_unique_path, &logger);
+
+        // Save genome_pair_to_gene_pairs{genome_A}{genome_B} = [
+        //    [ "CA1280:7000010362857299", "CNB2:7000010424362572" ],
+        //    [ "CA1280:...", "IND107:..." ],
+        //    ...
+        //    ]
+        let genome_pair_to_gene_pairs = dagchainer::process_orthocluster_results_into_hit_pairs(&cluster_to_genes, &logger);
+
+        // Save genome paths from repo
+        let genome_paths = dagchainer::save_genome_paths_for_dagchainer(&repo, &logger);
+
+        // DAGchainer wrapper scripts
+        let dagchainer_wrapper = bin_dir.join("../run_DAG_chainer.pl");
+        let dagchainer_wrapper2 = bin_dir.join("../dagchainer_to_chain_spans.pl");
+
+        let dagchainer_cmds = dagchainer::write_dagchainer_conf_file(
+            &dagchainer_out_subdir,
+            &dagchainer_wrapper,
+            &genomes_parsed,
+            &genome_paths,
+            &genome_pair_to_gene_pairs,
+            "-v y", // or build this from args
+            4,
+            &logger,
+        );
+
+        // Run DAGchainer commands sequentially for now
+        for cmd in &dagchainer_cmds {
+            util::run_shell_cmd(cmd, &logger, "dagchainer");
+        }
+
+        // Concatenate
+        dagchainer::concatenate_aligncoords_and_make_spans(&dagchainer_out_subdir, &dagchainer_out_dir, Path::new(&args.repo_spec), &dagchainer_wrapper2, &logger);
+    }
+
+    if args.synima_step.contains(&SynimaStep::Dagchainer) {
+        logger.information("──────────────────────────");
+        logger.information("Running Step 7: synima");
+        logger.information("──────────────────────────");
+
+        // make output directors
+        mkdir(&synima_out_dir, &logger, "synima");
+
     }
 
     logger.information("Synima: All requested steps completed.");

@@ -6,6 +6,7 @@ use std::fmt;
 use std::process;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
+use std::process::Command;
 
 pub fn mkdir(path: &Path, logger: &Logger, context: &str) {
     fs::create_dir_all(path).log_or_exit(logger, |e| {
@@ -33,6 +34,25 @@ pub fn open_bufread(path: &Path, logger: &Logger, context: &str) -> BufReader<Fi
 pub fn open_bufwrite(path: &Path, logger: &Logger, context: &str) -> BufWriter<File> {
     let file = open_file_write(path, logger, context);
     BufWriter::new(file)
+}
+
+pub fn run_shell_cmd(cmd: &str, logger: &Logger, context: &str) {
+    logger.information(&format!("{context}: running: {cmd}"));
+
+    let status = Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .status()
+        .log_or_exit(logger, |e| {
+            format!("{context}: failed to start '{cmd}': {e}")
+        });
+
+    if !status.success() {
+        logger.error(&format!(
+            "{context}: command failed with status {status}: {cmd}"
+        ));
+        std::process::exit(1);
+    }
 }
 
 // log_or_exit functionality
