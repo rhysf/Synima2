@@ -1,5 +1,6 @@
-use std::fs::{File};
-use std::io::{Write, BufWriter};
+use crate::util::open_bufwrite;
+
+use std::io::{Write};
 use std::path::Path;
 
 use crate::logger::Logger;
@@ -9,8 +10,9 @@ pub fn write_filtered_gff(
     output_path: &Path,
     logger: &Logger,
 ) -> Result<(), std::io::Error> {
-    //let new_path = original_gff_path.with_extension("gff3.synima-parsed.gff3");
-    let mut writer = BufWriter::new(File::create(&output_path)?);
+
+    // Output
+    let mut writer = open_bufwrite(&output_path, &logger, "write_filtered_gff");
 
     for line in filtered_lines {
         writeln!(writer, "{}", line)?;
@@ -25,9 +27,12 @@ pub fn write_combined_gff_file(
     all_gff_lines: &[String],
     logger: &Logger,
 ) -> std::io::Result<()> {
-    let mut file = File::create(output_path)?;
+
+    // Output
+    let mut writer = open_bufwrite(&output_path, &logger, "write_combined_gff_file");
+
     for line in all_gff_lines {
-        writeln!(file, "{}", line)?;
+        writeln!(writer, "{}", line)?;
     }
 
     logger.information(&format!("write_combined_gff_file: Wrote combined GFF to {:?}", output_path));

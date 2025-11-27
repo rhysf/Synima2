@@ -1,4 +1,6 @@
 use crate::logger::Logger;
+use crate::util::open_bufread;
+
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -253,38 +255,37 @@ pub fn build_gene_struct_map(repo: &[RepoEntry], logger: &Logger) -> HashMap<Str
         let genome = &entry.name;
 
         if let Some(gff_file) = entry.files.get("gff_parsed") {
-            if let Ok(file) = std::fs::File::open(&gff_file.path) {
-                let reader = std::io::BufReader::new(file);
 
-                for line in reader.lines().flatten() {
-                    if line.starts_with('#') {
-                        continue;
-                    }
+            let reader = open_bufread(Path::new(&gff_file.path), &logger, "build_gene_struct_map");
 
-                    let fields: Vec<&str> = line.split('\t').collect();
-                    if fields.len() < 9 {
-                        continue;
-                    }
-
-                    let attr = fields[8];
-                    let parts: Vec<&str> = attr.split('|').collect();
-
-                    if parts.len() != 2 {
-                        logger.error(&format!("build_gene_struct_map: gff {} has incorrectly formatted attributes field: {}", gff_file.path, attr));
-                        std::process::exit(1);
-                    }
-
-                    let gene_id = parts[1].to_string();
-
-                    gene_map.insert(
-                        gene_id.clone(),
-                        GeneStruct {
-                            genome: genome.clone(),
-                            gene_id,
-                            //name: parts[1].to_string(), // using gene_id again for name, like in Perl
-                        },
-                    );
+            for line in reader.lines().flatten() {
+                if line.starts_with('#') {
+                    continue;
                 }
+
+                let fields: Vec<&str> = line.split('\t').collect();
+                if fields.len() < 9 {
+                    continue;
+                }
+
+                let attr = fields[8];
+                let parts: Vec<&str> = attr.split('|').collect();
+
+                if parts.len() != 2 {
+                    logger.error(&format!("build_gene_struct_map: gff {} has incorrectly formatted attributes field: {}", gff_file.path, attr));
+                    std::process::exit(1);
+                }
+
+                let gene_id = parts[1].to_string();
+
+                gene_map.insert(
+                    gene_id.clone(),
+                    GeneStruct {
+                        genome: genome.clone(),
+                        gene_id,
+                        //name: parts[1].to_string(), // using gene_id again for name, like in Perl
+                    },
+                );
             }
         }
     }

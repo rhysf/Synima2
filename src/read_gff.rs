@@ -1,9 +1,9 @@
 use crate::logger::Logger;
 use crate::{read_fasta, read_repo};
 use crate::read_fasta::Fasta;
+use crate::util::open_bufread;
 
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 //use std::io::BufReader;
@@ -333,9 +333,9 @@ fn save_features(gff_path: &Path, logger: &Logger) -> io::Result<Vec<GffFeature>
 
     logger.information(&format!("read_gff_by_feature: {}", gff_path.display()));
 
-    let file = File::open(gff_path)?;
-    let reader = io::BufReader::new(file);
-    //let mut features_map: HashMap<String, Vec<String>> = HashMap::new();
+    // Input
+    let reader = open_bufread(&gff_path, &logger, "save_features");
+
     let mut features: Vec<GffFeature> = Vec::new();
 
     for line_result in reader.lines() {

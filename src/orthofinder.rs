@@ -117,7 +117,7 @@ pub fn prepare_orthofinder_blast(
 
     // Process FASTAs -> Blast/Species<ID>.fa and SequenceIDs.txt, and build seq map
     logger.information(&format!("prepare_orthofinder_blast: rewrite FASTA files with species codes: {}", orthofinder_out_dir.display()));
-    let seq_id_map = write_fasta::rewrite_fastas_from_repo(repo, alignment_type, &species_ids, orthofinder_out_dir)?;
+    let seq_id_map = write_fasta::rewrite_fastas_from_repo(repo, alignment_type, &species_ids, orthofinder_out_dir, &logger)?;
 
     // Rewrite BLAST files using sequence map
     logger.information(&format!("prepare_orthofinder_blast: rewrite BLAST files with species codes: {}", orthofinder_out_dir.display()));

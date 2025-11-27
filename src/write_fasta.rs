@@ -2,10 +2,10 @@ use crate::read_fasta::Fasta;
 use crate::logger::Logger;
 use crate::RepoEntry;
 use crate::blast;
+use crate::util::{open_bufread,open_bufwrite};
 
 //use std::fs;
-use std::fs::{File};
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -16,14 +16,8 @@ pub fn write_filtered_fasta(
     logger: &Logger,
 ) -> Result<(), std::io::Error> {
 
-    let file = match File::create(&output_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("failed to create output file {}: {}", output_path.display(), e));
-            std::process::exit(1);
-        }
-    };
-    let mut writer = BufWriter::new(file);
+    // Output
+    let mut writer = open_bufwrite(&output_path, &logger, "write_filtered_fasta");
 
     for fasta in filtered_records {
         writeln!(writer, ">{}", fasta.id)?;
@@ -39,13 +33,15 @@ pub fn write_combined_fasta_file(
     all_fasta: &[Fasta],
     logger: &Logger,
 ) -> std::io::Result<()> {
-    let mut file = File::create(output_path)?;
+
+    // Output
+    let mut writer = open_bufwrite(&output_path, &logger, "write_combined_fasta_file");
 
     for fasta in all_fasta {
-        writeln!(file, ">{}", fasta.id)?;
+        writeln!(writer, ">{}", fasta.id)?;
         let wrapped_seq = fasta.seq.as_bytes().chunks(60);
         for chunk in wrapped_seq {
-            writeln!(file, "{}", std::str::from_utf8(chunk).unwrap())?;
+            writeln!(writer, "{}", std::str::from_utf8(chunk).unwrap())?;
         }
     }
 
@@ -117,13 +113,16 @@ fn rewrite_one_species_fasta(
     sid: usize,
     seq_map: &mut HashMap<String, String>,
     seq_index_rows: &mut Vec<(usize, usize, String)>,
+    logger: &Logger
 ) -> Result<(), String> {
-    let rdr = BufReader::new(File::open(in_fa).map_err(|e| format!("open {}: {}", in_fa.display(), e))?);
-    let mut wtr = BufWriter::new(File::create(out_fa).map_err(|e| format!("create {}: {}", out_fa.display(), e))?);
+
+    // Input/Output
+    let reader = open_bufread(&in_fa, &logger, "rewrite_one_species_fasta");
+    let mut writer = open_bufwrite(&out_fa, &logger, "rewrite_one_species_fasta");
 
     let mut local_idx: usize = 0;
 
-    for (lineno, line) in rdr.lines().enumerate() {
+    for (lineno, line) in reader.lines().enumerate() {
         let line = line.map_err(|e| format!("read {} line {}: {}", in_fa.display(), lineno + 1, e))?;
         if line.starts_with('>') {
             let hdr = line[1..].trim();
@@ -133,7 +132,7 @@ fn rewrite_one_species_fasta(
             }
 
             let new_id = format!("{}_{}", sid, local_idx);
-            writeln!(wtr, ">{}", new_id).map_err(|e| format!("write header {}: {}", out_fa.display(), e))?;
+            writeln!(writer, ">{}", new_id).map_err(|e| format!("write header {}: {}", out_fa.display(), e))?;
 
             // record mapping
             seq_map.insert(orig_token.clone(), new_id.clone());
@@ -141,7 +140,7 @@ fn rewrite_one_species_fasta(
 
             local_idx += 1;
         } else {
-            writeln!(wtr, "{}", line).map_err(|e| format!("write seq {}: {}", out_fa.display(), e))?;
+            writeln!(writer, "{}", line).map_err(|e| format!("write seq {}: {}", out_fa.display(), e))?;
         }
     }
 
@@ -152,15 +151,17 @@ fn rewrite_one_species_fasta(
 fn write_sequence_ids_txt(
     blast_dir: &Path,
     seq_index_rows: &mut Vec<(usize, usize, String)>,
+    logger: &Logger
 ) -> Result<(), String> {
 
-    seq_index_rows.sort_by_key(|(sid, idx, _)| (*sid, *idx));
+    // Output
     let seq_ids_fn = blast_dir.join("SequenceIDs.txt");
-    let mut w = BufWriter::new(
-        File::create(&seq_ids_fn).map_err(|e| format!("create {}: {}", seq_ids_fn.display(), e))?,
-    );
+    let mut writer = open_bufwrite(&seq_ids_fn, &logger, "write_sequence_ids_txt");
+
+    seq_index_rows.sort_by_key(|(sid, idx, _)| (*sid, *idx));
+
     for (sid, idx, orig) in seq_index_rows.iter() {
-        writeln!(w, "{}_{}: {}", sid, idx, orig).map_err(|e| format!("write {}: {}", seq_ids_fn.display(), e))?;
+        writeln!(writer, "{}_{}: {}", sid, idx, orig).map_err(|e| format!("write {}: {}", seq_ids_fn.display(), e))?;
     }
     Ok(())
 }
@@ -170,7 +171,7 @@ pub fn rewrite_fastas_from_repo(
     alignment_type: &str,                  // "pep" or "cds"
     species_ids: &BTreeMap<String, usize>,    // .../Blast/SpeciesIDs.txt
     out_dir: &Path,             // synima_orthofinder_out
-) -> Result<HashMap<String, String>, String> {
+    logger: &Logger) -> Result<HashMap<String, String>, String> {
 
     let suffix = wanted_suffix_for(alignment_type)?;
     let blast_dir = blast::ensure_blast_dir(out_dir)?;
@@ -188,11 +189,11 @@ pub fn rewrite_fastas_from_repo(
             format!("Internal: missing FASTA path for species '{}'", species)
         })?;
         let out_fa = blast_dir.join(format!("Species{}.fa", sid));
-        rewrite_one_species_fasta(in_fa, &out_fa, *sid, &mut seq_map, &mut seq_index_rows)?;
+        rewrite_one_species_fasta(in_fa, &out_fa, *sid, &mut seq_map, &mut seq_index_rows, &logger)?;
     }
 
     // Write SequenceIDs.txt
-    write_sequence_ids_txt(&blast_dir, &mut seq_index_rows)?;
+    write_sequence_ids_txt(&blast_dir, &mut seq_index_rows, &logger)?;
 
     Ok(seq_map)
 }
