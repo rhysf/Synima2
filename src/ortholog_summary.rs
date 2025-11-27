@@ -1,12 +1,12 @@
 use crate::logger::Logger;
 use crate::omcl;
-use crate::mkdir;
+use crate::util::{mkdir, open_bufread, open_bufwrite};
 
 use std::path::{Path, PathBuf};
 use std::process;
 use std::collections::{HashMap, HashSet};
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::fs::{self};
+use std::io::{BufRead, Write};
 use std::collections::BTreeSet;
 
 pub enum OrthologySource {
@@ -131,33 +131,10 @@ pub fn from_orthofinder(
     logger.information(&format!("from_orthofinder: writing uniques to {}", unique_path.display()));
     logger.information(&format!("from_orthofinder: writing combined clusters+uniques to {}", clusters_and_unique.display()));
 
-    // 4. Open input and outputs
-    let infile = match File::open(&input_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_orthofinder: failed to open {}: {}", input_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut reader = BufReader::new(infile);
-
-    let clusters_file = match File::create(&clusters_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_orthofinder: failed to create clusters file {}: {}", clusters_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut clusters_writer = BufWriter::new(clusters_file);
-
-    let combined_file = match File::create(&clusters_and_unique) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_orthofinder: failed to create combined file {}: {}", clusters_and_unique.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut combined_writer = BufWriter::new(combined_file);
+    // Input/Output
+    let mut reader = open_bufread(&input_path, &logger, "from_orthofinder");
+    let mut clusters_writer = open_bufwrite(&clusters_path, &logger, "from_orthofinder");
+    let mut combined_writer = open_bufwrite(&clusters_and_unique, &logger, "from_orthofinder");
 
     // 5. Read header line to get genome names
     let mut header_line = String::new();
@@ -316,14 +293,7 @@ pub fn from_orthofinder(
     }
 
     // 8. Write uniques, same approach as from_orthomcl/from_rbh
-    let unique_file = match File::create(&unique_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_orthofinder: failed to create uniques file {}: {}", unique_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut unique_writer = BufWriter::new(unique_file);
+    let mut unique_writer = open_bufwrite(&unique_path, &logger, "from_orthofinder");
 
     let mut all_pairs: Vec<(String, String)> = Vec::new();
 
@@ -408,34 +378,10 @@ pub fn from_orthomcl(
     logger.information(&format!("from_orthomcl: writing uniques to {}", unique_path.display()));
     logger.information(&format!("from_orthomcl: writing combined clusters+uniques to {}", clusters_and_unique.display()));
 
-    // Open input
-    let infile = match File::open(&input_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_orthomcl: failed to open {}: {}", input_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let reader = BufReader::new(infile);
-
-    // Open clusters output
-    let clusters_file = match File::create(&clusters_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_orthomcl: failed to create clusters file {}: {}", clusters_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut clusters_writer = BufWriter::new(clusters_file);
-
-    let combined_file = match File::create(&clusters_and_unique) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_orthomcl: failed to create combined file {}: {}", clusters_and_unique.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut combined_writer = BufWriter::new(combined_file);
+    // Input/Output
+    let reader = open_bufread(&input_path, &logger, "from_orthomcl");
+    let mut clusters_writer = open_bufwrite(&clusters_path, &logger, "from_orthomcl");
+    let mut combined_writer = open_bufwrite(&clusters_and_unique, &logger, "from_orthomcl");
 
     // 5. Track which genes are used in clusters
     let mut clustered_genes: HashSet<(String, String)> = HashSet::new();
@@ -552,15 +498,8 @@ pub fn from_orthomcl(
         //process::exit(1);
     }
 
-    // 7. Write uniques (same logic as in from_rbh)
-    let unique_file = match File::create(&unique_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_orthomcl: failed to create uniques file {}: {}", unique_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut unique_writer = BufWriter::new(unique_file);
+    // 7. Write uniques (same logic as in from_rbh) - from_orthomcl
+    let mut unique_writer = open_bufwrite(&unique_path, &logger, "from_orthomcl");
 
     // Collect all (genome, gene_id) from GFF-derived map
     let mut all_pairs: Vec<(String, String)> = Vec::new();
@@ -627,47 +566,22 @@ pub fn from_rbh(
         std::process::exit(1);
     }
 
-    // Make output directory
+    // Output directory
     mkdir(&gene_clusters_out_dir, &logger, "from_rbh");
 
-    // Output files
+    // Input/Output
     let clusters_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.RBH.clusters", alignment_type));
     let unique_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.RBH.unique", alignment_type));
     let clusters_and_unique = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.RBH.clusters_and_uniques", alignment_type));
+
+    let reader = open_bufread(&input_path, &logger, "from_rbh");
+    let mut clusters_writer = open_bufwrite(&clusters_path, &logger, "from_rbh");
+    let mut combined_writer = open_bufwrite(&clusters_and_unique, &logger, "from_rbh");
 
     logger.information(&format!("from_rbh: reading {}", input_path.display()));
     logger.information(&format!("from_rbh: writing clusters to {}", clusters_path.display()));
     logger.information(&format!("from_rbh: writing uniques to {}", unique_path.display()));
     logger.information(&format!("from_rbh: writing combined clusters+uniques to {}", clusters_and_unique.display()));
-
-    // Open input
-    let infile = match File::open(&input_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_rbh: failed to open {}: {}", input_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let reader = BufReader::new(infile);
-
-    // Open clusters output
-    let clusters_file = match File::create(&clusters_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_rbh: failed to create clusters file {}: {}", clusters_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut clusters_writer = BufWriter::new(clusters_file);
-
-    let combined_file = match File::create(&clusters_and_unique) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_rbh: failed to create combined file {}: {}", clusters_and_unique.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut combined_writer = BufWriter::new(combined_file);
 
     // Track which genes are used in clusters
     let mut clustered_genes: HashSet<(String, String)> = HashSet::new();
@@ -755,14 +669,7 @@ pub fn from_rbh(
     flush_group(&mut group);
 
     // Now write uniques
-    let unique_file = match File::create(&unique_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("from_rbh: failed to create uniques file {}: {}", unique_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut unique_writer = BufWriter::new(unique_file);
+    let mut unique_writer = open_bufwrite(&unique_path, &logger, "from_rbh");
 
     // Collect all (genome, gene_id) pairs, sorted for deterministic output
     let mut all_pairs: Vec<(String, String)> = Vec::new();
@@ -810,25 +717,9 @@ pub fn write_cluster_dist_per_genome(
     logger.information(&format!("cluster_dist_per_genome: reading {}", combined_clusters_path.display()));
     logger.information(&format!("cluster_dist_per_genome: writing {}", output_path.display()));
 
-    // Open input
-    let infile = match File::open(combined_clusters_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("cluster_dist_per_genome: failed to open {}: {}", combined_clusters_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let reader = BufReader::new(infile);
-
-    // Open output
-    let outfile = match File::create(output_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("cluster_dist_per_genome: failed to create {}: {}", output_path.display(), e));
-            process::exit(1);
-        }
-    };
-    let mut writer = BufWriter::new(outfile);
+    // Input/Output
+    let reader = open_bufread(&combined_clusters_path, &logger, "write_cluster_dist_per_genome");
+    let mut writer = open_bufwrite(&output_path, &logger, "write_cluster_dist_per_genome");
 
     // Data structures (Rust equivalents of Perl hashes)
     let mut cluster_to_genome_count: HashMap<String, HashMap<String, u64>> = HashMap::new();

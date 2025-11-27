@@ -1,11 +1,11 @@
 use crate::logger::Logger;
 use crate::RepoEntry;
 use crate::write_fasta;
-use crate::mkdir;
+use crate::util::{mkdir, open_bufread, open_bufwrite};
 
 use std::collections::BTreeMap;
-use std::fs::{self, File};
-use std::io::{BufWriter, Write, BufReader, BufRead};
+use std::fs::{self};
+use std::io::{Write, BufRead};
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 
@@ -31,15 +31,16 @@ fn generate_species_ids(blast_dir: &Path, out_dir: &Path, logger: &Logger) -> Re
     let blast_subdir = out_dir.join("Blast");
     mkdir(&blast_subdir, &logger, "generate_species_ids");
 
+    // output
     let file_path = blast_subdir.join("SpeciesIDs.txt");
-    let mut f = BufWriter::new(File::create(&file_path).map_err(|e| format!("Failed to create SpeciesIDs.txt: {e}"))?);
+    let mut writer = open_bufwrite(&file_path, &logger, "generate_species_ids");
 
     for (name, id) in &species_id_map {
         let trimmed = name.trim();
         if trimmed.is_empty() {
             return Err(format!("Blank species name for ID {}", id));
         }
-        writeln!(f, "{}: {}", id, trimmed).map_err(|e| format!("Write error: {e}"))?;
+        writeln!(writer, "{}: {}", id, trimmed).map_err(|e| format!("Write error: {e}"))?;
     }
 
     Ok(species_id_map)
@@ -68,11 +69,12 @@ pub fn rewrite_blast_files(
         let i = *species_ids.get(a_name).ok_or_else(|| format!("Species not found in ID map: {a_name}"))?;
         let j = *species_ids.get(b_name).ok_or_else(|| format!("Species not found in ID map: {b_name}"))?;
 
+        // Input/Output
+        let reader = open_bufread(&path, &logger, "rewrite_blast_files");
         let out_path = of_blast.join(format!("Blast{}_{}.txt", i, j));
-        let rdr = BufReader::new(File::open(&path).map_err(|e| format!("Open failed {}: {e}", path.display()))?);
-        let mut wtr = BufWriter::new(File::create(&out_path).map_err(|e| format!("Create failed {}: {e}", out_path.display()))?);
+        let mut writer = open_bufwrite(&out_path, &logger, "rewrite_blast_files");
 
-        for (lnum, line_res) in rdr.lines().enumerate() {
+        for (lnum, line_res) in reader.lines().enumerate() {
             let line = line_res.map_err(|e| format!("Read error {}: {e}", path.display()))?;
             if line.is_empty() || line.starts_with('#') { continue; }
             let mut cols: Vec<&str> = line.split('\t').collect();
@@ -93,10 +95,10 @@ pub fn rewrite_blast_files(
             cols[1] = s_new;
 
             // write back
-            wtr.write_all(cols.join("\t").as_bytes()).map_err(|e| format!("Write {}: {}", out_path.display(), e))?;
-            wtr.write_all(b"\n").map_err(|e| format!("Write {}: {}", out_path.display(), e))?;
+            writer.write_all(cols.join("\t").as_bytes()).map_err(|e| format!("Write {}: {}", out_path.display(), e))?;
+            writer.write_all(b"\n").map_err(|e| format!("Write {}: {}", out_path.display(), e))?;
         }
-        wtr.flush().map_err(|e| format!("Flush error {}: {e}", out_path.display()))?;
+        writer.flush().map_err(|e| format!("Flush error {}: {e}", out_path.display()))?;
     }
     Ok(())
 }

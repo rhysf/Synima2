@@ -1,10 +1,11 @@
+use crate::logger::Logger;
+use crate::util::{open_bufwrite};
+
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf}; // 
 use std::process::Command;
-
-use crate::logger::Logger;
 
 pub fn write_cluster_dist_stats_and_plot(cluster_counts_file: &Path, _output_dir: &Path, logger: &Logger) {
 
@@ -92,20 +93,12 @@ pub fn write_cluster_dist_stats_and_plot(cluster_counts_file: &Path, _output_dir
         logger.information(&format!("  {}: core={}, aux={}, unique={}, total={}", g, c, a, u, total));
     }
 
-    // Write ggplot2 R script that makes a PDF
+    // Open ggplot2 Rscript that makes a PDF
     let rscript_path = summary_path.with_extension("summary_plot.R");
-    //let rscript_path = output_dir.join("plot_cluster_dist.R");
+    let mut rscript_writer = open_bufwrite(&rscript_path, &logger, "write_cluster_dist_stats_and_plot");
     logger.information(&format!("write_cluster_dist_stats_and_plot: writing R script to {}", rscript_path.display()));
 
-    let rscript_file = match File::create(&rscript_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("write_cluster_dist_stats_and_plot: failed to create R script {}: {}", rscript_path.display(), e));
-            std::process::exit(1);
-        }
-    };
-    let mut rscript_writer = BufWriter::new(rscript_file);
-
+    // Write Rscript
     let core_str = core_counts.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", ");
     let aux_str = aux_counts.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", ");
     let uniq_str = uniq_counts.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", ");
@@ -320,19 +313,12 @@ fn write_cluster_dist_summary(
         }
     }
 
-    // Write summary file: one line per genome with core / aux / unique counts
+    // Open summary file
     let summary_path = cluster_counts_file.with_extension("summary");
+    let mut summary_writer = open_bufwrite(&summary_path, &logger, "write_cluster_dist_summary");
     logger.information(&format!("write_cluster_dist_summary: writing summary to {}",summary_path.display()));
 
-    let summary_file = match File::create(&summary_path) {
-        Ok(f) => f,
-        Err(e) => {
-            logger.error(&format!("write_cluster_dist_summary: failed to create summary file {}: {}", summary_path.display(), e));
-            std::process::exit(1);
-        }
-    };
-    let mut summary_writer = BufWriter::new(summary_file);
-
+    // Write summary file: one line per genome with core / aux / unique counts
     if let Err(e) = writeln!(summary_writer, "#genome\tcore\taux\tunique") {
         logger.error(&format!("write_cluster_dist_summary: write error (summary header): {}", e));
         std::process::exit(1);
