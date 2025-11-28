@@ -9,21 +9,23 @@ SYNIMA.routes = {
   about: SYNIMA.showAbout
 };
 
-SYNIMA.router = function () {
-  const hash = window.location.hash.replace("#/", "");
-  const route = hash || "orthologs";
-
-  const view = SYNIMA.routes[route];
-
-  if (typeof view === "function") {
-    view();
-  } else {
-    document.getElementById("app").innerHTML =
-      `<div class="p-4 text-red-600">Page not found: ${route}</div>`;
-  }
+SYNIMA.router = function (page) {
+  const view = SYNIMA.routes[page] || SYNIMA.showOrthologs;
+  view();
 };
 
 SYNIMA.routerInit = function () {
-  window.addEventListener("hashchange", SYNIMA.router);
-  window.addEventListener("load", SYNIMA.router);
+
+  // Attach click handlers to all nav links
+  document.addEventListener("click", function (e) {
+    const link = e.target.closest("a[data-page]");
+    if (!link) return;
+
+    e.preventDefault(); // prevent URL change
+    const page = link.getAttribute("data-page");
+    SYNIMA.router(page);
+  });
+
+  // Default landing page
+  SYNIMA.router("orthologs");
 };

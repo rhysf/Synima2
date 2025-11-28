@@ -33,6 +33,7 @@ use logger::Logger;
 use read_repo::{RepoEntry};
 use crate::ortholog_summary::OrthologySource;
 use crate::util::mkdir;
+use crate::synima::OrthoParams;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
@@ -427,7 +428,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         synima::copy_web_template(&synima_out_dir)?;
 
         let index_path = synima_out_dir.join("index.html");
-        synima::inject_json_into_html(&index_path, "data-orthologs", r#"{"hello":"world"}"#)?;
+
+        // update orthologs
+        let params = OrthoParams {
+            aligner: args.aligner.clone(),
+            max_target_seqs: args.max_target_seqs,
+            diamond_sensitivity: args.diamond_sensitivity.clone(),
+            evalue: args.evalue.clone(),
+            dagchainer_chains: args.dagchainer_chains,
+            genetic_code: args.genetic_code,
+        };
+        synima::process_ortholog_summaries(&gene_clusters_out_dir, &index_path, params)?;
+
 
     }
 

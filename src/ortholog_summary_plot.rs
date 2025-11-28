@@ -106,7 +106,9 @@ pub fn write_cluster_dist_stats_and_plot(cluster_counts_file: &Path, _output_dir
 
     //let pdf_path = summary_path.join("cluster_dist.pdf");
     let pdf_path = summary_path.with_extension("summary_plot.pdf");
+    let png_path = summary_path.with_extension("summary_plot.png");
     let pdf_path_str = pdf_path.to_string_lossy().replace('\\', "/");
+    let png_path_str = png_path.to_string_lossy().replace('\\', "/");
 
     let r_code = format!(
         r#"core_counts <- c({core})
@@ -146,13 +148,22 @@ p <- ggplot(df, aes(x = genome, y = count, fill = class)) +
     guide = guide_legend(reverse = TRUE)
   )
 
-ggsave(filename = "{pdf}", plot = p, width = 7, height = 5)
+# PDF output
+ggsave(filename = 
+"{pdf}", 
+plot = p, width = 7, height = 5)
+
+# PNG output
+ggsave(filename = 
+"{png}", 
+plot = p, width = 7, height = 5, dpi = 300)
 "#,
         core = core_str,
         aux = aux_str,
         uniq = uniq_str,
         genomes = genomes_str,
-        pdf = pdf_path_str
+        pdf = pdf_path_str,
+        png = png_path_str
     );
 
     if let Err(e) = rscript_writer.write_all(r_code.as_bytes()) {
@@ -162,7 +173,7 @@ ggsave(filename = "{pdf}", plot = p, width = 7, height = 5)
     drop(rscript_writer);
 
     // Finally, try to run Rscript. If not available, just warn and continue.
-    logger.information("write_cluster_dist_stats_and_plot: checking for Rscript to generate PDF");
+    logger.information("write_cluster_dist_stats_and_plot: checking for Rscript to generate PDF and PNG");
     let status = Command::new("Rscript").arg(&rscript_path).status();
 
     match status {
