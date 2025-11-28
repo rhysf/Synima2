@@ -137,7 +137,7 @@ p <- ggplot(df, aes(x = genome, y = count, fill = class)) +
   ) +
   labs(
     title = "Distribution of core, accessory, and unique genes",
-    x = "Genome",
+    x = "Genome Assembly",
     y = "Number of genes",
     fill = "Class"
   ) +
