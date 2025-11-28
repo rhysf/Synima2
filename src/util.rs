@@ -8,6 +8,7 @@ use std::process;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::process::Command;
+use std::os::unix::fs::PermissionsExt;
 use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]
@@ -25,7 +26,13 @@ pub fn extract_embedded_bin(bin_dir: &Path) -> std::io::Result<()> {
         }
 
         let data = BinAssets::get(relative).unwrap();
-        fs::write(out_path, data.data)?;
+        fs::write(&out_path, data.data)?;
+
+        // Set permissions: 0o755 for directories and executables
+        // We assume everything in bin/ is executable
+        let mut perms = fs::metadata(&out_path)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&out_path, perms)?;
     }
 
     Ok(())

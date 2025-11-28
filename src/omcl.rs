@@ -157,7 +157,7 @@ pub fn write_gcoded_m8_and_sort<P: AsRef<Path>>(
     drop(writer); // flush temp file
 
     // Sort: col1 (ID), col12 (bit score) descending
-    logger.information("write_gcoded_m8_and_sort:sorting Gcoded m8 file...");
+    logger.information("write_gcoded_m8_and_sort: sorting Gcoded m8 file...");
 
     let tmp_path_str = tmp_path.to_string_lossy();
     let out_path_str = m8_output_path.as_ref().to_string_lossy();

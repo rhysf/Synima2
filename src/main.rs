@@ -161,7 +161,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (bpo_path, gg_path) = omcl::convert_m8_to_orthomcl_format(&blast_m8_output_path, &omcl_prefix, &genome_to_code, &logger)?;
 
         // run OrthoMCL
-        let orthomcl_script = std::env::current_dir().expect("Could not get current dir").join("bin").join("OrthoMCL.pl");
+        let orthomcl_script = bin_dir.join("../OrthoMCL.pl");
         omcl::run_orthomcl_clustering(&orthomcl_script, &bpo_path, &gg_path, &omcl_log_path, &logger)?;
     }
  
