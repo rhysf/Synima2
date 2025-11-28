@@ -410,14 +410,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .install(|| {
                 dagchainer_cmds.par_iter().for_each(|cmd| {
                     util::run_shell_cmd(cmd, &logger, "dagchainer");
-                });
-            });
+                });});
 
         // Concatenate
         dagchainer::concatenate_aligncoords_and_make_spans(&dagchainer_out_subdir, &dagchainer_out_dir, Path::new(&args.repo_spec), &dagchainer_wrapper2, &logger);
     }
 
-    if args.synima_step.contains(&SynimaStep::Dagchainer) {
+    if args.synima_step.contains(&SynimaStep::Synima) {
         logger.information("──────────────────────────");
         logger.information("Running Step 7: synima");
         logger.information("──────────────────────────");
