@@ -15,7 +15,7 @@ pub struct Fasta {
     pub seq:String,
 }
 
-fn read_fasta(path: &Path, logger: &Logger) -> Vec<Fasta> {
+pub fn read_fasta(path: &Path, logger: &Logger) -> Vec<Fasta> {
     println!("read_fasta: processing file: {}", path.display());
 
     // read file
