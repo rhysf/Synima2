@@ -26,6 +26,7 @@ mod ortholog_summary;
 mod ortholog_summary_plot;
 mod tree;
 mod dagchainer;
+mod synima;
 
 use args::{Args, SynimaStep}; //
 use logger::Logger;
@@ -40,6 +41,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Validate steps
     args::validate_step_sequence(&args.synima_step, &logger);
+
+    // Validate aligner vs alignment_type compatibility
+    args::validate_alignment_compatibility(&args, &logger);
 
     // Read the repo_spec file
     let mut repo = read_repo::read_repo_spec(&args.repo_spec, &args.alignment_type, &logger);
@@ -334,11 +338,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Run MUSCLE on all cluster pep files, in parallel
         let muscle_path = external_tools::find_executable("muscle", &bin_dir, &logger);
-        tree::run_muscle_on_pep_clusters(&malign_outdir, &muscle_path, args.threads, &logger);
+        tree::run_muscle_on_clusters(&malign_outdir, &muscle_path, &args, &logger);
 
         // Concatenate into a single fasta and build a tree
         let concat_out_path = tree_out_dir.join(format!("SC_core_concat.{}.{}.mfa", args.alignment_type, method_label));
-        tree::concatenate_alignments_and_write(&malign_outdir, &genomes_parsed, ".pep.mfa", &concat_out_path, &logger);
+        let alignment_suffix = format!(".{}.mfa", &args.alignment_type);
+        tree::concatenate_alignments_and_write(&malign_outdir, &genomes_parsed, &alignment_suffix, &concat_out_path, &logger);
         logger.information(&format!("Concatenated core single-copy alignment written to {}", concat_out_path.display()));
         let fasttree_path = external_tools::find_executable("fasttree", &bin_dir, &logger);
         let is_nt = args.alignment_type == "cds";
@@ -388,8 +393,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &genomes_parsed,
             &genome_paths,
             &genome_pair_to_gene_pairs,
-            "-v n", // or build this from args
-            4,
+            "-v n", // not verbose
+            args.dagchainer_chains,
             &logger,
         );
 
@@ -419,6 +424,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // make output directors
         mkdir(&synima_out_dir, &logger, "synima");
+
+        synima::copy_web_template(&synima_out_dir)?;
+
+        let index_path = synima_out_dir.join("index.html");
+        synima::inject_json_into_html(&index_path, "data-orthologs", r#"{"hello":"world"}"#)?;
 
     }
 

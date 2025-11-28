@@ -2,6 +2,7 @@ use crate::Logger;
 use crate::dagchainer::ClusterToGenes;
 use crate::util::{LogResultExt,mkdir,open_bufwrite};
 use crate::read_fasta;
+use crate::Args;
 
 use std::ffi::OsStr;
 use std::fs;
@@ -126,70 +127,69 @@ pub fn write_malign_files(
     logger.information(&format!("write_cluster_pep_files: clusters examined: {}, 1:1 orthologs: {}, unique clusters skipped: {}, skipped non-1:1: {}", total, written, skipped_uniq, skipped_not_1to1));
 }
 
-pub fn run_muscle_on_pep_clusters(
+pub fn run_muscle_on_clusters(
     malign_dir: &Path,
     muscle_path: &Path,
-    max_threads: usize,
+    args: &Args,
     logger: &Logger) {
 
-    logger.information(&format!("run_muscle_on_pep_clusters: running MUSCLE on peptide clusters in {}", malign_dir.display()));
+    logger.information(&format!("run_muscle_on_clusters: running MUSCLE on peptide clusters in {}", malign_dir.display()));
+
+    let alignment_type = args.alignment_type.as_str();
+    let total_threads = args.threads.max(1);
 
     // Make sure directory exists
-    mkdir(malign_dir, logger, "run_muscle_on_pep_clusters");
+    mkdir(malign_dir, logger, "run_muscle_on_clusters");
 
     // Collect all *.pep files in MALIGN_DIR
     let read_dir = fs::read_dir(malign_dir).log_or_exit(logger, |e| {
-        format!("run_muscle_on_pep_clusters: failed to read MALIGN_DIR {}: {}", malign_dir.display(), e)
+        format!("run_muscle_on_clusters: failed to read MALIGN_DIR {}: {}", malign_dir.display(), e)
     });
 
-    let mut pep_files: Vec<PathBuf> = Vec::new();
+    let mut cds_or_pep_files: Vec<PathBuf> = Vec::new();
 
     for entry_res in read_dir {
         let entry = entry_res.log_or_exit(logger, |e| {
-            format!("run_muscle_on_pep_clusters: failed to read entry in {}: {}", malign_dir.display(), e)
+            format!("run_muscle_on_clusters: failed to read entry in {}: {}", malign_dir.display(), e)
         });
 
         let path = entry.path();
-        if path.extension() == Some(OsStr::new("pep")) {
-            pep_files.push(path);
+        if path.extension() == Some(OsStr::new(alignment_type)) {
+            cds_or_pep_files.push(path);
         }
     }
 
-    if pep_files.is_empty() {
-        logger.warning("run_muscle_on_pep_clusters: no .pep files found for MUSCLE, skipping alignment step");
+    if cds_or_pep_files.is_empty() {
+        logger.warning(&format!("run_muscle_on_clusters: no .{} files found for MUSCLE, skipping alignment step", alignment_type));
         return;
     }
 
-    pep_files.sort();
+    cds_or_pep_files.sort();
 
-    let n_threads = max_threads.max(1);
-    logger.information(&format!("run_muscle_on_pep_clusters: found {} .pep files, running MUSCLE with {} threads", pep_files.len(), n_threads));
+    logger.information(&format!("run_muscle_on_clusters: found {} .{} files, running MUSCLE with {} threads", cds_or_pep_files.len(), alignment_type, total_threads));
 
     // Build a dedicated rayon pool so we do not rely on the global one
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(n_threads)
-        .build()
-        .log_or_exit(logger, |e| {
-            format!("run_muscle_on_pep_clusters: failed to build rayon thread pool for MUSCLE: {}", e)
-        });
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(total_threads).build().log_or_exit(logger, |e| {format!("run_muscle_on_clusters: failed to build rayon thread pool for MUSCLE: {}", e) });
 
     pool.install(|| {
-        pep_files.par_iter().for_each(|pep_path| {
+        cds_or_pep_files.par_iter().for_each(|cds_or_pep_path| {
+
             // Output is "<pep>.mfa", same as Perl: $opt_s.mfa
-            let mfa_path = pep_path.with_extension("pep.mfa");
+            let ext = format!("{}.mfa", alignment_type);
+            let mfa_path = cds_or_pep_path.with_extension(ext);
 
             // Skip if output already exists and is non empty
             let already_done = mfa_path.metadata().map(|m| m.len() > 0).unwrap_or(false);
 
             if already_done {
-                logger.information(&format!("run_muscle_on_pep_clusters: alignment already exists, skipping MUSCLE: {}", mfa_path.display()));
+                logger.information(&format!("run_muscle_on_clusters: alignment already exists, skipping MUSCLE: {}", mfa_path.display()));
                 return;
             }
 
-            //logger.information(&format!("run_muscle_on_pep_clusters: MUSCLE aligning {} -> {}", pep_path.display(), mfa_path.display()));
+            //logger.information(&format!("run_muscle_on_clusters: MUSCLE aligning {} -> {}", pep_path.display(), mfa_path.display()));
 
             let status = Command::new(muscle_path)
-                .arg("-align").arg(pep_path)
+                .arg("-align").arg(cds_or_pep_path)
                 .arg("-output").arg(&mfa_path)
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -199,21 +199,21 @@ pub fn run_muscle_on_pep_clusters(
 
             match status {
                 Ok(st) if st.success() => {
-                    //logger.information(&format!("run_muscle_on_pep_clusters: MUSCLE finished for {}", pep_path.display()));
+                    //logger.information(&format!("run_muscle_on_clusters: MUSCLE finished for {}", pep_path.display()));
                 }
                 Ok(st) => {
-                    logger.error(&format!("run_muscle_on_pep_clusters: MUSCLE failed for {} with status {}", pep_path.display(), st));
+                    logger.error(&format!("run_muscle_on_clusters: MUSCLE failed for {} with status {}", cds_or_pep_path.display(), st));
                     std::process::exit(1);
                 }
                 Err(e) => {
-                    logger.error(&format!("run_muscle_on_pep_clusters: failed to start MUSCLE for {}: {}", pep_path.display(), e));
+                    logger.error(&format!("run_muscle_on_clusters: failed to start MUSCLE for {}: {}", cds_or_pep_path.display(), e));
                     std::process::exit(1);
                 }
             }
         });
     });
 
-    logger.information("run_muscle_on_pep_clusters: MUSCLE alignments complete");
+    logger.information("run_muscle_on_clusters: MUSCLE alignments complete");
 }
 
 /// Concatenate all MUSCLE alignments (*.pep.mfa) in `malign_dir`

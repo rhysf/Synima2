@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Synima2 Report</title>
+  <link rel="stylesheet" href="./assets/tailwind.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body class="bg-gray-50 text-gray-900">
+  <div id="header"></div>
+
+  <!-- Embedded data: Synima2 will overwrite contents of these blocks -->
+  <script id="data-orthologs" type="application/json">{} </script>
+  <script id="data-tree" type="application/json">{} </script>
+  <script id="data-synteny" type="application/json">{} </script>
+
+
+  <main id="app" class="max-w-6xl mx-auto p-6">
+    <!-- Content injected here by router -->
+  </main>
+
+  <script src="./assets/components/header.js"></script>
+<script src="./assets/components/orthologs.js"></script>
+<script src="./assets/components/tree.js"></script>
+<script src="./assets/components/synteny.js"></script>
+<script src="./assets/components/plot.js"></script>
+<script src="./assets/components/methods.js"></script>
+<script src="./assets/components/about.js"></script>
+
+<!-- router must come last so the above functions are already defined -->
+<script src="./assets/router.js"></script>
+
+<script>
+  SYNIMA.renderHeader();
+  SYNIMA.routerInit();
+</script>
+
+</body>
+</html>

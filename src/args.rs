@@ -83,6 +83,10 @@ pub struct Args {
     #[arg(short = 'e', long, default_value = "1e-10")]
     pub evalue: String,
 
+    /// Number of DAGchainer chains
+    #[arg(long = "dagchainer_chains", default_value_t = 4)]
+    pub dagchainer_chains: usize,
+
     /// 1. The Standard Code
     /// 2. The Vertebrate Mitochondrial Code
     /// 3. The Yeast Mitochondrial Code
@@ -217,5 +221,22 @@ pub fn validate_step_sequence(steps: &[SynimaStep], logger: &Logger) {
             "Tree step selected without ortholog-summary. \
              Tree step will probably fail because it expects orthology summaries.",
         );
+    }
+}
+
+/// Validate logical compatibility between aligner and alignment_type.
+/// Abort with clear error messages when combinations are unsupported.
+pub fn validate_alignment_compatibility(args: &Args, logger: &Logger) {
+    let aligner = args.aligner.as_str();
+    let alignment_type = args.alignment_type.as_str();
+
+    match (aligner, alignment_type) {
+        ("diamond", "cds") => {
+            logger.error(
+                "Invalid configuration: DIAMOND does not support CDS searches. \
+                 Use --alignment-type pep or select --aligner blastplus/blastlegacy when using CDS.",);
+            std::process::exit(1);
+        }
+        _ => {}
     }
 }
