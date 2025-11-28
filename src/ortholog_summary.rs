@@ -401,9 +401,9 @@ pub fn from_orthomcl(
     mkdir(&gene_clusters_out_dir, &logger, "from_orthomcl");
 
     // 4. Output files
-    let clusters_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.OMCL.clusters", alignment_type));
-    let unique_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.OMCL.unique", alignment_type));
-    let clusters_and_unique = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.OMCL.clusters_and_uniques", alignment_type));
+    let clusters_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.orthomcl.clusters", alignment_type));
+    let unique_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.orthomcl.unique", alignment_type));
+    let clusters_and_unique = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.orthomcl.clusters_and_uniques", alignment_type));
 
     logger.information(&format!("from_orthomcl: reading {}", input_path.display()));
     logger.information(&format!("from_orthomcl: writing clusters to {}", clusters_path.display()));
@@ -602,9 +602,9 @@ pub fn from_rbh(
     mkdir(&gene_clusters_out_dir, &logger, "from_rbh");
 
     // Input/Output
-    let clusters_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.RBH.clusters", alignment_type));
-    let unique_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.RBH.unique", alignment_type));
-    let clusters_and_unique = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.RBH.clusters_and_uniques", alignment_type));
+    let clusters_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.rbh.clusters", alignment_type));
+    let unique_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.rbh.unique", alignment_type));
+    let clusters_and_unique = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.rbh.clusters_and_uniques", alignment_type));
 
     let reader = open_bufread(&input_path, &logger, "from_rbh");
     let mut clusters_writer = open_bufwrite(&clusters_path, &logger, "from_rbh");

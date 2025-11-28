@@ -50,20 +50,18 @@ pub fn parse_genome_map_from_gff(gff_path: &Path, logger: &Logger) -> Result<Has
     Ok(genome_set)
 }
 
-pub fn assign_genome_codes<P: AsRef<Path>>(
-    genome_set: &HashSet<String>,
-    output_path: P,
-    logger: &Logger,
-) -> Result<HashMap<String, String>, String> {
+pub fn assign_genome_codes<P: AsRef<Path>>(genome_set: &HashSet<String>, output_path: P, logger: &Logger) -> Result<HashMap<String, String>, String> {
     
     let mut genome_to_code = HashMap::new();
     let mut sorted_genomes: Vec<_> = genome_set.iter().cloned().collect();
     sorted_genomes.sort();
 
-    let mut file = File::create(&output_path).map_err(|e| format!("assign_genome_codes: Failed to write genome code file: {}", e))?;
+    // Output file
+    let path = output_path.as_ref();
+    let mut file = open_bufwrite(path, logger, "assign_genome_codes");
 
     for (i, genome) in sorted_genomes.iter().enumerate() {
-        let code = format!("G{:03x}", i + 1);
+        let code = format!("G{:03}", i + 1);
         logger.information(&format!("assign_genome_codes: {} -> {}", genome, code));
         genome_to_code.insert(genome.clone(), code.clone());
         writeln!(file, "{}\t{}", genome, code).map_err(|e| format!("Write error: {}", e))?;
