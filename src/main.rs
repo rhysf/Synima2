@@ -78,9 +78,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (bin_name, bin_dir) = external_tools::locate_bin_folder(bin_dir, &logger);
     logger.information(&format!("Bin name and path: {} and {}", bin_name, bin_dir.display()));
 
-    // GFF's filtered to memory (need for steps 1 and 4)
+    // SAve genomes to memory (need for steps 1 and 4)
     let genomes = read_fasta::load_genomic_fastas(&repo, &logger);
-    let mut genome_to_features2: Option<HashMap<String, Vec<String>>> = None;
 
     // Orthology step for ortholog-summaries and steps after
     let preferred_method = ortholog_summary::infer_preferred_method(&args.synima_step);
@@ -95,7 +94,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Extract gene sequences either from GFF & genome, or match GFF & CDS/PEP
         let (genome_to_genes, genome_to_features, all_genes, all_features) = read_fasta_and_gff::match_or_extract_genes_from_gff(&repo, &args, &features, &genomes, &logger);
-        genome_to_features2 = Some(genome_to_features.clone());
 
         // Write individual output files
         for genome in genome_to_genes.keys() {
@@ -272,20 +270,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         mkdir(&gene_clusters_out_dir, &logger, "main (ortholog-summary)");
 
         // Get all features
-        let all_features = match genome_to_features2 {
-            Some(ref m) => m,
-            None => {
-                // not run in this invocation, so load again
-                // or decide to error if you require create-repo-db beforehand
-                logger.information("ortholog-summary: re-reading GFF features");
-                // store it back into all_features if you want to reuse again
-                let features = read_gff::save_all_features(&repo, &logger);
-                // Extract gene sequences either from GFF & genome, or match GFF & CDS/PEP
-                let (_genome_to_genes, genome_to_features, _all_genes, _all_features) = read_fasta_and_gff::match_or_extract_genes_from_gff(&repo, &args, &features, &genomes, &logger);
-                genome_to_features2 = Some(genome_to_features);
-                genome_to_features2.as_ref().unwrap()
-            }
-        };
+        let all_features = read_gff::load_parsed_gff(&combined_gff_path, &logger);
 
         // Detect which ortholog clustering was used:
         let source = ortholog_summary::detect_orthology_source(preferred_method, &orthofinder_out_dir, &omcl_out_dir, &rbh_out_dir, &logger);
@@ -293,13 +278,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let clusters_and_unique = match &source {
             OrthologySource::OrthoFinder(dir) => {
-                ortholog_summary::from_orthofinder(dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger)
+                ortholog_summary::from_orthofinder(dir, &args.alignment_type, &gene_clusters_out_dir, &all_features, &logger)
             }
             OrthologySource::OrthoMcl(dir) => {
-                ortholog_summary::from_orthomcl(dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger)
+                ortholog_summary::from_orthomcl(dir, &args.alignment_type, &gene_clusters_out_dir, &all_features, &logger)
             }
             OrthologySource::Rbh(dir) => {
-                ortholog_summary::from_rbh(dir, &args.alignment_type, &gene_clusters_out_dir, all_features, &logger)
+                ortholog_summary::from_rbh(dir, &args.alignment_type, &gene_clusters_out_dir, &all_features, &logger)
             }
         };
 

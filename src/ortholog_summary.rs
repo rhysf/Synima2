@@ -2,6 +2,8 @@ use crate::logger::Logger;
 use crate::omcl;
 use crate::util::{mkdir, open_bufread, open_bufwrite};
 use crate::SynimaStep;
+use crate::read_gff;
+use crate::read_gff::GffFeature;
 
 use std::path::{Path, PathBuf};
 use std::process;
@@ -51,8 +53,6 @@ pub fn infer_preferred_method(steps: &[SynimaStep]) -> Option<OrthologyMethod> {
         }
     })
 }
-
-
 
 pub fn detect_orthology_source(
     preferred: Option<OrthologyMethod>,
@@ -137,9 +137,8 @@ pub fn from_orthofinder(
     orthofinder_dir: &Path,
     alignment_type: &str,
     gene_clusters_out_dir: &Path,
-    all_genes: &HashMap<String, Vec<String>>,
-    logger: &Logger,
-) -> PathBuf {
+    all_genes: &HashMap<String, Vec<GffFeature>>,
+    logger: &Logger) -> PathBuf {
 
     logger.information(&format!("from_orthofinder: {}", alignment_type));
 
@@ -330,19 +329,9 @@ pub fn from_orthofinder(
     let mut all_pairs: Vec<(String, String)> = Vec::new();
 
     for (genome, features) in all_genes {
-        for line in features {
-            let cols: Vec<&str> = line.split('\t').collect();
-            if cols.len() < 9 {
-                logger.error(&format!("from_orthofinder: GFF line has < 9 columns for genome {}: {}", genome, line));
-                process::exit(1);
-            }
-            let attrs = cols[8];
-            let parts: Vec<&str> = attrs.split('|').collect();
-            if parts.len() < 2 {
-                logger.error(&format!("from_orthofinder: could not parse gene_id from attributes for genome {}: {}", genome, attrs));
-                process::exit(1);
-            }
-            let gene_id = parts[1].to_string();
+        for feature in features {
+
+            let gene_id = read_gff::extract_gene_id_from_attributes(feature, &logger);
             all_pairs.push((genome.clone(), gene_id));
         }
     }
@@ -380,7 +369,7 @@ pub fn from_orthomcl(
     omcl_dir: &Path,
     alignment_type: &str,
     gene_clusters_out_dir: &Path,
-    all_genes: &HashMap<String, Vec<String>>,
+    all_genes: &HashMap<String, Vec<GffFeature>>,
     logger: &Logger,
 ) -> PathBuf {
 
@@ -533,23 +522,15 @@ pub fn from_orthomcl(
     // 7. Write uniques (same logic as in from_rbh) - from_orthomcl
     let mut unique_writer = open_bufwrite(&unique_path, &logger, "from_orthomcl");
 
-    // Collect all (genome, gene_id) from GFF-derived map
+    // Collect all genome -> gene_id from GFFfeatures
     let mut all_pairs: Vec<(String, String)> = Vec::new();
+
     for (genome, features) in all_genes {
-        for line in features {
-            let cols: Vec<&str> = line.split('\t').collect();
-            if cols.len() < 9 {
-                logger.error(&format!("from_orthomcl: GFF line has < 9 columns for genome {}: {}", genome, line));
-                process::exit(1);
-            }
-            let attrs = cols[8];
-            let parts: Vec<&str> = attrs.split('|').collect();
-            if parts.len() < 2 {
-                logger.error(&format!("from_orthomcl: could not parse gene_id from attributes for genome {}: {}", genome, attrs));
-                process::exit(1);
-            }
-            let gene_id = parts[1].to_string();
+        for feature in features {
+
+            let gene_id = read_gff::extract_gene_id_from_attributes(feature, &logger);
             all_pairs.push((genome.clone(), gene_id));
+
         }
     }
     all_pairs.sort();
@@ -585,7 +566,7 @@ pub fn from_rbh(
     rbh_dir: &Path,
     alignment_type: &str,
     gene_clusters_out_dir: &Path,
-    all_genes: &HashMap<String, Vec<String>>,
+    all_genes: &HashMap<String, Vec<GffFeature>>,
     logger: &Logger,
 ) -> PathBuf {
 
@@ -703,14 +684,14 @@ pub fn from_rbh(
     // Now write uniques
     let mut unique_writer = open_bufwrite(&unique_path, &logger, "from_rbh");
 
-    // Collect all (genome, gene_id) pairs, sorted for deterministic output
+    // Collect all genome -> gene_id from GffFeature
     let mut all_pairs: Vec<(String, String)> = Vec::new();
     for (genome, features) in all_genes {
-        for line in features {
-            //let line = feat.  .original_line.clone();
-            let cols: Vec<&str> = line.split('\t').collect();
-            let cols2: Vec<&str> = cols[8].split('|').collect();
-            all_pairs.push((genome.clone(), cols2[1].to_string().clone()));
+        for feature in features {
+
+            let gene_id = read_gff::extract_gene_id_from_attributes(feature, &logger);
+            all_pairs.push((genome.clone(), gene_id));
+
         }
     }
     all_pairs.sort();

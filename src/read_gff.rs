@@ -4,7 +4,7 @@ use crate::read_fasta::Fasta;
 use crate::util::open_bufread;
 
 use std::collections::{HashMap, HashSet};
-use std::io::{self, BufRead};
+use std::io::{BufRead};
 use std::path::Path;
 //use std::io::BufReader;
 
@@ -53,6 +53,54 @@ pub struct GffFeature {
     pub original_line: String
 }
 
+// single gff line to feature struct
+fn parse_gff_line_to_feature(line: &str, logger: &Logger) -> Option<GffFeature> {
+
+    // Skip empty or comment lines
+    if line.trim().is_empty() || line.starts_with('#') {
+        return None;
+    }
+
+    let fields: Vec<&str> = line.split('\t').collect();
+    if fields.len() < 9 {
+        logger.error(&format!("parse_gff_line_to_feature: Malformed GFF line (<9 fields): {}", line));
+        std::process::exit(1);
+    }
+
+    // Parse coordinates
+    let start = match fields[3].parse::<usize>() {
+        Ok(v) => v,
+        Err(_) => {
+            logger.error(&format!("parse_gff_line_to_feature: Invalid GFF start coordinate '{}' in line: {}", fields[3], line));
+            std::process::exit(1);
+        }
+    };
+
+    let end = match fields[4].parse::<usize>() {
+        Ok(v) => v,
+        Err(_) => {
+            logger.error(&format!("parse_gff_line_to_feature: Invalid GFF end coordinate '{}' in line: {}", fields[4], line));
+            std::process::exit(1);
+        }
+    };
+
+    // Parse strand (+ / -)
+    let strand = fields[6].chars().next().unwrap_or('.');
+
+    // Parse attributes column
+    let attributes = parse_gff_attributes(fields[8]);
+
+    Some(GffFeature {
+        seqid: fields[0].to_string(),
+        feature_type: fields[2].to_string(),
+        start,
+        end,
+        strand,
+        attributes,
+        original_line: line.to_string(),
+    })
+}
+
 // returns HashMap<String, Vec<GffFeature>>  // genome_name -> features
 pub fn save_all_features(repo_entries: &[RepoEntry], logger: &Logger,) -> HashMap<String, Vec<GffFeature>> {
     let mut all_gff_maps: HashMap<String, Vec<GffFeature>> = HashMap::new();
@@ -68,16 +116,7 @@ pub fn save_all_features(repo_entries: &[RepoEntry], logger: &Logger,) -> HashMa
         if let Some(gff_file) = entry.files.get("gff") {
             let gff_path = Path::new(&gff_file.path);
 
-            let features = save_features(gff_path, logger).unwrap_or_else(|e| {
-                    logger.error(&format!("save_all_features: Failed to read GFF for genome '{}': {}", genome_name, e));
-                    Vec::new()
-                });
-
-            //logger.information(&format!("Loaded {} feature types from genome '{}'", feature_map.len(), genome_name));
-
-            //let mut counts: Vec<_> = feature_map.iter().map(|(feature, entries)| (feature, entries.len())).collect();
-            // Sort descending by count
-            //counts.sort_by(|a, b| b.1.cmp(&a.1));
+            let features = save_features(gff_path, logger);
 
             // Count features by type
             let mut counts: HashMap<String, usize> = HashMap::new();
@@ -105,6 +144,41 @@ pub fn save_all_features(repo_entries: &[RepoEntry], logger: &Logger,) -> HashMa
     logger.information("──────────────────────────────");
 
     all_gff_maps
+}
+
+pub fn load_parsed_gff(path: &Path, logger: &Logger) -> HashMap<String, Vec<GffFeature>> {
+
+    logger.information(&format!("ortholog-summary: loading parsed GFF from {}", path.display()));
+
+    //let reader = open_bufread(path, logger, "load_parsed_gff");
+
+    let features = save_features(path, logger);
+    let mut map: HashMap<String, Vec<GffFeature>> = HashMap::new();
+
+    for feature in features {
+        // ID must exist (parse_gff_attributes now guarantees this
+        // for both normal GFF and the combined parsed GFF)
+        let id = match feature.attributes.get("ID") {
+            Some(v) => v.as_str(),
+            None => {
+                logger.error(&format!("load_parsed_gff: feature missing ID attribute: {}", feature.original_line));
+                std::process::exit(1);
+            }
+        };
+
+        // ID must contain "genome|gene_id"
+        let (genome, _gene_part) = match id.split_once('|') {
+            Some((g, rest)) if !g.is_empty() && !rest.is_empty() => (g.to_string(), rest),
+            _ => {
+                logger.error(&format!("load_parsed_gff: ID '{}' is not in 'genome|gene_id' format", id));
+                std::process::exit(1);
+            }
+        };
+
+        map.entry(genome).or_default().push(feature);
+    }
+
+    map
 }
 
 pub fn prepare_gff_sample(gff_lines: &[String], sample_only: bool) -> Vec<(usize, &String)> {
@@ -258,6 +332,17 @@ pub fn parse_gff_attributes(attr_field: &str) -> HashMap<String, String> {
             map.insert(kv[0].trim().to_string(), kv[1].trim().to_string());
         }
     }
+
+    // Special case for the combined parsed GFF:
+    // If there were no key=value pairs, but the field is nonempty
+    // then treat the entire field as the ID, for example:
+    // "T.soudanense_CBS452.61|7000010104620099"
+    if map.is_empty() {
+        let trimmed = attr_field.trim();
+        if !trimmed.is_empty() {
+            map.insert("ID".to_string(), trimmed.to_string());
+        }
+    }
     map
 }
 
@@ -329,7 +414,7 @@ fn find_matching_parts(
 
 /// Parses a GFF3 file and groups lines by feature type (e.g., "gene", "mRNA")
 /// Returns a HashMap where keys are feature types and values are vectors of full lines.
-fn save_features(gff_path: &Path, logger: &Logger) -> io::Result<Vec<GffFeature>> {
+fn save_features(gff_path: &Path, logger: &Logger) -> Vec<GffFeature> {
 
     logger.information(&format!("read_gff_by_feature: {}", gff_path.display()));
 
@@ -339,52 +424,41 @@ fn save_features(gff_path: &Path, logger: &Logger) -> io::Result<Vec<GffFeature>
     let mut features: Vec<GffFeature> = Vec::new();
 
     for line_result in reader.lines() {
-        let line = line_result?;
-        if line.trim().is_empty() || line.starts_with('#') {
-            continue;
-        }
-
-        let fields: Vec<&str> = line.split('\t').collect();
-        if fields.len() < 9 {
-            logger.warning(&format!("Skipping malformed GFF line (expected 9 fields): {}", line));
-            continue; // Skip malformed lines
-        }
-
-        //let feature_type = fields[2].to_string();
-        //features_map.entry(feature_type).or_default().push(line);
-        // Parse coordinates
-        let start = match fields[3].parse::<usize>() {
-            Ok(v) => v,
-            Err(_) => {
-                logger.warning(&format!("Invalid start coordinate: {}", fields[3]));
-                continue;
+        let line = match line_result {
+            Ok(l) => l,
+            Err(e) => {
+                logger.error(&format!("save_features: read error: {}", e));
+                std::process::exit(1);
             }
         };
 
-        let end = match fields[4].parse::<usize>() {
-            Ok(v) => v,
-            Err(_) => {
-                logger.warning(&format!("Invalid end coordinate: {}", fields[4]));
-                continue;
-            }
-        };
-
-        let strand_char = fields[6].chars().next().unwrap_or('.');
-
-        let attributes = parse_gff_attributes(fields[8]);
-
-        features.push(GffFeature {
-            seqid: fields[0].to_string(),
-            feature_type: fields[2].to_string(),
-            start,
-            end,
-            strand: strand_char,
-            attributes,
-            original_line: line.clone()
-        });
+        // line -> Feature struct
+        if let Some(feature) = parse_gff_line_to_feature(&line, logger) {
+            features.push(feature);
+        }
     }
 
-    Ok(features)
+    features
+}
+
+pub fn extract_gene_id_from_attributes(f: &GffFeature, logger: &Logger) -> String {
+    // ID must exist
+    let id = match f.attributes.get("ID") {
+        Some(v) => v.as_str(),
+        None => {
+            logger.error(&format!("extract_gene_id: feature is missing ID attribute: {}", f.original_line));
+            std::process::exit(1);
+        }
+    };
+
+    // ID must contain '|'
+    match id.split_once('|') {
+        Some((_genome, gene_id)) => gene_id.to_string(),
+        None => {
+            logger.error(&format!("extract_gene_id: ID '{}' is missing '|'", id));
+            std::process::exit(1);
+        }
+    }
 }
 
 /// Given a parent ID, return its feature type (e.g. mRNA, gene) if found in the GFF list
