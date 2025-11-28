@@ -68,7 +68,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let combined_gff_path = repo_out_dir.join(combined_gff_filename);
 
     // Set input subdirs
-    let (bin_name, bin_dir) = external_tools::locate_bin_folder("bin", &logger);
+    let exe = std::env::current_exe()?;
+    let exe_dir = exe.parent().unwrap();
+    let bin_dir = exe_dir.join("bin");
+
+    // Ensure bin/ exists and is populated
+    util::extract_embedded_bin(&bin_dir)?;
+    
+    let (bin_name, bin_dir) = external_tools::locate_bin_folder(bin_dir, &logger);
     logger.information(&format!("Bin name and path: {} and {}", bin_name, bin_dir.display()));
 
     // GFF's filtered to memory (need for steps 1 and 4)
@@ -338,25 +345,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Write MALIGN cds/pep files
-        tree::write_cluster_pep_files(&cluster_to_genes, &args.alignment_type, &pep_by_id, &malign_outdir, &genomes_parsed, &logger);
-
-        // muscle and fasttree
-        let muscle_path = external_tools::find_executable("muscle", &bin_dir, &logger);
+        tree::write_malign_files(&cluster_to_genes, &args.alignment_type, &pep_by_id, &malign_outdir, &genomes_parsed, &logger);
 
         // Run MUSCLE on all cluster pep files, in parallel
+        let muscle_path = external_tools::find_executable("muscle", &bin_dir, &logger);
         tree::run_muscle_on_pep_clusters(&malign_outdir, &muscle_path, args.threads, &logger);
 
+        // Concatenate into a single fasta and build a tree
         let concat_out_path = tree_out_dir.join(format!("SC_core_concat.{}.{}.mfa", args.alignment_type, method_label));
-
-        // pep mode for now: ".pep.mfa"
         tree::concatenate_alignments_and_write(&malign_outdir, &genomes_parsed, ".pep.mfa", &concat_out_path, &logger);
-
         logger.information(&format!("Concatenated core single-copy alignment written to {}", concat_out_path.display()));
-
-        // Finally build the tree with FastTree
         let fasttree_path = external_tools::find_executable("fasttree", &bin_dir, &logger);
         let is_nt = args.alignment_type == "cds";
-
         tree::run_fasttree_on_alignment(&fasttree_path, &concat_out_path, is_nt, &logger);
 
     }

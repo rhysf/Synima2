@@ -2,11 +2,38 @@ use crate::logger::Logger;
 use crate::Path;
 use crate::fs;
 
+
 use std::fmt;
 use std::process;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::process::Command;
+use rust_embed::RustEmbed;
+
+#[derive(RustEmbed)]
+#[folder = "bin/"]  // folder in your source
+struct BinAssets;
+
+pub fn extract_embedded_bin(bin_dir: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(bin_dir)?;
+    for file in BinAssets::iter() {
+        let relative = file.as_ref();
+        let out_path = bin_dir.join(relative);
+
+        if let Some(parent) = out_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let data = BinAssets::get(relative).unwrap();
+        fs::write(out_path, data.data)?;
+    }
+
+    Ok(())
+}
+
+//#[derive(RustEmbed)]
+//#[folder = "orthofinder_runtime/"]  // folder in your source
+//struct OrthoFinderAssets;
 
 pub fn mkdir(path: &Path, logger: &Logger, context: &str) {
     fs::create_dir_all(path).log_or_exit(logger, |e| {

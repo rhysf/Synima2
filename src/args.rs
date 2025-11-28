@@ -47,7 +47,7 @@ pub struct Args {
         default_values = [
             "create-repo-db",
             "blast-grid",
-            "blast-to-orthofinder",
+            "blast-to-orthomcl",
             "ortholog-summary",
             "tree",
             "dagchainer",

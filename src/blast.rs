@@ -137,14 +137,16 @@ pub fn create_all_dbs(
 
     for entry in repo {
         let Some(fasta) = find_fasta(entry, alignment_type) else { continue };
-        //let stem = Path::new(&fasta).file_stem().unwrap().to_string_lossy();
-        //let db_prefix = db_dir.join(stem.as_ref());
-        let db_prefix = db_dir.join(&entry.name);
+
+        //let db_prefix = db_dir.join(&entry.name);
+
+        // Clean the species name so DIAMOND accepts it
+        let clean_prefix = normalise_prefix(&entry.name);
 
         species.push(Species {
             name: entry.name.clone(),        // "CNB2"
             fasta: PathBuf::from(&fasta),
-            db_prefix: db_prefix.clone(),    // ".../databases/CNB2.synima-parsed"
+            db_prefix: db_dir.join(&clean_prefix), // db_prefix.clone(),    // ".../databases/CNB2.synima-parsed"
         });
     }
 
@@ -253,6 +255,11 @@ fn find_fasta(entry: &RepoEntry, alignment_type: &str) -> Option<PathBuf> {
         })
 }
 
+fn normalise_prefix(name: &str) -> String {
+    name.replace('.', "_")
+        .replace('-', "_")
+}
+
 pub fn run_all_vs_all(
     repo: &[RepoEntry],
     searcher: &Path,     // e.g. diamond, blastp, blastn, or blastall
@@ -278,10 +285,13 @@ pub fn run_all_vs_all(
 
     for entry in repo {
         if let Some(fasta) = find_fasta(entry, alignment_type) {
+            // Clean the species name so DIAMOND accepts it
+            let clean_prefix = normalise_prefix(&entry.name);
+
             species.push(Species {
                 name: entry.name.clone(),            // used in output filenames
                 fasta: PathBuf::from(&fasta),
-                db_prefix: db_dir.join(&entry.name)
+                db_prefix: db_dir.join(&clean_prefix), //db_dir.join(&entry.name)
             });
         }
     }

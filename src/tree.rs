@@ -16,7 +16,7 @@ use rayon::prelude::*;
 
 // cluster_to_genes: HashMap<String, Vec<ClusterMember>>
 // ClusterMember { genome: String, trans_id: String }
-pub fn write_cluster_pep_files(
+pub fn write_malign_files(
     cluster_to_genes: &ClusterToGenes,
     alignment_type: &str,
     pep_by_id: &HashMap<String, String>,
