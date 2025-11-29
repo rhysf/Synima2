@@ -5,7 +5,9 @@ use crate::read_gff::MatchFieldCriteria;
 use std::fs::{self};
 use std::collections::{HashMap};
 use std::path::Path;
-//use std::fs::File;
+use std::fs::File;
+use std::io::{BufRead,BufReader};
+use anyhow::Result;
 //use std::process;
 
 #[derive(Clone, Debug)]
@@ -197,4 +199,81 @@ pub fn read_fasta_for_genome(
             Vec::new()
         }
     }
+}
+
+// synima step
+
+pub fn fasta_to_total_seq_length(path: &Path) -> Result<u64> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    let mut total: u64 = 0;
+    let mut current_len: u64 = 0;
+
+    for line_res in reader.lines() {
+        let line = line_res?;
+        if line.starts_with('>') {
+            // new contig starts, save previous
+            total += current_len;
+            current_len = 0;
+        } else {
+            current_len += line.trim().len() as u64;
+        }
+    }
+
+    total += current_len; // last contig
+
+    Ok(total)
+}
+
+pub fn fasta_id_to_seq_length_hash(path: &Path) -> Result<HashMap<String, u64>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    let mut map = HashMap::<String, u64>::new();
+    let mut current_id: Option<String> = None;
+    let mut current_len: u64 = 0;
+
+    for line_res in reader.lines() {
+        let line = line_res?;
+
+        if line.starts_with('>') {
+            // store previous
+            if let Some(id) = current_id.take() {
+                map.insert(id, current_len);
+            }
+
+            // new contig
+            let id = line[1..].split_whitespace().next().unwrap().to_string();
+            current_id = Some(id);
+            current_len = 0;
+        } else {
+            current_len += line.trim().len() as u64;
+        }
+    }
+
+    // save last contig
+    if let Some(id) = current_id {
+        map.insert(id, current_len);
+    }
+
+    Ok(map)
+}
+
+pub fn fasta_id_to_order_array(path: &Path) -> Result<Vec<String>> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    let mut order = Vec::<String>::new();
+
+    for line_res in reader.lines() {
+        let line = line_res?;
+
+        if line.starts_with('>') {
+            let id = line[1..].split_whitespace().next().unwrap().to_string();
+            order.push(id);
+        }
+    }
+
+    Ok(order)
 }

@@ -43,6 +43,16 @@ pub enum OrthologyMethod {
     Rbh,
 }
 
+impl OrthologyMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OrthologyMethod::OrthoFinder => "orthofinder",
+            OrthologyMethod::OrthoMcl    => "orthomcl",
+            OrthologyMethod::Rbh         => "rbh",
+        }
+    }
+}
+
 pub fn infer_preferred_method(steps: &[SynimaStep]) -> Option<OrthologyMethod> {
     steps.iter().find_map(|step| {
         match step {

@@ -439,8 +439,8 @@ pub fn concatenate_aligncoords_and_make_spans(
     output_dir: &Path,
     repo_spec: &Path,
     dagchainer_to_spans: &Path,
-    logger: &Logger,
-) {
+    logger: &Logger) {
+
     // Base name from repo_spec, e.g. Repo_spec.txt -> Repo_spec.txt.dagchainer.aligncoords
     let repo_base = repo_spec.file_name().and_then(|s| s.to_str()).unwrap_or("synima");
 

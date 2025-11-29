@@ -1,9 +1,18 @@
+use crate::logger::Logger;
+use crate::RepoEntry;
+use crate::read_fasta;
+
 use regex::Regex;
 use anyhow::{Result, Context};
 use rust_embed::RustEmbed;
 use serde::Serialize;
 use std::fs;
-use std::path::{Path}; //, PathBuf
+//use std::fs::File;
+use std::path::{Path, PathBuf}; 
+//use std::io::{BufRead, BufReader};
+//use std::collections::HashSet;
+//use anyhow::anyhow;
+//use anyhow::bail;
 
 #[derive(RustEmbed)]
 #[folder = "src/web-template/"]
@@ -82,6 +91,30 @@ pub struct CitationInfo {
 pub struct MethodsData {
     pub tools: Vec<ToolInfo>,
     pub citations: Vec<CitationInfo>,
+}
+
+// synteny plots:
+
+#[derive(Serialize)]
+pub struct GenomeContig {
+    pub contig: String,
+    pub length: u64,
+}
+
+#[derive(Serialize)]
+pub struct GenomeInfo {
+    pub name: String,
+    pub total_length: u64,
+    pub contigs: Vec<GenomeContig>,      // contig + length
+    pub order: Vec<String>,             // ordered contig names
+}
+
+#[derive(Serialize)]
+pub struct SyntenyConfig {
+    pub genomes: Vec<GenomeInfo>,
+    pub num_genomes: usize,
+    pub max_length: u64,
+    pub halfway: f64,
 }
 
 
@@ -266,8 +299,8 @@ pub fn process_ortholog_summaries(
 
 pub fn process_tree_files(
     tree_dir: &Path,
-    index_path: &Path,
-) -> Result<()> {
+    index_path: &Path) -> Result<()> {
+
     let mut trees: Vec<TreeItem> = Vec::new();
 
     for entry in fs::read_dir(tree_dir)
@@ -309,4 +342,64 @@ pub fn process_tree_files(
     inject_json_into_html(index_path, "data-tree", &json)?;
 
     Ok(())
+}
+
+// synteny plots
+
+pub fn build_synteny_config(repo_entries: &[RepoEntry], logger: &Logger) -> Result<SyntenyConfig> {
+
+    logger.information(&format!("build_synteny_config: saving from repo..."));
+
+    //let genome_set = extract_genome_names_from_spans(spans_file)?;
+    let mut genomes: Vec<GenomeInfo> = Vec::new();
+
+    for entry in repo_entries {
+        let genome = &entry.name;
+
+        if genome == "synima_all" {
+            continue;
+        }
+
+        // Genome FASTA
+        let genome_fasta_path = if let Some(genome_file) = entry.files.get("genome") {
+            PathBuf::from(&genome_file.path)
+        } else if let Some(genome_file) = entry.files.get("genome_parsed") {
+            PathBuf::from(&genome_file.path)
+        } else {
+            logger.warning(&format!("build_synteny_config: no genome FASTA for genome {}, skipping", genome));
+            continue;
+        };
+
+        // Total genome length
+        let total_len = read_fasta::fasta_to_total_seq_length(&genome_fasta_path)?;
+
+        // Contig -> length map
+        let contig_map = read_fasta::fasta_id_to_seq_length_hash(&genome_fasta_path)?;
+
+        // Order array
+        let order = read_fasta::fasta_id_to_order_array(&genome_fasta_path)?;
+
+        // Convert contigs to struct list
+        let contigs = contig_map.into_iter()
+            .map(|(id, len)| GenomeContig { contig: id, length: len })
+            .collect::<Vec<_>>();
+
+        genomes.push(GenomeInfo {
+            name: genome.clone(),
+            total_length: total_len,
+            contigs,
+            order,
+        });
+    }
+
+    let num_genomes = genomes.len();
+    let max_length = genomes.iter().map(|g| g.total_length).max().unwrap_or(0);
+    let halfway = (num_genomes as f64 / 2.0) - 1.0;
+
+    Ok(SyntenyConfig {
+        genomes,
+        num_genomes,
+        max_length,
+        halfway,
+    })
 }
