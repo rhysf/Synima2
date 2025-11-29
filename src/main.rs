@@ -440,6 +440,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         synima::process_ortholog_summaries(&gene_clusters_out_dir, &index_path, params)?;
 
+        // update tree
+        if tree_out_dir.is_dir() {
+            synima::process_tree_files(&tree_out_dir, &index_path)?;
+        }
+
 
     }
 

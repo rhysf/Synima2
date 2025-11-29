@@ -321,3 +321,90 @@ body {
   max-height: 400px;
 }
 
+
+/* TREE */
+
+.tree-view {
+  background: #0f1b30;
+  border: 1px solid #334155;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  min-height: 300px;
+  margin-bottom: 1.5rem;
+}
+
+.tree-svg {
+  width: 100%;
+  height: auto;
+}
+
+.tree-lines line {
+  stroke: #64748b; /* slate-500 */
+  stroke-width: 1.5;
+}
+
+.tree-label {
+  fill: #e2e8f0;   /* slate-200 */
+  font-size: 0.9rem;
+}
+
+/* Newick block styling, similar to R script */
+.newick-block {
+  background: #0f1b30;
+  border: 1px solid #334155;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  line-height: 1.25rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 250px;
+  overflow-y: auto;
+  margin-bottom: 0.5rem;
+}
+
+/* TREE pt2 */
+
+.tree-controls button {
+  background: #1e40af;
+  color: #e2e8f0;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.4rem;
+  border: none;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+
+.tree-controls button:hover {
+  background: #3b82f6;
+}
+
+.tip-dialog {
+  background: #0f1b30;
+  border: 1px solid #334155;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-top: 1rem;
+}
+
+.tip-dialog.hidden {
+  display: none;
+}
+
+.tip-dialog button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #1e293b;
+  border: 1px solid #334155;
+  padding: 0.3rem 0.5rem;
+  margin: 0.2rem 0;
+  border-radius: 0.3rem;
+}
+
+.tip-dialog button:hover {
+  background: #475569;
+}
+

@@ -13,20 +13,67 @@ SYNIMA.showOrthologs = function () {
 
   let html = `<h1>Ortholog Summaries</h1>`;
 
+  function formatSequenceType(code) {
+    if (code === "cds") return "Coding sequences (CDS)";
+    if (code === "pep") return "Peptide sequences (PEP)";
+    return code;
+  }
+
+function formatOrthoTool(method) {
+  if (method === "orthomcl") return "OrthoMCL";
+  if (method === "rbh") return "Reciprocal Best Hits (RBH)";
+  if (method === "orthofinder") return "OrthoFinder";
+  return method;
+}
+
+  // Determine sequence type + orthology tool run
+  let seqType = "Unknown";
+  let orthoTool = "Unknown";
+
+  if (data.summaries && data.summaries.length > 0) {
+    seqType = formatSequenceType(data.summaries[0].alignment);
+    orthoTool = formatOrthoTool(data.summaries[0].method);
+  }
+
+  // Determine which parameters should be shown
+  let paramRows = `
+    <tr><th>Sequence type</th><td>${seqType}</td></tr>
+    <tr><th>Aligner</th><td>${params.aligner}</td></tr>
+    <tr><th>Orthology tool</th><td>${orthoTool}</td></tr>
+  `;
+
+  // Shared parameters (apply to BLAST and DIAMOND)
+  if (params.max_target_seqs !== undefined) {
+    paramRows += `<tr><th>Max target seqs</th><td>${params.max_target_seqs}</td></tr>`;
+  }
+
+  if (params.evalue !== undefined) {
+    paramRows += `<tr><th>E-value</th><td>${params.evalue}</td></tr>`;
+  }
+
+  // DIAMOND-specific settings
+  if (params.aligner === "diamond" || (params.aligner === "auto" && params.diamond_sensitivity)) {
+    paramRows += `<tr><th>Diamond sensitivity</th><td>${params.diamond_sensitivity}</td></tr>`;
+  }
+
+  // BLAST-specific things (none yet, but easily added later)
+
+  // Always relevant for translation of coding sequences
+  paramRows += `<tr><th>Genetic code</th><td>${params.genetic_code}</td></tr>`;
+
+
+
+
+
   data.summaries.forEach(summary => {
 
 
     html += `
       <div class="section">
       <h2>Ortholog Inference Parameters</h2>
-
-    <table class="param-table">
-      <tr><th>Aligner</th><td>${params.aligner}</td></tr>
-      <tr><th>Max target seqs</th><td>${params.max_target_seqs}</td></tr>
-      <tr><th>Diamond sensitivity</th><td>${params.diamond_sensitivity}</td></tr>
-      <tr><th>E-value</th><td>${params.evalue}</td></tr>
-      <tr><th>Genetic code</th><td>${params.genetic_code}</td></tr>
-    </table>
+      <table class="param-table">
+        ${paramRows}
+      </table>
   </div>
 
 
@@ -104,6 +151,7 @@ function escapeForJsLiteral(str) {
     .replace(/\$/g, "\\$")
     .replace(/\\/g, "\\\\");
 }
+
 
   app.innerHTML = html;
 };

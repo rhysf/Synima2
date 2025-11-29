@@ -9,6 +9,8 @@ use std::path::{Path}; //, PathBuf
 #[folder = "src/web-template/"]
 struct WebTemplate;
 
+// orthologs
+
 #[derive(Serialize)]
 struct SummaryRow {
     genome: String,
@@ -43,6 +45,22 @@ pub struct OrthoParams {
     pub genetic_code: usize
 }
 
+// tree
+
+#[derive(Serialize)]
+struct TreeItem {
+    alignment: String,   // "cds" or "pep"
+    method: String,      // "orthomcl", "rbh", "orthofinder"
+    newick: String,
+    file_name: String,   // tree file name
+}
+
+#[derive(Serialize)]
+struct TreeSummary {
+    trees: Vec<TreeItem>,
+}
+
+
 pub fn copy_web_template(output_dir: &Path) -> Result<()> {
     for file in WebTemplate::iter() {
         let data = WebTemplate::get(&file).unwrap().data;
@@ -76,6 +94,8 @@ pub fn inject_json_into_html(path: &Path, id: &str, json: &str) -> Result<()> {
     std::fs::write(path, new_html)?;
     Ok(())
 }
+
+// Ortholog functions below
 
 /// Parse a `.summary` file
 fn parse_summary_file(path: &Path) -> Result<Vec<SummaryRow>> {
@@ -200,6 +220,55 @@ pub fn process_ortholog_summaries(
 
     // Inject into HTML
     inject_json_into_html(index_path, "data-orthologs", &json)?;
+
+    Ok(())
+}
+
+// Tree functions below
+
+pub fn process_tree_files(
+    tree_dir: &Path,
+    index_path: &Path,
+) -> Result<()> {
+    let mut trees: Vec<TreeItem> = Vec::new();
+
+    for entry in fs::read_dir(tree_dir)
+        .with_context(|| format!("Cannot read directory {:?}", tree_dir))?
+    {
+        let path = entry?.path();
+        if path.extension() != Some("tree".as_ref()) {
+            continue;
+        }
+
+        let filename = path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        // Expect something like: SC_core_concat.cds.orthomcl.mfa.tree
+        let parts: Vec<&str> = filename.split('.').collect();
+        if parts.len() < 5 {
+            continue;
+        }
+
+        let alignment = parts[1].to_string(); // cds or pep
+        let method    = parts[2].to_string(); // orthomcl / rbh / orthofinder
+
+        let newick = fs::read_to_string(&path)
+            .with_context(|| format!("Failed reading tree file {:?}", path))?
+            .trim()
+            .to_string();
+
+        trees.push(TreeItem {
+            alignment,
+            method,
+            newick,
+            file_name: filename,
+        });
+    }
+
+    let json = serde_json::to_string(&TreeSummary { trees })?;
+    inject_json_into_html(index_path, "data-tree", &json)?;
 
     Ok(())
 }
