@@ -26,7 +26,7 @@ SYNIMA.renderHeader = function () {
           <a href="#" data-page="orthologs">Orthologs</a>
 <a href="#" data-page="tree">Tree</a>
 <a href="#" data-page="synteny">Synteny</a>
-<a href="#" data-page="plot">Plot</a>
+<!--<a href="#" data-page="plot">Plot</a>-->
 <a href="#" data-page="methods">Methods</a>
 <a href="#" data-page="about">About</a>
         </div>
@@ -36,7 +36,7 @@ SYNIMA.renderHeader = function () {
           <a href="#" data-page="orthologs">Orthologs</a>
 <a href="#" data-page="tree">Tree</a>
 <a href="#" data-page="synteny">Synteny</a>
-<a href="#" data-page="plot">Plot</a>
+<!--<a href="#" data-page="plot">Plot</a>-->
 <a href="#" data-page="methods">Methods</a>
 <a href="#" data-page="about">About</a>
         </div>
