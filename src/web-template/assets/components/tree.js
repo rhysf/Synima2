@@ -356,8 +356,8 @@ SYNIMA.showTree = function () {
     </div>
 
     <div class="tree-controls">
-      <button disabled title="Midpoint rooting coming soon">Midpoint root (coming soon)</button>
-      <button disabled title="Tip rooting coming soon">Root by tip (coming soon)</button>
+      <!--<button disabled title="Midpoint rooting coming soon">Midpoint root (coming soon)</button>-->
+      <!--<button disabled title="Tip rooting coming soon">Root by tip (coming soon)</button>-->
       
 
       <label>
@@ -368,7 +368,7 @@ SYNIMA.showTree = function () {
       <button onclick="SYNIMA.resetRoot()">Reset tree</button>
 
     <button onclick="SYNIMA.exportSvg()">Download SVG</button>
-<button onclick="SYNIMA.exportPng()">Download PNG</button>
+    <button onclick="SYNIMA.exportPng()">Download PNG</button>
 
     </div>
 
@@ -551,6 +551,27 @@ SYNIMA.midpointRoot = function () {
 
   console.log("=== END STAGE 2 ===");
 
+};
+
+SYNIMA.resetRoot = function () {
+  if (!SYNIMA_TREES.original) {
+    console.warn("resetRoot: No original tree stored.");
+    return;
+  }
+
+  // 1. Turn off label alignment mode
+  SYNIMA_ALIGN_LABELS = false;
+
+  const chk = document.getElementById("align-labels-checkbox");
+  if (chk) chk.checked = false;
+
+  // Deep clone (so mutations won't touch the stored original)
+  SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
+
+  // Re-render
+  renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+
+  console.log("Tree reset to original unrooted version.");
 };
 
 SYNIMA.exportSvg = function () {
