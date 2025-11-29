@@ -1,5 +1,7 @@
 window.SYNIMA = window.SYNIMA || {};
 
+let SYNIMA_ALIGN_LABELS = false;
+
 let SYNIMA_TREES = {
   original: null,
   current: null
@@ -210,9 +212,9 @@ function renderTreeSvg(root, containerId) {
       let y2 = offsetY + child.y;
 
       // Vertical segment
-      lines.push(`<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y2}" />`);
+      lines.push(`<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y2}" stroke="white" stroke-width="2" />`);
       // Horizontal segment
-      lines.push(`<line x1="${x1}" y1="${y2}" x2="${x2}" y2="${y2}" />`);
+      lines.push(`<line x1="${x1}" y1="${y2}" x2="${x2}" y2="${y2}" stroke="white" stroke-width="2" />`);
 
       drawBranches(child);
     });
@@ -221,25 +223,46 @@ function renderTreeSvg(root, containerId) {
 
   function drawLabels(node) {
     if (node.name && !/^[0-9.]+$/.test(node.name)) {
-      let x = offsetX + node.x * scaleX + 5;
+      let x;
+      if (SYNIMA_ALIGN_LABELS) {
+        // All labels flush right at the max X
+        x = offsetX + (maxX * scaleX) + 10;
+      } else {
+        // Natural position at tip
+        x = offsetX + node.x * scaleX + 5;
+      }
       let y = offsetY + node.y + 5;
-      labels.push(`<text x="${x}" y="${y}" class="tree-label">${node.name}</text>`);
+      labels.push(
+        `<text x="${x}" y="${y}" fill="white" font-size="14" font-family="sans-serif">
+           ${node.name}
+         </text>`
+      );
     }
     if (node.children) node.children.forEach(drawLabels);
   }
   drawLabels(root);
 
-  // Scale bar
+  // Choose a scale bar = 20% of tree length
   let scaleLen = maxX * 0.2;
-  let sx1 = offsetX;
-  let sx2 = offsetX + scaleLen * scaleX;
 
+  // Round the number for display
+  let rounded = Number(scaleLen.toFixed(3)); // e.g. 0.00593 → 0.006
+
+  let scalePxStart = offsetX;
+  let scalePxEnd = offsetX + scaleLen * scaleX;
+
+  // Compute midpoint in *pixel coordinates*
+  let scalePxMid = (scalePxStart + scalePxEnd) / 2;
+
+  // Build scale bar SVG
   let scaleBar = `
-    <line x1="${sx1}" y1="${maxY + offsetY + 40}"
-          x2="${sx2}" y2="${maxY + offsetY + 40}"
-          style="stroke:white;stroke-width:2" />
-    <text x="${sx1}" y="${maxY + offsetY + 55}" class="tree-label">0</text>
-    <text x="${sx2}" y="${maxY + offsetY + 55}" class="tree-label">${scaleLen.toFixed(4)}</text>
+    <line x1="${scalePxStart}" y1="${maxY + offsetY + 40}"
+          x2="${scalePxEnd}"   y2="${maxY + offsetY + 40}"
+          stroke="white" stroke-width="2" />
+
+    <text x="${scalePxMid}" y="${maxY + offsetY + 60}"
+          class="tree-label"
+          text-anchor="middle">${rounded}</text>
   `;
 
   let width = 650;
@@ -335,8 +358,21 @@ SYNIMA.showTree = function () {
     <div class="tree-controls">
       <button disabled title="Midpoint rooting coming soon">Midpoint root (coming soon)</button>
       <button disabled title="Tip rooting coming soon">Root by tip (coming soon)</button>
+      
+
+      <label>
+          <input type="checkbox" id="align-labels-checkbox" />
+          Align tip labels
+      </label>
+
       <button onclick="SYNIMA.resetRoot()">Reset tree</button>
+
+    <button onclick="SYNIMA.exportSvg()">Download SVG</button>
+<button onclick="SYNIMA.exportPng()">Download PNG</button>
+
     </div>
+
+  
 
     <div id="tip-root-dialog" class="tip-dialog hidden"></div>
   `;
@@ -370,8 +406,15 @@ SYNIMA.showTree = function () {
     document.getElementById("tree-view-0").innerHTML =
       "<p>Could not render tree.</p>";
   }
-};
 
+  document.getElementById("align-labels-checkbox").addEventListener("change", e => {
+  SYNIMA_ALIGN_LABELS = e.target.checked;
+  if (SYNIMA_TREES.current) {
+    renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+  }
+});
+
+};
 
 SYNIMA.midpointRoot = function () {
   console.log("=== MIDPOINT ROOT: STAGE 1 ===");
@@ -509,3 +552,84 @@ SYNIMA.midpointRoot = function () {
   console.log("=== END STAGE 2 ===");
 
 };
+
+SYNIMA.exportSvg = function () {
+  const svgEl = document.querySelector("#tree-view-0 svg");
+  if (!svgEl) return;
+
+  // Clone the SVG so we don’t touch on-screen version
+  const clone = svgEl.cloneNode(true);
+
+  // Convert all white strokes/fills to black
+  clone.querySelectorAll("line").forEach(line => {
+    line.setAttribute("stroke", "black");
+  });
+
+  clone.querySelectorAll("text").forEach(txt => {
+    txt.setAttribute("fill", "black");
+  });
+
+  const svgData = new XMLSerializer().serializeToString(clone);
+  const blob = new Blob([svgData], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "synima_tree.svg";
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+
+SYNIMA.exportPng = function () {
+  const svgEl = document.querySelector("#tree-view-0 svg");
+  if (!svgEl) return;
+
+  // Clone and recolor white→black
+  const clone = svgEl.cloneNode(true);
+  clone.querySelectorAll("line").forEach(line => {
+    line.setAttribute("stroke", "black");
+  });
+  clone.querySelectorAll("text").forEach(txt => {
+    txt.setAttribute("fill", "black");
+  });
+
+  // Ensure width + height exist in the SVG tag (critically important!)
+  const viewBox = clone.getAttribute("viewBox").split(/\s+/);
+  const vbWidth  = parseFloat(viewBox[2]);
+  const vbHeight = parseFloat(viewBox[3]);
+
+  clone.setAttribute("width", vbWidth);
+  clone.setAttribute("height", vbHeight);
+
+  const svgData = new XMLSerializer().serializeToString(clone);
+  const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+
+  const img = new Image();
+  img.onload = function () {
+
+    const SCALE = 3;   // or 2 or 4 depending on quality preference
+
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width * SCALE;
+    canvas.height = img.height * SCALE;
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    ctx.drawImage(img, 0, 0);
+
+    const pngUrl = canvas.toDataURL("image/png");
+
+    const a = document.createElement("a");
+    a.href = pngUrl;
+    a.download = "synima_tree.png";
+    a.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+  img.src = url;
+};
+
+

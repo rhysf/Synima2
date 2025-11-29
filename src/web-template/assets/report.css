@@ -408,3 +408,7 @@ body {
   background: #475569;
 }
 
+.tree-controls label,
+.tree-controls label span {
+  color: white !important;
+}
