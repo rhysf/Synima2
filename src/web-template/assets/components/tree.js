@@ -1,6 +1,6 @@
 window.SYNIMA = window.SYNIMA || {};
 
-let SYNIMA_ALIGN_LABELS = false;
+let SYNIMA_ALIGN_LABELS = true;
 
 let SYNIMA_TREES = {
   original: null,
@@ -221,17 +221,44 @@ function renderTreeSvg(root, containerId) {
   }
   drawBranches(root);
 
+  // Collect leader lines separately so they render behind labels
+  let leaderLines = [];
+
   function drawLabels(node) {
     if (node.name && !/^[0-9.]+$/.test(node.name)) {
+
+      // Y-position is always the same
+      let y = offsetY + node.y + 5;
+
+      // Label X-position depends on alignment mode
       let x;
       if (SYNIMA_ALIGN_LABELS) {
-        // All labels flush right at the max X
-        x = offsetX + (maxX * scaleX) + 10;
+
+        // space between branch tip and dotted line
+        const LEADER_GAP = 6;  
+
+        // Pixel coordinates
+        let tipX   = offsetX + node.x * scaleX;
+        let leaderStartX = tipX + LEADER_GAP;
+        let labelX = offsetX + (maxX * scaleX) + 10;
+
+        // Dotted leader (stop right before the label)
+        leaderLines.push(`
+          <line x1="${leaderStartX}" y1="${offsetY + node.y}"
+                x2="${labelX - 5}" y2="${offsetY + node.y}"
+                stroke="white"
+                stroke-width="1"
+                stroke-dasharray="3,3" />
+        `);
+
+        // Label is still positioned at labelX
+        x = labelX;
+
       } else {
         // Natural position at tip
         x = offsetX + node.x * scaleX + 5;
       }
-      let y = offsetY + node.y + 5;
+
       labels.push(
         `<text x="${x}" y="${y}" fill="white" font-size="14" font-family="sans-serif">
            ${node.name}
@@ -268,9 +295,9 @@ function renderTreeSvg(root, containerId) {
   let width = 650;
   let height = maxY + 100;
 
-  let svg = `
-    <svg class="tree-svg" viewBox="0 0 ${width} ${height}">
+  let svg = `<svg class="tree-svg" viewBox="0 0 ${width} ${height}">
       <g class="tree-lines">${lines.join("\n")}</g>
+      <g class="tree-leaders">${leaderLines.join("\n")}</g>
       <g class="tree-labels">${labels.join("\n")}</g>
       <g class="tree-scale">${scaleBar}</g>
     </svg>
@@ -378,6 +405,12 @@ SYNIMA.showTree = function () {
   `;
 
   app.innerHTML = html;
+
+  // Enable aligned labels by default
+  SYNIMA_ALIGN_LABELS = true;
+
+  const chk = document.getElementById("align-labels-checkbox");
+  if (chk) chk.checked = true;
 
   // Fill Newick block safely
   const preEl = document.getElementById("newick-text");
