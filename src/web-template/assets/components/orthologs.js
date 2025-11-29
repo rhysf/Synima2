@@ -62,7 +62,13 @@ function formatOrthoTool(method) {
   paramRows += `<tr><th>Genetic code</th><td>${params.genetic_code}</td></tr>`;
 
 
-
+// Show global single-copy orthologs at the top (only once)
+html += `
+  <div class="section">
+    <h2>Single Copy Orthologs</h2>
+    <p>Total 1:1 ortholog groups: <strong>${data.single_copy_orthologs}</strong></p>
+  </div>
+`;
 
 
   data.summaries.forEach(summary => {
@@ -83,7 +89,8 @@ function formatOrthoTool(method) {
           <thead>
             <tr>
               <th>Genome</th>
-              <th>Core</th>
+              <th>Core (1:1)</th>
+              <th>Core (multi)</th>
               <th>Aux</th>
               <th>Unique</th>
             </tr>
@@ -95,7 +102,8 @@ function formatOrthoTool(method) {
       html += `
         <tr>
           <td>${row.genome}</td>
-          <td>${row.core}</td>
+          <td>${row.core_1to1}</td>
+          <td>${row.core_multi}</td>
           <td>${row.aux}</td>
           <td>${row.unique}</td>
         </tr>

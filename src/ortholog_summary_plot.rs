@@ -9,7 +9,7 @@ use std::process::Command;
 
 pub fn write_cluster_dist_stats_and_plot(cluster_counts_file: &Path, _output_dir: &Path, logger: &Logger) {
 
-    // First produce the *.summary file and get its path
+    // First produce the *.summary file (and single copy ortholog count) and get its path
     let summary_path = write_cluster_dist_summary(cluster_counts_file, logger);
 
     logger.information(&format!("write_cluster_dist_stats_and_plot: reading {}", cluster_counts_file.display()));
@@ -42,7 +42,8 @@ pub fn write_cluster_dist_stats_and_plot(cluster_counts_file: &Path, _output_dir
     }
 
     let mut genomes: Vec<String> = Vec::new();
-    let mut core_counts: Vec<u64> = Vec::new();
+    let mut core1_counts: Vec<u64> = Vec::new();
+    let mut corem_counts: Vec<u64> = Vec::new();
     let mut aux_counts: Vec<u64> = Vec::new();
     let mut uniq_counts: Vec<u64> = Vec::new();
 
@@ -66,31 +67,35 @@ pub fn write_cluster_dist_stats_and_plot(cluster_counts_file: &Path, _output_dir
         }
 
         let cols: Vec<&str> = trimmed.split('\t').collect();
-        if cols.len() != 4 {
+        if cols.len() != 5 {
             logger.error(&format!("write_cluster_dist_stats_and_plot: skipping malformed summary line: {}", trimmed));
             continue
         }
 
         let genome = cols[0].to_string();
-        let core = cols[1].parse::<u64>().unwrap_or(0);
-        let aux = cols[2].parse::<u64>().unwrap_or(0);
-        let uniq = cols[3].parse::<u64>().unwrap_or(0);
+        let core1 = cols[1].parse::<u64>().unwrap_or(0);
+        let corem = cols[2].parse::<u64>().unwrap_or(0);
+        let aux   = cols[3].parse::<u64>().unwrap_or(0);
+        let uniq  = cols[4].parse::<u64>().unwrap_or(0);
 
         genomes.push(genome);
-        core_counts.push(core);
+        core1_counts.push(core1);
+        corem_counts.push(corem);
         aux_counts.push(aux);
         uniq_counts.push(uniq);
     }
 
     // Log what we are about to plot
     logger.information("write_cluster_dist_stats_and_plot: values going into R plot:");
-    for ((g, c), (a, u)) in genomes
-        .iter()
-        .zip(core_counts.iter())
-        .zip(aux_counts.iter().zip(uniq_counts.iter()))
-    {
-        let total = c + a + u;
-        logger.information(&format!("  {}: core={}, aux={}, unique={}, total={}", g, c, a, u, total));
+    for i in 0..genomes.len() {
+        let g = &genomes[i];
+        let c1 = core1_counts[i];
+        let cm = corem_counts[i];
+        let a  = aux_counts[i];
+        let u  = uniq_counts[i];
+        let total = c1 + cm + a + u;
+
+        logger.information(&format!("  {}: core_1to1={}, core_multi={}, aux={}, unique={}, total={}", g, c1, cm, a, u, total));
     }
 
     // Open ggplot2 Rscript that makes a PDF
@@ -99,7 +104,8 @@ pub fn write_cluster_dist_stats_and_plot(cluster_counts_file: &Path, _output_dir
     logger.information(&format!("write_cluster_dist_stats_and_plot: writing R script to {}", rscript_path.display()));
 
     // Write Rscript
-    let core_str = core_counts.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", ");
+    let core1_str = core1_counts.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
+    let corem_str = corem_counts.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
     let aux_str = aux_counts.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", ");
     let uniq_str = uniq_counts.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(", ");
     let genomes_str = genomes.iter().map(|g| format!("'{}'", g)).collect::<Vec<_>>().join(", ");
@@ -111,7 +117,8 @@ pub fn write_cluster_dist_stats_and_plot(cluster_counts_file: &Path, _output_dir
     let png_path_str = png_path.to_string_lossy().replace('\\', "/");
 
     let r_code = format!(
-        r#"core_counts <- c({core})
+        r#"core1_counts <- c({core1})
+corem_counts <- c({corem})
 aux_counts <- c({aux})
 uniq_counts <- c({uniq})
 genomes <- c({genomes})
@@ -119,12 +126,12 @@ genomes <- c({genomes})
 library(ggplot2)
 
 df <- data.frame(
-  genome = rep(genomes, times = 3),
+  genome = rep(genomes, times = 4),
   class = factor(
-    rep(c("core", "aux", "unique"), each = length(genomes)),
-    levels = c("core", "aux", "unique")
+    rep(c("core_1to1", "core_multi", "aux", "unique"), each = length(genomes)),
+    levels = c("core_1to1", "core_multi", "aux", "unique")
   ),
-  count = c(core_counts, aux_counts, uniq_counts)
+  count  = c(core1_counts, corem_counts, aux_counts, uniq_counts)
 )
 
 p <- ggplot(df, aes(x = genome, y = count, fill = class)) +
@@ -138,7 +145,7 @@ p <- ggplot(df, aes(x = genome, y = count, fill = class)) +
     legend.position = "right"
   ) +
   labs(
-    title = "Distribution of core, accessory, and unique genes",
+    title = "Distribution of core (1:1 and multi), accessory, and unique genes",
     x = "Genome Assembly",
     y = "Number of genes",
     fill = "Class"
@@ -149,16 +156,15 @@ p <- ggplot(df, aes(x = genome, y = count, fill = class)) +
   )
 
 # PDF output
-ggsave(filename = 
-"{pdf}", 
+ggsave(filename = "{pdf}", 
 plot = p, width = 7, height = 5)
 
 # PNG output
-ggsave(filename = 
-"{png}", 
+ggsave(filename = "{png}", 
 plot = p, width = 7, height = 5, dpi = 300)
 "#,
-        core = core_str,
+        core1 = core1_str,
+        corem = corem_str,
         aux = aux_str,
         uniq = uniq_str,
         genomes = genomes_str,
@@ -192,10 +198,7 @@ plot = p, width = 7, height = 5, dpi = 300)
 /// Read GENE_CLUSTERS_SUMMARIES.*.cluster_dist_per_genome.txt
 /// and write GENE_CLUSTERS_SUMMARIES.*.cluster_dist_per_genome.summary.
 /// Returns the path of the summary file.
-fn write_cluster_dist_summary(
-    cluster_counts_file: &Path,
-    logger: &Logger,
-) -> PathBuf {
+fn write_cluster_dist_summary(cluster_counts_file: &Path, logger: &Logger) -> PathBuf {
 
     logger.information(&format!("write_cluster_dist_summary: reading {}", cluster_counts_file.display()));
 
@@ -237,9 +240,7 @@ fn write_cluster_dist_summary(
             genome_total_counts.insert(genome, count);
         }
     } else {
-        logger.warning(
-            "write_cluster_dist_summary: first line does not start with '#', assuming missing totals header",
-        );
+        logger.warning("write_cluster_dist_summary: first line does not start with '#', assuming missing totals header");
     }
 
     // Second line: "#cluster_id\tname\tgenome1\tgenome2\t..."
@@ -298,13 +299,17 @@ fn write_cluster_dist_summary(
             counts_for_cluster.push((genome.clone(), count));
         }
 
-        let counts_gt_zero: Vec<&(String, u64)> =
-            counts_for_cluster.iter().filter(|(_, c)| *c > 0).collect();
+        let counts_gt_zero: Vec<&(String, u64)> = counts_for_cluster.iter().filter(|(_, c)| *c > 0).collect();
 
-        let classification = if !counts_for_cluster.is_empty()
-            && counts_gt_zero.len() == counts_for_cluster.len()
-        {
-            "core"
+        let classification = if !counts_for_cluster.is_empty() && counts_gt_zero.len() == counts_for_cluster.len() {
+            // CORE (present in all genomes)
+            let all_one = counts_for_cluster.iter().all(|(_, c)| *c == 1);
+
+            if all_one {
+                "core_1to1"
+            } else {
+                "core_multi"
+            }
         } else if counts_gt_zero.len() == 1 {
             "unique"
         } else {
@@ -330,7 +335,7 @@ fn write_cluster_dist_summary(
     logger.information(&format!("write_cluster_dist_summary: writing summary to {}",summary_path.display()));
 
     // Write summary file: one line per genome with core / aux / unique counts
-    if let Err(e) = writeln!(summary_writer, "#genome\tcore\taux\tunique") {
+    if let Err(e) = writeln!(summary_writer, "#genome\tcore_1to1\tcore_multi\taux\tunique") {
         logger.error(&format!("write_cluster_dist_summary: write error (summary header): {}", e));
         std::process::exit(1);
     }
@@ -340,23 +345,15 @@ fn write_cluster_dist_summary(
 
     for genome in &genomes {
         let class_counts_opt = genome_to_class_count.get(genome);
-        let core = class_counts_opt
-            .and_then(|m| m.get("core"))
-            .copied()
-            .unwrap_or(0);
-        let aux = class_counts_opt
-            .and_then(|m| m.get("aux"))
-            .copied()
-            .unwrap_or(0);
-        let uniq = class_counts_opt
-            .and_then(|m| m.get("unique"))
-            .copied()
-            .unwrap_or(0);
-        let total = core + aux + uniq;
+        let core_1to1 = class_counts_opt.and_then(|m| m.get("core_1to1")).copied().unwrap_or(0);
+        let core_multi = class_counts_opt.and_then(|m| m.get("core_multi")).copied().unwrap_or(0);
+        let aux = class_counts_opt.and_then(|m| m.get("aux")).copied().unwrap_or(0);
+        let uniq = class_counts_opt.and_then(|m| m.get("unique")).copied().unwrap_or(0);
+        let total = core_1to1 + core_multi + aux + uniq;
 
-        logger.information(&format!("  {}: core={}, aux={}, unique={}, total={}", genome, core, aux, uniq, total));
+        logger.information(&format!("  {}: core_1to1={}, core_multi={}, aux={}, unique={}, total={}", genome, core_1to1, core_multi, aux, uniq, total));
 
-        if let Err(e) = writeln!(summary_writer, "{}\t{}\t{}\t{}", genome, core, aux, uniq) {
+        if let Err(e) = writeln!(summary_writer, "{}\t{}\t{}\t{}\t{}", genome, core_1to1, core_multi , aux, uniq) {
             logger.error(&format!("write_cluster_dist_summary: write error (summary row): {}", e));
             std::process::exit(1);
         }

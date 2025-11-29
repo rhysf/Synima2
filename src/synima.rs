@@ -14,7 +14,8 @@ struct WebTemplate;
 #[derive(Serialize)]
 struct SummaryRow {
     genome: String,
-    core: u32,
+    core_1to1: u32,
+    core_multi: u32,
     aux: u32,
     unique: u32,
 }
@@ -33,6 +34,7 @@ struct SummaryItem {
 struct OrthologSummary {
     params: OrthoParams,
     summaries: Vec<SummaryItem>,
+    single_copy_orthologs: usize,
 }
 
 #[derive(Serialize)]
@@ -60,6 +62,28 @@ struct TreeSummary {
     trees: Vec<TreeItem>,
 }
 
+// methods
+
+#[derive(Serialize)]
+pub struct ToolInfo {
+    pub category: String,
+    pub name: String,
+    pub version: String,
+}
+
+#[derive(Serialize)]
+pub struct CitationInfo {
+    pub tool: String,
+    pub citation: String,
+    pub link: String,
+}
+
+#[derive(Serialize)]
+pub struct MethodsData {
+    pub tools: Vec<ToolInfo>,
+    pub citations: Vec<CitationInfo>,
+}
+
 
 pub fn copy_web_template(output_dir: &Path) -> Result<()> {
     for file in WebTemplate::iter() {
@@ -80,8 +104,8 @@ pub fn inject_json_into_html(path: &Path, id: &str, json: &str) -> Result<()> {
     let html = std::fs::read_to_string(path)?;
 
     let re = Regex::new(&format!(
-        r#"(?s)<script[^>]*id="{}"[^>]*type="application/json"[^>]*>.*?</script>"#,
-        regex::escape(id)
+        r#"<script[^>]*id="{}"[^>]*type="application/json"[^>]*>(?s).*?</script>"#,
+        id
     ))?;
 
     let replacement = format!(
@@ -108,13 +132,14 @@ fn parse_summary_file(path: &Path) -> Result<Vec<SummaryRow>> {
 
         // genome core aux unique
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 4 { continue; }
+        if parts.len() < 5 { continue; }
 
         rows.push(SummaryRow {
-            genome: parts[0].to_string(),
-            core: parts[1].parse().unwrap_or(0),
-            aux: parts[2].parse().unwrap_or(0),
-            unique: parts[3].parse().unwrap_or(0),
+            genome:      parts[0].to_string(),
+            core_1to1:   parts[1].parse().unwrap_or(0),
+            core_multi:  parts[2].parse().unwrap_or(0),
+            aux:         parts[3].parse().unwrap_or(0),
+            unique:      parts[4].parse().unwrap_or(0),
         });
     }
 
@@ -199,8 +224,7 @@ pub fn process_ortholog_summaries(
         };
 
         // Parse table
-        let table = parse_summary_file(&path)
-            .with_context(|| format!("Failed parsing {:?}", path))?;
+        let table = parse_summary_file(&path).with_context(|| format!("Failed parsing {:?}", path))?;
 
         // Find PDF + R script
         let (pdf_path, png_path, rscript) = find_associated_files(gene_clusters_out_dir, &alignment, &method);
@@ -215,8 +239,22 @@ pub fn process_ortholog_summaries(
         });
     }
 
+    // Compute global single-copy ortholog count across all summaries
+    let mut global_sco = 0usize;
+
+    for summary in &summaries {
+        for row in &summary.table {
+            // row.core_1to1 is the SCO count for this genome
+            // We only want to count *unique SCO groups*, not sum per-genome
+            // So track only once from one genome (e.g., the first)
+            global_sco = row.core_1to1 as usize;
+            break;
+        }
+        break;
+    }
+
     // Serialize to JSON
-    let json = serde_json::to_string(&OrthologSummary { params, summaries })?;
+    let json = serde_json::to_string(&OrthologSummary { params, summaries, single_copy_orthologs: global_sco })?;
 
     // Inject into HTML
     inject_json_into_html(index_path, "data-orthologs", &json)?;
