@@ -27,6 +27,7 @@ mod ortholog_summary_plot;
 mod tree;
 mod dagchainer;
 mod synima;
+mod write_repo_from_ncbi;
 
 use args::{Args, SynimaStep}; //
 use logger::Logger;
@@ -38,7 +39,7 @@ use crate::synima::{MethodsData};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    let args = Args::parse();
+    let mut args = Args::parse();
     let logger = Logger;
 
     // Validate steps
@@ -47,11 +48,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Validate aligner vs alignment_type compatibility
     args::validate_alignment_compatibility(&args, &logger);
 
+    // Set input subdirs
+    let exe = std::env::current_exe()?;
+    let exe_dir = exe.parent().unwrap();
+    let bin_dir = exe_dir.join("bin");
+
+    // Ensure bin/ exists and is populated
+    util::extract_embedded_bin(&bin_dir)?;
+    
+    let (bin_name, bin_dir) = external_tools::locate_bin_folder(bin_dir, &logger);
+    logger.information(&format!("Bin name and path: {} and {}", bin_name, bin_dir.display()));
+
+    // Step0: Download from NCBI if -w was provided
+    if let Some(accession_str) = &args.genbank_accessions {
+        if args.synima_step.contains(&SynimaStep::DownloadFromNcbi) {
+            let accs: Vec<String> = accession_str
+                .split(',')
+                .map(|x| x.trim().to_string())
+                .filter(|x| !x.is_empty())
+                .collect();
+
+            write_repo_from_ncbi::run_step0_download_genbank(&accs, &logger)?;
+
+            // ensure downstream steps know which file to use
+            args.repo_spec = Some("Synima_repo_spec.txt".to_string());
+        } else {
+            logger.error("You used --genbank_accessions but did not select the download-from-ncbi step.");
+            std::process::exit(1);
+        }
+    }
+
     // Read the repo_spec file
-    let mut repo = read_repo::read_repo_spec(&args.repo_spec, &args.alignment_type, &logger);
-    let repo_spec_path = Path::new(&args.repo_spec);
+    let repo_spec_file = match &args.repo_spec {
+        Some(path) => path,
+        None => {
+            logger.error("No repo spec provided. Use either --repo_spec or --genbank_accessions.");
+            std::process::exit(1);
+        }
+    };
+    let mut repo = read_repo::read_repo_spec(repo_spec_file, &args.alignment_type, &logger);
+    let repo_spec_path = Path::new(repo_spec_file);
     let repo_base_dir = repo_spec_path.parent().unwrap_or_else(|| Path::new("."));
-    let repo_basename = Path::new(&args.repo_spec).file_name().and_then(|s| s.to_str()).unwrap_or("repo_spec.txt");
+    let repo_basename = repo_spec_path.file_name().and_then(|s| s.to_str()).unwrap_or("repo_spec.txt");
 
     // Output dirs
     let main_output_dir = repo_base_dir.join(&args.output_dir);
@@ -64,7 +102,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tree_out_dir = main_output_dir.join("synima_step5-tree");
     let dagchainer_out_dir = main_output_dir.join("synima_step6-dagchainer");
     let synima_out_dir = main_output_dir.join("synima_step7-synima");
-
     mkdir(&main_output_dir, &logger, "main");
 
     // Input/Output filenames
@@ -74,17 +111,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let combined_gff_path = repo_out_dir.join(combined_gff_filename);
     let combined_aligncoords = dagchainer_out_dir.join(format!("{repo_basename}.dagchainer.aligncoords"));
     let combined_spans = dagchainer_out_dir.join(format!("{repo_basename}.dagchainer.aligncoords.spans"));
-
-    // Set input subdirs
-    let exe = std::env::current_exe()?;
-    let exe_dir = exe.parent().unwrap();
-    let bin_dir = exe_dir.join("bin");
-
-    // Ensure bin/ exists and is populated
-    util::extract_embedded_bin(&bin_dir)?;
-    
-    let (bin_name, bin_dir) = external_tools::locate_bin_folder(bin_dir, &logger);
-    logger.information(&format!("Bin name and path: {} and {}", bin_name, bin_dir.display()));
 
     // Save genomes to memory (need for steps 1 and 4)
     let genomes = read_fasta::load_genomic_fastas(&repo, &logger);
@@ -124,7 +150,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         write_gff::write_combined_gff_file(&combined_gff_path, &all_features, &logger)?;
 
         logger.information("──────────────────────────────");
-    }
+    } 
 
     // Update repo (only do once)
     read_repo::update_repo_with_parsed_files(&mut repo, &repo_out_dir, &logger);
@@ -417,7 +443,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 });});
 
         // Concatenate
-        dagchainer::concatenate_aligncoords_and_make_spans(&dagchainer_out_subdir, &dagchainer_out_dir, Path::new(&args.repo_spec), &dagchainer_wrapper2, &logger);
+        dagchainer::concatenate_aligncoords_and_make_spans(&dagchainer_out_subdir, &dagchainer_out_dir, Path::new(repo_spec_file), &dagchainer_wrapper2, &logger);
     }
 
     if args.synima_step.contains(&SynimaStep::Synima) {

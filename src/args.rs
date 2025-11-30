@@ -10,6 +10,16 @@ use clap::{Parser, ValueEnum};
 #[command(about = "Synima (Synteny Imager) is an orthology prediction pipeline and synteny viewer.", long_about = None)]
 
 pub struct Args {
+
+    #[arg(
+        short='w',
+        long="genbank_accessions",
+        help="Comma separated NCBI accessions",
+        required_unless_present="repo_spec",
+        conflicts_with="repo_spec"
+    )]
+    pub genbank_accessions: Option<String>,
+
     #[arg(
         short='r', 
         long="repo_spec",
@@ -32,11 +42,13 @@ pub struct Args {
             Cryp_gatt_IND107_V2    gff     /data/genomes/IND107/annotation.gff
             Cryp_gatt_IND107_V2    cds     /data/genomes/IND107/cds.fa
             Cryp_gatt_IND107_V2    pep     /data/genomes/IND107/pep.fa
-            "#)]
-        pub repo_spec: String, 
+            "#,
+            required_unless_present="genbank_accessions",
+            conflicts_with="genbank_accessions"
+        )]
+        pub repo_spec: Option<String>, 
 
     /// Pipeline steps to run (comma separated). See possible values below.
-    ///
     /// Example:
     ///   --synima_step create-repo-db,blast-grid,blast-to-orthofinder
     #[arg(
@@ -45,6 +57,7 @@ pub struct Args {
         value_enum,
         value_delimiter = ',',
         default_values = [
+            "download-from-ncbi",
             "create-repo-db",
             "blast-grid",
             "blast-to-orthomcl",
@@ -114,6 +127,15 @@ pub struct Args {
 #[derive(Debug, Clone, ValueEnum, PartialEq, Eq)]
 #[clap(rename_all = "kebab-case")]
 pub enum SynimaStep {
+
+    #[value(
+        name = "download-from-ncbi",
+        alias = "download-ncbi",
+        alias = "ncbi",
+        help = "Download genome FASTA and GFF from NCBI and write a repo spec"
+    )]
+    DownloadFromNcbi,
+
     #[value(name = "create-repo", alias = "create-repo-db", help = "Parse repo spec, validate GFF and FASTA, and write parsed .pep/.cds files")]
     CreateRepoDb,
 
@@ -171,6 +193,7 @@ pub fn validate_step_sequence(steps: &[SynimaStep], logger: &Logger) {
 
     // 2. Canonical pipeline order, including Tree
     let pipeline_order = [
+        DownloadFromNcbi,
         CreateRepoDb,
         BlastGrid,
         BlastToOrthomcl,
@@ -187,10 +210,7 @@ pub fn validate_step_sequence(steps: &[SynimaStep], logger: &Logger) {
             .iter()
             .position(|s| s == step)
             .unwrap_or_else(|| {
-                logger.error(&format!(
-                    "Internal error: step {:?} not found in pipeline_order.",
-                    step
-                ));
+                logger.error(&format!("Internal error: step {:?} not found in pipeline_order.", step));
                 std::process::exit(1);
             })
     };
