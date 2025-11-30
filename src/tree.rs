@@ -439,3 +439,33 @@ pub fn run_fasttree_on_alignment(
 
     logger.information(&format!("run_fasttree_on_alignment: wrote tree to {}",tree_path.display()));
 }
+
+pub fn extract_leaf_order_from_newick(newick: &str) -> Vec<String> {
+    let mut leaves = Vec::new();
+    let mut token = String::new();
+
+    for c in newick.chars() {
+        match c {
+            '(' | ')' | ',' | ';' => {
+                if !token.is_empty() && token.parse::<f64>().is_err() {
+                    leaves.push(token.clone());
+                }
+                token.clear();
+            }
+            ':' => {
+                if !token.is_empty() && token.parse::<f64>().is_err() {
+                    leaves.push(token.clone());
+                }
+                token.clear();
+            }
+            _ => token.push(c),
+        }
+    }
+
+    // catch final token
+    if !token.is_empty() && token.parse::<f64>().is_err() {
+        leaves.push(token);
+    }
+
+    leaves
+}

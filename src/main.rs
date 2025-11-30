@@ -425,11 +425,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.information("Running Step 7: synima");
         logger.information("──────────────────────────");
 
-        // make output directors
+        // make output directory and web template
         mkdir(&synima_out_dir, &logger, "synima");
-
         synima::copy_web_template(&synima_out_dir)?;
-
         let index_path = synima_out_dir.join("index.html");
 
         // update orthologs
@@ -448,35 +446,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             synima::process_tree_files(&tree_out_dir, &index_path)?;
         }
 
-        // save the tree order
-        //let newick = fs::read_to_string(tree_file)?;
-        //let leaf_order = read_tree::extract_leaf_order_from_newick(&newick);
-
-        //let json = serde_json::to_string(&leaf_order)?;
-        //synima::inject_json_into_html(&index_path, "tree-genome-order", &json)?;
-
         // update methods
-
-        let tools = external_tools::build_tools_vector(
-            &args,
-            preferred_method,
-            &orthofinder_out_dir,
-            &omcl_out_dir,
-            &rbh_out_dir,
-            &logger,
-        );
-
+        let tools = external_tools::build_tools_vector(&args, preferred_method, &orthofinder_out_dir, &omcl_out_dir, &rbh_out_dir, &logger);
         let citations = external_tools::build_citations_vector(&args, preferred_method);
-
         let json = serde_json::to_string(&MethodsData { tools, citations })?;
         synima::inject_json_into_html(&index_path, "data-methods", &json)?;
 
-        // synteny plot
+        // Determine the genome order from the tree
         let source = ortholog_summary::detect_orthology_source(preferred_method, &orthofinder_out_dir, &omcl_out_dir, &rbh_out_dir, &logger);
         let method_label = source.method_label();
-        let synteny_config = synima::build_synteny_config(&repo, &args.alignment_type, &method_label, &logger)?;
+        let tree_file = tree_out_dir.join(format!("SC_core_concat.{}.{}.mfa.tree", args.alignment_type, method_label));
+        let newick = fs::read_to_string(tree_file)?;
+        let leaf_order = tree::extract_leaf_order_from_newick(&newick);
+
+        // synteny plot
         let aligncoords_text = std::fs::read_to_string(&combined_aligncoords).unwrap_or_else(|_| String::new());
         let aligncoords_spans_text = std::fs::read_to_string(&combined_spans).unwrap_or_else(|_| String::new());
+        let synteny_config = synima::build_synteny_config(&repo, &leaf_order, &aligncoords_spans_text, &logger)?;
 
         let json = serde_json::json!({
             "synteny_config": synteny_config,

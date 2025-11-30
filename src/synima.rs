@@ -8,9 +8,11 @@ use rust_embed::RustEmbed;
 use serde::Serialize;
 use std::fs;
 //use std::fs::File;
-use std::path::{Path, PathBuf}; 
+use std::path::{Path, PathBuf};
+//use std::io::{BufRead, BufReader};
 //use std::io::{BufRead, BufReader};
 //use std::collections::HashSet;
+use std::collections::HashMap;
 //use anyhow::anyhow;
 //use anyhow::bail;
 
@@ -106,7 +108,8 @@ pub struct GenomeInfo {
     pub name: String,
     pub total_length: u64,
     pub contigs: Vec<GenomeContig>,      // contig + length
-    pub order: Vec<String>,             // ordered contig names
+    pub fasta_order: Vec<String>,             // original ordered contig names
+    pub inferred_order: Vec<String>,    // ordered contig names
 }
 
 #[derive(Serialize)]
@@ -115,8 +118,22 @@ pub struct SyntenyConfig {
     pub num_genomes: usize,
     pub max_length: u64,
     pub halfway: f64,
-    pub alignment: String,
-    pub method: String,
+    pub genome_order: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Span {
+    pub genome1: String,
+    pub contig1: String,
+    pub start1: u64,
+    pub stop1: u64,
+    pub length1: u64,
+
+    pub genome2: String,
+    pub contig2: String,
+    pub start2: u64,
+    pub stop2: u64,
+    pub length2: u64,
 }
 
 
@@ -343,7 +360,7 @@ pub fn process_tree_files(
 
 // synteny plots
 
-pub fn build_synteny_config(repo_entries: &[RepoEntry], alignment_type: &str, method_label: &str, logger: &Logger) -> Result<SyntenyConfig> {
+pub fn build_synteny_config(repo_entries: &[RepoEntry], genome_order: &[String], spans_text: &str, logger: &Logger) -> Result<SyntenyConfig> {
 
     logger.information(&format!("build_synteny_config: saving from repo..."));
 
@@ -374,19 +391,57 @@ pub fn build_synteny_config(repo_entries: &[RepoEntry], alignment_type: &str, me
         let contig_map = read_fasta::fasta_id_to_seq_length_hash(&genome_fasta_path)?;
 
         // Order array
-        let order = read_fasta::fasta_id_to_order_array(&genome_fasta_path)?;
+        let fasta_order = read_fasta::fasta_id_to_order_array(&genome_fasta_path)?;
 
         // Convert contigs to struct list
         let contigs = contig_map.into_iter()
             .map(|(id, len)| GenomeContig { contig: id, length: len })
-            .collect::<Vec<_>>();
+            .collect();
 
         genomes.push(GenomeInfo {
             name: genome.clone(),
             total_length: total_len,
             contigs,
-            order,
+            fasta_order: fasta_order.clone(),
+            inferred_order: fasta_order, // temporary, replaced later
         });
+    }
+
+    // reorder genomes to match tree leaf order
+    genomes.sort_by_key(|g| {
+        genome_order.iter().position(|x| x == &g.name).unwrap_or(usize::MAX)
+    });
+
+    // Parse spans and infer contig order -----
+    let spans = parse_aligncoords_spans_text(spans_text)?;
+
+    // Infer contig order
+    // use genome 0 (top) as guide
+    if genomes.len() > 1 {
+        let guide = genomes[0].name.clone();
+        let guide_order = genomes[0].inferred_order.clone();
+
+        // guide genome keeps original order
+        genomes[0].inferred_order = guide_order.clone();
+
+        for i in 1..genomes.len() {
+            let target = genomes[i].name.clone();
+            let target_order = genomes[i].inferred_order.clone();
+
+            logger.information(&format!("Inferring contig order for {} using guide {}", target, guide));
+
+            let inferred = infer_contig_order_from_spans(
+                &guide,
+                &target,
+                &guide_order,
+                &target_order,
+                &spans
+            );
+
+            genomes[i].inferred_order = inferred;
+        }
+    } else if genomes.len() == 1 {
+        genomes[0].inferred_order = genomes[0].fasta_order.clone();
     }
 
     let num_genomes = genomes.len();
@@ -398,7 +453,128 @@ pub fn build_synteny_config(repo_entries: &[RepoEntry], alignment_type: &str, me
         num_genomes,
         max_length,
         halfway,
-        alignment: alignment_type.to_string().clone(),
-        method: method_label.to_string(),
+        genome_order: genome_order.to_vec(),
     })
+}
+
+pub fn parse_aligncoords_spans_text(text: &str) -> Result<Vec<Span>> {
+    let mut out = Vec::<Span>::new();
+
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let cols: Vec<&str> = line.split('\t').collect();
+        if cols.len() < 6 {
+            continue; // skip malformed lines
+        }
+
+        // genome1;contig1
+        let gc1: Vec<&str> = cols[0].split(';').collect();
+        if gc1.len() != 2 {
+            continue;
+        }
+
+        // start1-stop1
+        let s1: Vec<&str> = cols[1].split('-').collect();
+        if s1.len() != 2 {
+            continue;
+        }
+
+        // aligned length1
+        let len1 = cols[2].parse::<u64>().unwrap_or(0);
+
+        // genome2;contig2
+        let gc2: Vec<&str> = cols[3].split(';').collect();
+        if gc2.len() != 2 {
+            continue;
+        }
+
+        // start2-stop2
+        let s2: Vec<&str> = cols[4].split('-').collect();
+        if s2.len() != 2 {
+            continue;
+        }
+
+        // aligned length2
+        let len2 = cols[5].parse::<u64>().unwrap_or(0);
+
+        out.push(Span {
+            genome1: gc1[0].to_string(),
+            contig1: gc1[1].to_string(),
+            start1: s1[0].parse().unwrap_or(0),
+            stop1:  s1[1].parse().unwrap_or(0),
+            length1: len1,
+
+            genome2: gc2[0].to_string(),
+            contig2: gc2[1].to_string(),
+            start2: s2[0].parse().unwrap_or(0),
+            stop2:  s2[1].parse().unwrap_or(0),
+            length2: len2,
+        });
+    }
+
+    Ok(out)
+}
+
+fn split_genome_contig(s: &str) -> Option<(String, String)> {
+    let mut parts = s.split(';');
+    let g = parts.next()?.trim().to_string();
+    let c = parts.next()?.trim().to_string();
+    Some((g, c))
+}
+
+/// Recreate Perl logic:
+/// infer the order of genome2’s contigs using genome1 as guide.
+pub fn infer_contig_order_from_spans(guide_genome: &str, target_genome: &str, guide_order: &[String], target_order: &[String], spans: &[Span]) -> Vec<String> {
+
+    let mut seen: HashMap<String, u64> = HashMap::new();
+    let mut new_order: Vec<String> = Vec::new();
+
+    for contig1 in guide_order {
+
+        // collect all synteny hits between guide and target
+        let mut matches: Vec<(String, u64, u64)> = spans
+            .iter()
+            .filter(|s|
+                (s.genome1 == guide_genome && s.contig1 == *contig1 && s.genome2 == target_genome) ||
+                (s.genome2 == guide_genome && s.contig2 == *contig1 && s.genome1 == target_genome)
+            )
+            .map(|s| {
+                let (tcontig, tstart) = if s.genome1 == target_genome {
+                    (s.contig1.clone(), s.start1)
+                } else {
+                    (s.contig2.clone(), s.start2)
+                };
+                let weight = s.length1.max(s.length2);
+                (tcontig, tstart, weight)
+            })
+            .collect();
+
+        // sort by start along guide
+        matches.sort_by_key(|(_, start, _)| *start);
+
+        for (contig2, _, weight) in matches {
+            if let Some(prev) = seen.get(&contig2) {
+                if weight > *prev {
+                    new_order.retain(|c| c != &contig2);
+                    new_order.push(contig2.clone());
+                    seen.insert(contig2, weight);
+                }
+            } else {
+                seen.insert(contig2.clone(), weight);
+                new_order.push(contig2);
+            }
+        }
+    }
+
+    // append any target contig that had no synteny hits
+    for contig in target_order {
+        if !seen.contains_key(contig) {
+            new_order.push(contig.clone());
+        }
+    }
+
+    new_order
 }

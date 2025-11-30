@@ -4,7 +4,6 @@ SYNIMA.showSynteny = function () {
 
     const app = document.getElementById("app");
     const raw = document.getElementById("data-synteny");
-    const treeRaw = document.getElementById("data-tree");
 
     if (!raw) {
         app.innerHTML = "<p>No synteny data found.</p>";
@@ -15,33 +14,7 @@ SYNIMA.showSynteny = function () {
     const config = data.synteny_config;
     const aligncoords = data.aligncoords || "";
     const spans = data.aligncoords_spans || "";
-
-    // 1. Load tree JSON and extract correct tree
-    //----------------------------------------------------------------
-    let genomeOrder = [];
-
-    if (treeRaw && treeRaw.textContent.trim()) {
-        const treeData = JSON.parse(treeRaw.textContent);
-
-        // Extract alignment + method from synteny_config
-        // (Rust includes these inside Tools table AND ortholog summary,
-        //  but synteny doesn't currently re-embed them. So we assume:)
-        const alignment = config.alignment || data.alignment || null;
-        const method = config.method || data.method || null;
-
-        // If not available, try to guess nothing yet
-        if (alignment && method) {
-            const match = treeData.trees.find(
-                t =>
-                    t.alignment.toLowerCase() === alignment.toLowerCase() &&
-                    t.method.toLowerCase() === method.toLowerCase()
-            );
-
-            if (match) {
-                genomeOrder = extractLeafOrder(match.newick);
-            }
-        }
-    }
+    const genomeOrder = config.genome_order || [];
 
     // 2. Begin debug output
     let html = "<h1>Synteny Debug</h1>";
@@ -64,7 +37,8 @@ SYNIMA.showSynteny = function () {
     config.genomes.forEach(g => {
         html += `<h3>${g.name}</h3>`;
         html += `<p>Total length: ${g.total_length}</p>`;
-        html += `<p>Contig order: ${g.order.join(", ")}</p>`;
+        html += `<p>Contig order (inferred): ${g.inferred_order.join(", ")}</p>`;
+        html += `<p>Contig order (fasta): ${g.fasta_order.join(", ")}</p>`;
         html += `<p>Contig lengths:</p>`;
         html += `<ul>`;
         g.contigs.forEach(c => {
@@ -84,28 +58,3 @@ SYNIMA.showSynteny = function () {
 
     app.innerHTML = html;
 };
-
-// Extract leaf order from Newick
-function extractLeafOrder(newick) {
-    const leaves = [];
-    let token = "";
-
-    for (const c of newick) {
-        if (c === '(' || c === ')' || c === ',' || c === ';') {
-            if (token.length > 0 && isNaN(Number(token))) {
-                leaves.push(token);
-            }
-            token = "";
-        } else if (c === ':') {
-            // Colon indicates branch length → previous token was a label
-            if (token.length > 0 && isNaN(Number(token))) {
-                leaves.push(token);
-            }
-            token = "";
-        } else {
-            token += c;
-        }
-    }
-
-    return leaves;
-}
