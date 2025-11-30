@@ -1,6 +1,0 @@
-/Users/rhysfarrer/.cargo/bin/bin/Darwin.x86_64/../run_DAG_chainer.pl -c examples/synima_output/synima_step6-dagchainer/pairwise_comparisons/CA1280_vs_CNB2.dagchainer.conf -v n
-/Users/rhysfarrer/.cargo/bin/bin/Darwin.x86_64/../run_DAG_chainer.pl -c examples/synima_output/synima_step6-dagchainer/pairwise_comparisons/CA1280_vs_IND107.dagchainer.conf -v n
-/Users/rhysfarrer/.cargo/bin/bin/Darwin.x86_64/../run_DAG_chainer.pl -c examples/synima_output/synima_step6-dagchainer/pairwise_comparisons/CA1280_vs_WM276.dagchainer.conf -v n
-/Users/rhysfarrer/.cargo/bin/bin/Darwin.x86_64/../run_DAG_chainer.pl -c examples/synima_output/synima_step6-dagchainer/pairwise_comparisons/CNB2_vs_IND107.dagchainer.conf -v n
-/Users/rhysfarrer/.cargo/bin/bin/Darwin.x86_64/../run_DAG_chainer.pl -c examples/synima_output/synima_step6-dagchainer/pairwise_comparisons/CNB2_vs_WM276.dagchainer.conf -v n
-/Users/rhysfarrer/.cargo/bin/bin/Darwin.x86_64/../run_DAG_chainer.pl -c examples/synima_output/synima_step6-dagchainer/pairwise_comparisons/IND107_vs_WM276.dagchainer.conf -v n
