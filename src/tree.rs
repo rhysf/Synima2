@@ -15,6 +15,9 @@ use std::process::Stdio;
 
 use rayon::prelude::*;
 
+const MAX_MUSCLE_AA: usize = 20000;  // Muscle5 safe limit
+const MAX_MUSCLE_NT: usize = 60_000;   // 60k nt limit for nucleotide alignments
+
 // cluster_to_genes: HashMap<String, Vec<ClusterMember>>
 // ClusterMember { genome: String, trans_id: String }
 pub fn write_malign_files(
@@ -127,6 +130,28 @@ pub fn write_malign_files(
     logger.information(&format!("write_cluster_pep_files: clusters examined: {}, 1:1 orthologs: {}, unique clusters skipped: {}, skipped non-1:1: {}", total, written, skipped_uniq, skipped_not_1to1));
 }
 
+fn cluster_is_too_large(path: &Path, is_pep: bool, logger: &Logger) -> bool {
+
+    // Load sequences from the cluster file
+    let seqs = read_fasta::read_fasta(&path, &logger);
+
+    let max_len = seqs.iter().map(|f| f.seq.len()).max().unwrap_or(0);
+
+    if is_pep {
+        if max_len > MAX_MUSCLE_AA {
+            logger.warning(&format!("Cluster {} has peptide length {} > {} aa: skipping MUSCLE", path.display(), max_len, MAX_MUSCLE_AA));
+            return true;
+        }
+    } else {
+        if max_len > MAX_MUSCLE_NT {
+            logger.warning(&format!("Cluster {} has nucleotide length {} > {} nt: skipping MUSCLE", path.display(), max_len, MAX_MUSCLE_NT));
+            return true;
+        }
+    }
+
+    false
+}
+
 pub fn run_muscle_on_clusters(
     malign_dir: &Path,
     muscle_path: &Path,
@@ -173,6 +198,15 @@ pub fn run_muscle_on_clusters(
 
     pool.install(|| {
         cds_or_pep_files.par_iter().for_each(|cds_or_pep_path| {
+
+            // Determine if this is peptide or nucleotide
+            let is_pep = alignment_type == "pep";
+
+            // Skip MUSCLE if any sequence exceeds allowable size
+            if cluster_is_too_large(cds_or_pep_path, is_pep, logger) {
+                logger.warning(&format!("run_muscle_on_clusters: Skipping MUSCLE: {} is too large for alignment", cds_or_pep_path.display()));
+                return;  // do not crash, just skip MUSCLE
+            }
 
             // Output is "<pep>.mfa", same as Perl: $opt_s.mfa
             let ext = format!("{}.mfa", alignment_type);
