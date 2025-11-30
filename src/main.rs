@@ -448,6 +448,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             synima::process_tree_files(&tree_out_dir, &index_path)?;
         }
 
+        // save the tree order
+        //let newick = fs::read_to_string(tree_file)?;
+        //let leaf_order = read_tree::extract_leaf_order_from_newick(&newick);
+
+        //let json = serde_json::to_string(&leaf_order)?;
+        //synima::inject_json_into_html(&index_path, "tree-genome-order", &json)?;
+
         // update methods
 
         let tools = external_tools::build_tools_vector(
@@ -465,8 +472,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         synima::inject_json_into_html(&index_path, "data-methods", &json)?;
 
         // synteny plot
-        
-        let synteny_config = synima::build_synteny_config(&repo, &logger)?;
+        let source = ortholog_summary::detect_orthology_source(preferred_method, &orthofinder_out_dir, &omcl_out_dir, &rbh_out_dir, &logger);
+        let method_label = source.method_label();
+        let synteny_config = synima::build_synteny_config(&repo, &args.alignment_type, &method_label, &logger)?;
         let aligncoords_text = std::fs::read_to_string(&combined_aligncoords).unwrap_or_else(|_| String::new());
         let aligncoords_spans_text = std::fs::read_to_string(&combined_spans).unwrap_or_else(|_| String::new());
 

@@ -115,6 +115,8 @@ pub struct SyntenyConfig {
     pub num_genomes: usize,
     pub max_length: u64,
     pub halfway: f64,
+    pub alignment: String,
+    pub method: String,
 }
 
 
@@ -303,18 +305,13 @@ pub fn process_tree_files(
 
     let mut trees: Vec<TreeItem> = Vec::new();
 
-    for entry in fs::read_dir(tree_dir)
-        .with_context(|| format!("Cannot read directory {:?}", tree_dir))?
-    {
+    for entry in fs::read_dir(tree_dir).with_context(|| format!("Cannot read directory {:?}", tree_dir))? {
         let path = entry?.path();
         if path.extension() != Some("tree".as_ref()) {
             continue;
         }
 
-        let filename = path
-            .file_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_default();
+        let filename = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
 
         // Expect something like: SC_core_concat.cds.orthomcl.mfa.tree
         let parts: Vec<&str> = filename.split('.').collect();
@@ -346,7 +343,7 @@ pub fn process_tree_files(
 
 // synteny plots
 
-pub fn build_synteny_config(repo_entries: &[RepoEntry], logger: &Logger) -> Result<SyntenyConfig> {
+pub fn build_synteny_config(repo_entries: &[RepoEntry], alignment_type: &str, method_label: &str, logger: &Logger) -> Result<SyntenyConfig> {
 
     logger.information(&format!("build_synteny_config: saving from repo..."));
 
@@ -401,5 +398,7 @@ pub fn build_synteny_config(repo_entries: &[RepoEntry], logger: &Logger) -> Resu
         num_genomes,
         max_length,
         halfway,
+        alignment: alignment_type.to_string().clone(),
+        method: method_label.to_string(),
     })
 }
