@@ -18,7 +18,8 @@ pub struct Fasta {
 }
 
 pub fn read_fasta(path: &Path, logger: &Logger) -> Vec<Fasta> {
-    println!("read_fasta: processing file: {}", path.display());
+
+    //println!("read_fasta: processing file: {}", path.display());
 
     // read file
     let fasta_file = fs::read_to_string(path).unwrap_or_else(|error| {
