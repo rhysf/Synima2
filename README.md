@@ -1,5 +1,5 @@
 <p align="center">
-<img src="https://github.com/rhysf/Synima2/blob/main/src/web-template/assets/logo.png" height="150" />
+<img src="https://github.com/rhysf/Synima2/blob/main/src/web-template/assets/logo.png" height="125" />
 </p>
 
 ## Introduction
