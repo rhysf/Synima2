@@ -59,7 +59,7 @@ pub fn read_fasta(path: &Path, logger: &Logger) -> Vec<Fasta> {
     }
     fasta.push(Fasta { id: last_id.to_string(), desc: last_desc.to_string(), seq: last_sequence }); 
     //fasta.push(Fasta { id: last_id.to_string(), seq: last_sequence }); 
-    logger.information(&format!("read_fasta: Loaded {} sequences", fasta.len()));
+    //logger.information(&format!("read_fasta: Loaded {} sequences", fasta.len()));
 
     return fasta;
 }
