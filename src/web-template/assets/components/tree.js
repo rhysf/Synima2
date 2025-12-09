@@ -12,6 +12,14 @@ SYNIMA.selectedLabelName = null;   // currently selected displayed name
 let SYNIMA_LINE_WIDTH = 2;   // default stroke width
 let SYNIMA_FONT_SIZE = 14;   // default tip label font-size
 
+const SYNIMA_PERSIST_KEYS = {
+  names: "synima_tree_renames",
+  lineWidth: "synima_tree_line_width",
+  fontSize: "synima_tree_font_size",
+  alignLabels: "synima_tree_align_labels",
+  rootTip: "synima_tree_root_tip"
+};
+
 // Apply stored renames to a cloned tree
 function applyRenamedTaxa(node) {
   if (node.origName && SYNIMA_TAXON_NAMES[node.origName]) {
@@ -437,7 +445,6 @@ SYNIMA.buildRootByTipDropdown = function () {
 };
 
 // Modal-based rename
-// ----------------------------------------------------
 SYNIMA.applyRename = function (oldDisplayedName, newName) {
   if (!newName) return;
   const trimmed = newName.trim();
@@ -464,8 +471,8 @@ SYNIMA.applyRename = function (oldDisplayedName, newName) {
   // apply to current
   replace(SYNIMA_TREES.current);
 
-  // apply to original too (so rooting persists)
-  //replace(SYNIMA_TREES.original); <- this may break reset trees to old names
+  // PERSIST THE RENAME MAP
+  localStorage.setItem(SYNIMA_PERSIST_KEYS.names, JSON.stringify(SYNIMA_TAXON_NAMES));
 
   renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   SYNIMA.buildRootByTipDropdown();
@@ -608,6 +615,7 @@ SYNIMA.rootByTip = function (tipName) {
   stripParents(newRoot);
 
   SYNIMA_TREES.current = newRoot;
+  localStorage.setItem(SYNIMA_PERSIST_KEYS.rootTip, tipName);
   renderTreeSvg(newRoot, "tree-view-0");
 };
 
@@ -826,6 +834,7 @@ SYNIMA.showTree = function () {
   const lwSelect = document.getElementById("line-width-select");
   lwSelect.addEventListener("change", () => {
     SYNIMA_LINE_WIDTH = parseInt(lwSelect.value, 10);
+    localStorage.setItem(SYNIMA_PERSIST_KEYS.lineWidth, SYNIMA_LINE_WIDTH);
     renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   });
 
@@ -833,6 +842,7 @@ SYNIMA.showTree = function () {
   const fsSelect = document.getElementById("font-size-select");
   fsSelect.addEventListener("change", () => {
     SYNIMA_FONT_SIZE = parseInt(fsSelect.value, 10);
+    localStorage.setItem(SYNIMA_PERSIST_KEYS.fontSize, SYNIMA_FONT_SIZE);  
     renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   });
 
@@ -858,6 +868,46 @@ SYNIMA.showTree = function () {
 
     SYNIMA_TREES.original = cloneTree(parsed);
     SYNIMA_TREES.current  = cloneTree(parsed);
+
+    // ===== RESTORE PERSISTED SETTINGS =====
+
+    // 1. Restored renamed taxa
+    const savedNames = localStorage.getItem(SYNIMA_PERSIST_KEYS.names);
+    if (savedNames) {
+      SYNIMA_TAXON_NAMES = JSON.parse(savedNames);
+      applyRenamedTaxa(SYNIMA_TREES.current);
+    }
+
+    // 2. Restore line width
+    const savedLW = localStorage.getItem(SYNIMA_PERSIST_KEYS.lineWidth);
+    if (savedLW !== null) {
+      SYNIMA_LINE_WIDTH = parseInt(savedLW, 10);
+      const lwSelect = document.getElementById("line-width-select");
+      if (lwSelect) lwSelect.value = savedLW;
+    }
+
+    // 3. Restore font size
+    const savedFS = localStorage.getItem(SYNIMA_PERSIST_KEYS.fontSize);
+    if (savedFS !== null) {
+      SYNIMA_FONT_SIZE = parseInt(savedFS, 10);
+      const fsSelect = document.getElementById("font-size-select");
+      if (fsSelect) fsSelect.value = savedFS;
+    }
+
+    // 4. Restore align labels checkbox
+    const savedAlign = localStorage.getItem(SYNIMA_PERSIST_KEYS.alignLabels);
+    if (savedAlign !== null) {
+      SYNIMA_ALIGN_LABELS = (savedAlign === "true");
+      const chk = document.getElementById("align-labels-checkbox");
+      if (chk) chk.checked = SYNIMA_ALIGN_LABELS;
+    }
+
+    // 5. Restore root if present
+    const savedRoot = localStorage.getItem(SYNIMA_PERSIST_KEYS.rootTip);
+    if (savedRoot) {
+      // apply to *current*, not original
+      SYNIMA.rootByTip(savedRoot);
+    }
 
     renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
 
@@ -890,11 +940,12 @@ SYNIMA.showTree = function () {
   }
 
   document.getElementById("align-labels-checkbox").addEventListener("change", e => {
-  SYNIMA_ALIGN_LABELS = e.target.checked;
-  if (SYNIMA_TREES.current) {
-    renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
-  }
-});
+    SYNIMA_ALIGN_LABELS = e.target.checked;
+    localStorage.setItem(SYNIMA_PERSIST_KEYS.alignLabels, SYNIMA_ALIGN_LABELS);
+    if (SYNIMA_TREES.current) {
+      renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+    }
+  });
 
 };
 
@@ -1063,6 +1114,24 @@ SYNIMA.resetRoot = function () {
   SYNIMA_ALIGN_LABELS = true;
   const chk = document.getElementById("align-labels-checkbox");
   if (chk) chk.checked = true;
+
+  // Clear saved state
+  localStorage.removeItem(SYNIMA_PERSIST_KEYS.names);
+  localStorage.removeItem(SYNIMA_PERSIST_KEYS.lineWidth);
+  localStorage.removeItem(SYNIMA_PERSIST_KEYS.fontSize);
+  localStorage.removeItem(SYNIMA_PERSIST_KEYS.alignLabels);
+  localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip);
+
+  // Reset globals
+  SYNIMA_TAXON_NAMES = {};
+  SYNIMA_LINE_WIDTH = 2;
+  SYNIMA_FONT_SIZE = 14;
+  SYNIMA_ALIGN_LABELS = true;
+
+  // Update dropdown UI controls
+  document.getElementById("line-width-select").value = "2";
+  document.getElementById("font-size-select").value = "14";
+  document.getElementById("align-labels-checkbox").checked = true;
 
   // clone pristine original
   SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
