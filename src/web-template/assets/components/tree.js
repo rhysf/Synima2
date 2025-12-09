@@ -175,7 +175,6 @@ function layoutTree(root) {
   return root;
 }
 
-
 // -------------------------
 // SVG rendering
 // -------------------------
@@ -306,6 +305,112 @@ function renderTreeSvg(root, containerId) {
   document.getElementById(containerId).innerHTML = svg;
 }
 
+// Get tip names
+SYNIMA.getTipNames = function(root) {
+  let out = [];
+  (function walk(n) {
+    if (!n.children || n.children.length === 0) {
+      if (n.name) out.push(n.name);
+    } else {
+      n.children.forEach(walk);
+    }
+  })(root);
+  return out;
+};
+
+// Root by selection
+SYNIMA.rootByTip = function (tipName) {
+
+  // Clone original tree always
+  let root = cloneTree(SYNIMA_TREES.original);
+
+  // Parent pointers
+  function addParents(n, parent = null) {
+    n.parent = parent;
+    if (n.children) n.children.forEach(c => addParents(c, n));
+  }
+  addParents(root);
+
+  function stripParents(n) {
+    delete n.parent;
+    if (n.children) n.children.forEach(stripParents);
+  }
+
+  function findNode(n, name) {
+    if (n.name === name) return n;
+    if (!n.children) return null;
+    for (let c of n.children) {
+      const found = findNode(c, name);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function pathToRoot(n) {
+    let out = [];
+    while (n) { out.push(n); n = n.parent; }
+    return out;
+  }
+
+  function flipEdge(parent, child) {
+    parent.children = parent.children.filter(c => c !== child);
+
+    const down = child.length || 0;
+    const up   = parent.length || 0;
+
+    child.children = child.children || [];
+    child.children.push(parent);
+
+    parent.length = down;
+    child.length = up;
+  }
+
+  // -----------------------------
+  // 1. Locate the chosen tip
+  // -----------------------------
+  const tip = findNode(root, tipName);
+  if (!tip) {
+    console.warn("Tip not found:", tipName);
+    return;
+  }
+
+  const originalTipLength = tip.length || 0;
+
+  const path = pathToRoot(tip);
+
+  // Flip edges until tip’s parent is the global root
+  for (let i = 1; i < path.length - 1; i++) {
+    const child  = path[i];
+    const parent = path[i + 1];
+    flipEdge(parent, child);
+  }
+
+  // After flipping:
+  // tip.parent === oldParent
+  const oldParent = tip.parent;
+
+  // -----------------------------
+  // 2. Remove tip from oldParent’s children
+  //    to avoid duplicate appearance
+  // -----------------------------
+  oldParent.children = oldParent.children.filter(c => c !== tip);
+
+  // -----------------------------
+  // 3. Build new root (Figtree style)
+  // -----------------------------
+  tip.length = originalTipLength;   // Option A: preserve original branch length
+  oldParent.length = 0;             // branch from new root to clade
+
+  const newRoot = {
+    length: 0,
+    children: [ tip, oldParent ]
+  };
+
+  stripParents(newRoot);
+
+  SYNIMA_TREES.current = newRoot;
+  renderTreeSvg(newRoot, "tree-view-0");
+};
 
 // -------------------------
 // Page function
@@ -394,6 +499,7 @@ SYNIMA.showTree = function () {
 
       <button onclick="SYNIMA.resetRoot()">Reset tree</button>
 
+
     <button onclick="SYNIMA.exportSvg()">Download SVG</button>
     <button onclick="SYNIMA.exportPng()">Download PNG</button>
 
@@ -434,6 +540,29 @@ SYNIMA.showTree = function () {
     SYNIMA_TREES.current  = cloneTree(parsed);
 
     renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+
+    // new code for rooting:
+    // Insert "root by tip" dropdown once tree is rendered
+    const tips = SYNIMA.getTipNames(SYNIMA_TREES.current);
+
+    let dropdownHtml = `
+      <label style="margin-left: 10px;">
+        Root by tip:
+        <select id="tip-root-select">
+          <option value="">Select…</option>
+          ${tips.map(t => `<option value="${t}">${t}</option>`).join("")}
+        </select>
+      </label>
+      <button id="apply-tip-root">Apply</button>
+    `;
+
+    document.querySelector(".tree-controls").insertAdjacentHTML("beforeend", dropdownHtml);
+
+    document.getElementById("apply-tip-root").addEventListener("click", () => {
+      const chosen = document.getElementById("tip-root-select").value;
+      if (chosen) SYNIMA.rootByTip(chosen);
+    });
+  
   } catch (e) {
     console.error("Failed to parse or render tree", e);
     document.getElementById("tree-view-0").innerHTML =
@@ -592,11 +721,11 @@ SYNIMA.resetRoot = function () {
     return;
   }
 
-  // 1. Turn off label alignment mode
-  SYNIMA_ALIGN_LABELS = false;
+  // Default: labels aligned
+  SYNIMA_ALIGN_LABELS = true;
 
   const chk = document.getElementById("align-labels-checkbox");
-  if (chk) chk.checked = false;
+  if (chk) chk.checked = true;
 
   // Deep clone (so mutations won't touch the stored original)
   SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
