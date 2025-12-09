@@ -676,30 +676,50 @@ SYNIMA.showTree = function () {
 
     <div class="section">
 
-      <div class="flex justify-between items-center">
-        <h2>Tree Visualisation</h2>
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:6px;">
+    <h2 style="margin:0;">Tree Visualisation</h2>
 
-        <div class="relative inline-block text-left">
-          <button id="download-btn" class="inline-block px-2 py-1">
-            Download ▾
-          </button>
-          <div id="download-dropdown"
-               class="hidden absolute right-0 top-full mt-1 
-                      bg-white text-black border rounded shadow z-50 w-32">
-            <button class="block w-full text-left px-3 py-1 hover:bg-gray-200" id="download-svg">
-              SVG
-            </button>
-            <button class="block w-full text-left px-3 py-1 hover:bg-gray-200" id="download-png">
-              PNG
-            </button>
-          </div>
-        </div>
+    <div style="position:relative; display:inline-block;">
+      <button id="download-btn" style="padding:2px 6px; margin:0;">
+        Download ▾
+      </button>
 
+      <div id="download-dropdown"
+           class="hidden"
+           style="
+             position:absolute;
+             right:0;
+             top:100%;
+             margin-top:2px;
+             background:white;
+             color:black;
+             border:1px solid #ccc;
+             border-radius:4px;
+             box-shadow:0 2px 4px rgba(0,0,0,0.2);
+             z-index:1000;
+             width:120px;
+           ">
+        <button id="download-svg"
+          style="display:block; width:100%; text-align:left; padding:4px 8px;
+                 border:none; background:none; cursor:pointer;"
+          onmouseover="this.style.background='#e5e5e5'"
+          onmouseout="this.style.background='none'">
+          SVG
+        </button>
+
+        <button id="download-png"
+          style="display:block; width:100%; text-align:left; padding:4px 8px;
+                 border:none; background:none; cursor:pointer;"
+          onmouseover="this.style.background='#e5e5e5'"
+          onmouseout="this.style.background='none'">
+          PNG
+        </button>
       </div>
-
-      <div id="tree-view-0" class="tree-view"></div>
-
     </div>
+  </div>
+
+  <div id="tree-view-0" class="tree-view"></div>
+</div>
 
     <div class="tree-controls">
       <!--<button disabled title="Midpoint rooting coming soon">Midpoint root (coming soon)</button>-->
