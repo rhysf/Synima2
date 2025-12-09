@@ -9,6 +9,7 @@ let SYNIMA_TREES = {
 
 SYNIMA_TAXON_NAMES = {}; // mapping oldName → newName
 SYNIMA.selectedLabelName = null;   // currently selected displayed name
+let SYNIMA_LINE_WIDTH = 2;   // default stroke width
 
 // Apply stored renames to a cloned tree
 function applyRenamedTaxa(node) {
@@ -263,9 +264,9 @@ function renderTreeSvg(root, containerId) {
       let y2 = offsetY + child.y;
 
       // Vertical segment
-      lines.push(`<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y2}" stroke="white" stroke-width="2" />`);
+      lines.push(`<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y2}" stroke="white" stroke-width="${SYNIMA_LINE_WIDTH}" style="stroke-width:${SYNIMA_LINE_WIDTH}px;" />`);
       // Horizontal segment
-      lines.push(`<line x1="${x1}" y1="${y2}" x2="${x2}" y2="${y2}" stroke="white" stroke-width="2" />`);
+      lines.push(`<line x1="${x1}" y1="${y2}" x2="${x2}" y2="${y2}" stroke="white" stroke-width="${SYNIMA_LINE_WIDTH}" style="stroke-width:${SYNIMA_LINE_WIDTH}px;" />`);
 
       drawBranches(child);
     });
@@ -725,13 +726,26 @@ SYNIMA.showTree = function () {
       <!--<button disabled title="Midpoint rooting coming soon">Midpoint root (coming soon)</button>-->
       <!--<button disabled title="Tip rooting coming soon">Root by tip (coming soon)</button>-->
       
+      <button onclick="SYNIMA.resetRoot()">Reset tree</button>
 
       <label>
           <input type="checkbox" id="align-labels-checkbox" />
           Align tip labels
       </label>
 
-      <button onclick="SYNIMA.resetRoot()">Reset tree</button>
+      
+    <label style="margin-left: 10px;">
+      Line width:
+      <select id="line-width-select">
+        <option value="1">1</option>
+        <option value="2" selected>2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+      </select>
+    </label>
+
+
 
       <button id="annotate-btn" disabled>Annotate</button>
       <div id="annotate-dropdown" 
@@ -788,6 +802,13 @@ SYNIMA.showTree = function () {
   // allow taxa to be selected
   document.getElementById("annotate-btn").addEventListener("click", () => {
     SYNIMA.renameSelectedTaxon();
+  });
+
+  // adjust line width
+  const lwSelect = document.getElementById("line-width-select");
+  lwSelect.addEventListener("change", () => {
+    SYNIMA_LINE_WIDTH = parseInt(lwSelect.value, 10);
+    renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   });
 
 
@@ -994,6 +1015,11 @@ SYNIMA.resetRoot = function () {
     console.warn("resetRoot: No original tree stored.");
     return;
   }
+
+  // reset line widths
+  SYNIMA_LINE_WIDTH = 2;
+  const lwSelect = document.getElementById("line-width-select");
+  if (lwSelect) lwSelect.value = "2";
 
   // Reset renames
   SYNIMA_TAXON_NAMES = {};
