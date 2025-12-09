@@ -10,6 +10,7 @@ let SYNIMA_TREES = {
 SYNIMA_TAXON_NAMES = {}; // mapping oldName → newName
 SYNIMA.selectedLabelName = null;   // currently selected displayed name
 let SYNIMA_LINE_WIDTH = 2;   // default stroke width
+let SYNIMA_FONT_SIZE = 14;   // default tip label font-size
 
 // Apply stored renames to a cloned tree
 function applyRenamedTaxa(node) {
@@ -312,12 +313,17 @@ function renderTreeSvg(root, containerId) {
       }
 
       labels.push(
-        `<text class="tree-label-text" 
-          data-tip-name="${node.name}" 
-          x="${x}" y="${y}" fill="white" font-size="14" font-family="sans-serif">
-           ${node.name}
+        `<text class="tree-label-text"
+           data-tip-name="${node.name}"
+           x="${x}" y="${y}"
+           fill="white"
+           font-size="${SYNIMA_FONT_SIZE}"
+           font-family="sans-serif">
+            ${node.name}
          </text>`
       );
+
+
     }
     if (node.children) node.children.forEach(drawLabels);
   }
@@ -746,6 +752,18 @@ SYNIMA.showTree = function () {
     </label>
 
 
+    <label style="margin-left: 10px;">
+      Font size:
+      <select id="font-size-select">
+        <option value="10">10</option>
+        <option value="12">12</option>
+        <option value="14" selected>14</option>
+        <option value="16">16</option>
+        <option value="18">18</option>
+        <option value="20">20</option>
+      </select>
+    </label>
+
 
       <button id="annotate-btn" disabled>Annotate</button>
       <div id="annotate-dropdown" 
@@ -808,6 +826,13 @@ SYNIMA.showTree = function () {
   const lwSelect = document.getElementById("line-width-select");
   lwSelect.addEventListener("change", () => {
     SYNIMA_LINE_WIDTH = parseInt(lwSelect.value, 10);
+    renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+  });
+
+  // adjust font size
+  const fsSelect = document.getElementById("font-size-select");
+  fsSelect.addEventListener("change", () => {
+    SYNIMA_FONT_SIZE = parseInt(fsSelect.value, 10);
     renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   });
 
@@ -1020,6 +1045,11 @@ SYNIMA.resetRoot = function () {
   SYNIMA_LINE_WIDTH = 2;
   const lwSelect = document.getElementById("line-width-select");
   if (lwSelect) lwSelect.value = "2";
+
+  // reset font size
+  SYNIMA_FONT_SIZE = 14;
+  const fsSelect = document.getElementById("font-size-select");
+  if (fsSelect) fsSelect.value = "14";
 
   // Reset renames
   SYNIMA_TAXON_NAMES = {};
