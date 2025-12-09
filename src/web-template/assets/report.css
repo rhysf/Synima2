@@ -412,3 +412,14 @@ body {
 .tree-controls label span {
   color: white !important;
 }
+
+/* for updating taxa labels */
+
+.tree-label-selected {
+  fill: yellow;
+  stroke: black;
+  stroke-width: 0.5;
+}
+
+.hidden { display: none; }
+.tree-label-selected { fill: yellow; stroke: black; stroke-width: 0.4; }

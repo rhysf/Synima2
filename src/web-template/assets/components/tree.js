@@ -7,24 +7,37 @@ let SYNIMA_TREES = {
   current: null
 };
 
+SYNIMA_TAXON_NAMES = {}; // mapping oldName → newName
+SYNIMA.selectedLabelName = null;   // currently selected displayed name
+
+// Apply stored renames to a cloned tree
+function applyRenamedTaxa(node) {
+  if (node.origName && SYNIMA_TAXON_NAMES[node.origName]) {
+    node.name = SYNIMA_TAXON_NAMES[node.origName];
+  }
+  if (node.children) node.children.forEach(applyRenamedTaxa);
+}
+
+// Record original names once after parsing
+function setOriginalNames(node) {
+  node.origName = node.name || null;
+  if (node.children) node.children.forEach(setOriginalNames);
+}
+
 // Remove NEXUS wrappers and BEAST metadata, return pure Newick
 function extractNewick(raw) {
   if (!raw || typeof raw !== "string") return null;
 
   let s = raw.trim();
 
-  // -----------------------------------------
   // CASE 1: Plain Newick (starts with "(" and ends with ";")
-  // -----------------------------------------
   if (s.startsWith("(") && s.includes(";")) {
     // Remove BEAST-style metadata: [&label=...]
     s = s.replace(/\[\&[^\]]*\]/g, "");
     return s;
   }
 
-  // -----------------------------------------
   // CASE 2: NEXUS format
-  // -----------------------------------------
   const lower = s.toLowerCase();
 
   // Find "begin trees"
@@ -65,9 +78,7 @@ function extractNewick(raw) {
   return newick.trim();
 }
 
-// -------------------------
 // Newick parsing
-// -------------------------
 function parseNewick(s) {
   let ancestors = [];
   let tree = {};
@@ -131,6 +142,7 @@ function parseNewick(s) {
 function cloneTree(node) {
   return {
     name: node.name,
+    origName: node.origName,
     length: node.length,
     children: (node.children || []).map(child => cloneTree(child))
   };
@@ -175,12 +187,52 @@ function layoutTree(root) {
   return root;
 }
 
-// -------------------------
+// Label click handlers (select / deselect / enable annotate)
+SYNIMA.attachLabelClickHandlers = function(root) {
+
+  const labels = document.querySelectorAll(".tree-label-text");
+
+  labels.forEach(el => {
+    el.addEventListener("click", (evt) => {
+      evt.stopPropagation(); // don't trigger background deselect
+
+      const name = el.getAttribute("data-tip-name");
+
+      // Toggle off if clicking same taxon again
+      if (SYNIMA.selectedLabelName === name) {
+          SYNIMA.selectedLabelName = null;
+          el.classList.remove("tree-label-selected");
+          const ann = document.getElementById("annotate-btn");
+          if (ann) ann.disabled = true;
+          return;
+      }
+
+      // Remove highlight from others
+      document.querySelectorAll(".tree-label-text")
+        .forEach(n => n.classList.remove("tree-label-selected"));
+
+      // Highlight this one
+      el.classList.add("tree-label-selected");
+
+      // record selected name
+      SYNIMA.selectedLabelName = name; // store globally
+
+      // >>> ENABLE ANNOTATE BUTTON HERE <<<
+      const annBtn = document.getElementById("annotate-btn");
+      if (annBtn) annBtn.disabled = false;
+
+      console.log("Selected taxon:", name);
+    });
+  });
+};
+
 // SVG rendering
-// -------------------------
 function renderTreeSvg(root, containerId) {
 
   console.log(">>> RENDER START, tree:", JSON.stringify(root));
+
+  // Ensure dropdown closes when tree is re-rendered
+  document.getElementById("annotate-dropdown").classList.add("hidden");
 
   layoutTree(root);
 
@@ -259,7 +311,9 @@ function renderTreeSvg(root, containerId) {
       }
 
       labels.push(
-        `<text x="${x}" y="${y}" fill="white" font-size="14" font-family="sans-serif">
+        `<text class="tree-label-text" 
+          data-tip-name="${node.name}" 
+          x="${x}" y="${y}" fill="white" font-size="14" font-family="sans-serif">
            ${node.name}
          </text>`
       );
@@ -302,10 +356,29 @@ function renderTreeSvg(root, containerId) {
     </svg>
   `;
 
-  document.getElementById(containerId).innerHTML = svg;
+  const container = document.getElementById(containerId);
+  container.innerHTML = svg;
+
+  // Background click to clear selection
+  const svgEl = container.querySelector("svg");
+  if (svgEl) {
+    svgEl.addEventListener("click", (e) => {
+      // Ignore clicks on labels (handled in label handler)
+      if (e.target.tagName.toLowerCase() === "text") return;
+
+      SYNIMA.selectedLabelName = null;
+      document.querySelectorAll(".tree-label-text")
+        .forEach(n => n.classList.remove("tree-label-selected"));
+
+      const ann = document.getElementById("annotate-btn");
+      if (ann) ann.disabled = true;
+    });
+  }
+
+  SYNIMA.attachLabelClickHandlers(root);
 }
 
-// Get tip names
+// Get tip names (current displayed labels)
 SYNIMA.getTipNames = function(root) {
   let out = [];
   (function walk(n) {
@@ -318,11 +391,138 @@ SYNIMA.getTipNames = function(root) {
   return out;
 };
 
-// Root by selection
+// Root-by-tip dropdown builder
+SYNIMA.buildRootByTipDropdown = function () {
+  const controls = document.querySelector(".tree-controls");
+  if (!controls || !SYNIMA_TREES.current) return;
+
+  // Remove existing dropdown + button if any
+  const oldSelect = document.getElementById("tip-root-select");
+  if (oldSelect && oldSelect.parentElement) {
+    oldSelect.parentElement.remove(); // removes label wrapper
+  }
+  const oldBtn = document.getElementById("apply-tip-root");
+  if (oldBtn) oldBtn.remove();
+
+  const tips = SYNIMA.getTipNames(SYNIMA_TREES.current);
+  if (!tips || tips.length === 0) return;
+
+  let dropdownHtml = `
+    <label style="margin-left: 10px;">
+      Root by tip:
+      <select id="tip-root-select">
+        <option value="">Select…</option>
+        ${tips.map(t => `<option value="${t}">${t}</option>`).join("")}
+      </select>
+    </label>
+    <button id="apply-tip-root">Apply</button>
+  `;
+
+  controls.insertAdjacentHTML("beforeend", dropdownHtml);
+
+  const btn = document.getElementById("apply-tip-root");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      const chosen = document.getElementById("tip-root-select").value;
+      if (chosen) SYNIMA.rootByTip(chosen);
+    });
+  }
+};
+
+// Modal-based rename
+// ----------------------------------------------------
+SYNIMA.applyRename = function (oldDisplayedName, newName) {
+  if (!newName) return;
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+
+  // detect duplicates
+  const allNames = SYNIMA.getTipNames(SYNIMA_TREES.current);
+  if (allNames.includes(trimmed) && trimmed !== oldDisplayedName) {
+    alert("Name already exists. Choose a unique name.");
+    return;
+  }
+
+  function replace(node) {
+    if (!node.children || node.children.length === 0) {
+      if (node.name === oldDisplayedName) {
+        if (!node.origName) node.origName = node.name;
+        SYNIMA_TAXON_NAMES[node.origName] = trimmed;
+        node.name = trimmed;
+      }
+    }
+    if (node.children) node.children.forEach(replace);
+  }
+
+  // apply to current
+  replace(SYNIMA_TREES.current);
+
+  // apply to original too (so rooting persists)
+  //replace(SYNIMA_TREES.original); <- this may break reset trees to old names
+
+  renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+  SYNIMA.buildRootByTipDropdown();
+};
+
+// rename taxa (entry point from button)
+SYNIMA.renameSelectedTaxon = function () {
+  const oldName = SYNIMA.selectedLabelName;
+  if (!oldName) return;
+
+  const dd = document.getElementById("annotate-dropdown");
+  const input = document.getElementById("rename-input");
+  const apply = document.getElementById("rename-apply");
+  const cancel = document.getElementById("rename-cancel");
+
+  // Position dropdown just under the Annotate button
+  const btn = document.getElementById("annotate-btn");
+  const rect = btn.getBoundingClientRect();
+  dd.style.position = "absolute";
+  dd.style.left = rect.left + "px";
+  dd.style.top = rect.bottom + window.scrollY + "px";
+
+  // Populate input with old name
+  input.value = oldName;
+  dd.classList.remove("hidden");
+
+  // Close helper
+  function close() {
+    dd.classList.add("hidden");
+    apply.removeEventListener("click", onApply);
+    cancel.removeEventListener("click", onCancel);
+    document.removeEventListener("click", onClickAway);
+  }
+
+  function onApply() {
+    SYNIMA.applyRename(oldName, input.value.trim());
+    close();
+  }
+
+  function onCancel() {
+    close();
+  }
+
+  // Close if clicking outside dropdown
+  function onClickAway(ev) {
+    if (!dd.contains(ev.target) && ev.target !== btn) {
+      close();
+    }
+  }
+
+  apply.addEventListener("click", onApply);
+  cancel.addEventListener("click", onCancel);
+  setTimeout(() => document.addEventListener("click", onClickAway), 50);
+
+  input.focus();
+  input.select();
+};
+
+// Root by selection (Figtree-style)
 SYNIMA.rootByTip = function (tipName) {
 
   // Clone original tree always
   let root = cloneTree(SYNIMA_TREES.original);
+  applyRenamedTaxa(root);
 
   // Parent pointers
   function addParents(n, parent = null) {
@@ -365,9 +565,7 @@ SYNIMA.rootByTip = function (tipName) {
     child.length = up;
   }
 
-  // -----------------------------
   // 1. Locate the chosen tip
-  // -----------------------------
   const tip = findNode(root, tipName);
   if (!tip) {
     console.warn("Tip not found:", tipName);
@@ -385,20 +583,14 @@ SYNIMA.rootByTip = function (tipName) {
     flipEdge(parent, child);
   }
 
-  // After flipping:
-  // tip.parent === oldParent
+  // After flipping: tip.parent is the top clade root
   const oldParent = tip.parent;
 
-  // -----------------------------
-  // 2. Remove tip from oldParent’s children
-  //    to avoid duplicate appearance
-  // -----------------------------
+  // Remove tip from oldParent’s children to avoid duplicates
   oldParent.children = oldParent.children.filter(c => c !== tip);
 
-  // -----------------------------
-  // 3. Build new root (Figtree style)
-  // -----------------------------
-  tip.length = originalTipLength;   // Option A: preserve original branch length
+  // Build new root (bifurcating)
+  tip.length = originalTipLength;   // Preserve original branch length
   oldParent.length = 0;             // branch from new root to clade
 
   const newRoot = {
@@ -483,8 +675,30 @@ SYNIMA.showTree = function () {
     </div>
 
     <div class="section">
-      <h2>Tree Visualisation</h2>
+
+      <div class="flex justify-between items-center">
+        <h2>Tree Visualisation</h2>
+
+        <div class="relative inline-block text-left">
+          <button id="download-btn" class="inline-block px-2 py-1">
+            Download ▾
+          </button>
+          <div id="download-dropdown"
+               class="hidden absolute right-0 top-full mt-1 
+                      bg-white text-black border rounded shadow z-50 w-32">
+            <button class="block w-full text-left px-3 py-1 hover:bg-gray-200" id="download-svg">
+              SVG
+            </button>
+            <button class="block w-full text-left px-3 py-1 hover:bg-gray-200" id="download-png">
+              PNG
+            </button>
+          </div>
+        </div>
+
+      </div>
+
       <div id="tree-view-0" class="tree-view"></div>
+
     </div>
 
     <div class="tree-controls">
@@ -499,24 +713,63 @@ SYNIMA.showTree = function () {
 
       <button onclick="SYNIMA.resetRoot()">Reset tree</button>
 
-
-    <button onclick="SYNIMA.exportSvg()">Download SVG</button>
-    <button onclick="SYNIMA.exportPng()">Download PNG</button>
-
+      <button id="annotate-btn" disabled>Annotate</button>
+      <div id="annotate-dropdown" 
+         class="hidden absolute bg-white text-black border rounded shadow p-2 z-50"
+         style="margin-top: 4px; width: 180px;">
+      <input id="rename-input" type="text" 
+             class="border p-1 w-full mb-2" placeholder="New name…">
+      <div class="flex justify-end gap-2">
+        <button id="rename-cancel">Cancel</button>
+        <button id="rename-apply" class="font-bold">Apply</button>
+      </div>
     </div>
 
-  
+
+    </div>
 
     <div id="tip-root-dialog" class="tip-dialog hidden"></div>
   `;
 
   app.innerHTML = html;
 
+  // DOWNLOAD DROPDOWN LOGIC
+  const downloadBtn = document.getElementById("download-btn");
+  const downloadMenu = document.getElementById("download-dropdown");
+
+  downloadBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    downloadMenu.classList.toggle("hidden");
+  });
+
+  // Clicking SVG option
+  document.getElementById("download-svg").addEventListener("click", () => {
+    downloadMenu.classList.add("hidden");
+    SYNIMA.exportSvg();
+  });
+
+  // Clicking PNG option
+  document.getElementById("download-png").addEventListener("click", () => {
+    downloadMenu.classList.add("hidden");
+    SYNIMA.exportPng();
+  });
+
+  // Close on outside click
+  document.addEventListener("click", () => {
+    downloadMenu.classList.add("hidden");
+  });
+
   // Enable aligned labels by default
   SYNIMA_ALIGN_LABELS = true;
 
   const chk = document.getElementById("align-labels-checkbox");
   if (chk) chk.checked = true;
+
+  // allow taxa to be selected
+  document.getElementById("annotate-btn").addEventListener("click", () => {
+    SYNIMA.renameSelectedTaxon();
+  });
+
 
   // Fill Newick block safely
   const preEl = document.getElementById("newick-text");
@@ -535,6 +788,7 @@ SYNIMA.showTree = function () {
   // Parse + draw tree
   try {
     const parsed = parseNewick(newick);
+    setOriginalNames(parsed);
 
     SYNIMA_TREES.original = cloneTree(parsed);
     SYNIMA_TREES.current  = cloneTree(parsed);
@@ -721,17 +975,25 @@ SYNIMA.resetRoot = function () {
     return;
   }
 
+  // Reset renames
+  SYNIMA_TAXON_NAMES = {};
+  SYNIMA.selectedLabelName = null;
+
+  // hide dropdown if open
+  const dd = document.getElementById("annotate-dropdown");
+  if (dd) dd.classList.add("hidden");
+
   // Default: labels aligned
   SYNIMA_ALIGN_LABELS = true;
-
   const chk = document.getElementById("align-labels-checkbox");
   if (chk) chk.checked = true;
 
-  // Deep clone (so mutations won't touch the stored original)
+  // clone pristine original
   SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
 
-  // Re-render
+  // redraw
   renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+  SYNIMA.buildRootByTipDropdown();
 
   console.log("Tree reset to original unrooted version.");
 };
