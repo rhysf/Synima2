@@ -423,3 +423,9 @@ body {
 
 .hidden { display: none; }
 .tree-label-selected { fill: yellow; stroke: black; stroke-width: 0.4; }
+
+#synteny-tree-mini {
+  width: 100%;
+  display: block;
+  height: auto;
+}

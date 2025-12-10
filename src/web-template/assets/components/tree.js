@@ -158,9 +158,7 @@ function cloneTree(node) {
   };
 }
 
-// -------------------------
 // Basic phylogram layout
-// -------------------------
 function layoutTree(root) {
   // collect leaves
   let leaves = [];
@@ -237,13 +235,16 @@ SYNIMA.attachLabelClickHandlers = function(root) {
 };
 
 // SVG rendering
-function renderTreeSvg(root, containerId) {
+function renderTreeSvg(root, containerId, opts={}) {
+  const isMini = opts.mini || false;
 
   console.log(">>> RENDER START, tree:", JSON.stringify(root));
 
   // Ensure dropdown closes when tree is re-rendered
-  document.getElementById("annotate-dropdown").classList.add("hidden");
+  const dd = document.getElementById("annotate-dropdown");
+  if (dd) dd.classList.add("hidden");
 
+  // Layout the tree (x = branch length, y = vertical spacing)
   layoutTree(root);
 
   // gather nodes
@@ -253,15 +254,24 @@ function renderTreeSvg(root, containerId) {
     if (n.children) n.children.forEach(walk);
   })(root);
 
+  // Expand vertical scale for mini tree BEFORE computing height
+  if (isMini) {
+      allNodes.forEach(n => {
+          n.y *= 4;    // or 5 if you prefer your previous spacing
+      });
+  }
+
   let maxX = Math.max(...allNodes.map(n => n.x));
   let maxY = Math.max(...allNodes.map(n => n.y));
 
-  let scaleX = 500 / (maxX || 1);
-  let offsetX = 20;
-  let offsetY = 20;
+  // Horizontal scaling
+  let scaleX = isMini ? 250 / (maxX || 1) : 500 / (maxX || 1);
+  let offsetX = isMini ? 10 : 20;
+  let offsetY = isMini ? 40 : 20;
 
   let lines = [];
   let labels = [];
+  let leaderLines = [];
 
   function drawBranches(node) {
     if (!node.children || node.children.length === 0) return;
@@ -282,9 +292,6 @@ function renderTreeSvg(root, containerId) {
   }
   drawBranches(root);
 
-  // Collect leader lines separately so they render behind labels
-  let leaderLines = [];
-
   function drawLabels(node) {
     if (node.name && !/^[0-9.]+$/.test(node.name)) {
 
@@ -296,12 +303,14 @@ function renderTreeSvg(root, containerId) {
       if (SYNIMA_ALIGN_LABELS) {
 
         // space between branch tip and dotted line
-        const LEADER_GAP = 6;  
+        //const LEADER_GAP = 6;
+        const LEADER_GAP = isMini ? 3 : 6;
 
         // Pixel coordinates
         let tipX   = offsetX + node.x * scaleX;
         let leaderStartX = tipX + LEADER_GAP;
-        let labelX = offsetX + (maxX * scaleX) + 10;
+        //let labelX = offsetX + (maxX * scaleX) + 10;
+        let labelX = offsetX + (maxX * scaleX) + (isMini ? 5 : 10);
 
         // Dotted leader (stop right before the label)
         leaderLines.push(`
@@ -320,14 +329,24 @@ function renderTreeSvg(root, containerId) {
         x = offsetX + node.x * scaleX + 5;
       }
 
+      // label too big?
+      let displayName = node.name;
+      if (isMini && displayName.length > 20) {
+          displayName = displayName.slice(0, 17) + "...";
+      }
+
+      // Boost font size in mini trees
+      const effectiveFontSize = isMini ? SYNIMA_FONT_SIZE * 2 : SYNIMA_FONT_SIZE;
+
+      // old font-size = font-size="${isMini ? SYNIMA_FONT_SIZE * 0.8 : SYNIMA_FONT_SIZE}" 
       labels.push(
         `<text class="tree-label-text"
            data-tip-name="${node.name}"
            x="${x}" y="${y}"
-           fill="white"
-           font-size="${SYNIMA_FONT_SIZE}"
+           fill="white" 
+           font-size="${effectiveFontSize}"
            font-family="sans-serif">
-            ${node.name}
+            ${displayName}
          </text>`
       );
 
@@ -337,16 +356,12 @@ function renderTreeSvg(root, containerId) {
   }
   drawLabels(root);
 
-  // Choose a scale bar = 20% of tree length
+  // Scale bar based on tree length
   let scaleLen = maxX * 0.2;
-
-  // Round the number for display
   let rounded = Number(scaleLen.toFixed(3)); // e.g. 0.00593 → 0.006
 
   let scalePxStart = offsetX;
   let scalePxEnd = offsetX + scaleLen * scaleX;
-
-  // Compute midpoint in *pixel coordinates*
   let scalePxMid = (scalePxStart + scalePxEnd) / 2;
 
   // Build scale bar SVG
@@ -360,10 +375,22 @@ function renderTreeSvg(root, containerId) {
           text-anchor="middle">${rounded}</text>
   `;
 
-  let width = 650;
+  // Overall SVG dimensions in user space
+  let width = isMini ? (offsetX + maxX * scaleX + 100) : 650;
   let height = maxY + 100;
 
-  let svg = `<svg class="tree-svg" viewBox="0 0 ${width} ${height}">
+  let preserve = "xMinYMin meet";
+  let svgWidthAttr = width;
+  let svgHeightAttr = height;
+
+  if (isMini) {
+      preserve = "none"; 
+      svgWidthAttr = "100%";    // but maintain full height
+      svgHeightAttr = height;   // full natural height
+  }
+
+  //let svg = `<svg class="tree-svg" viewBox="0 0 ${width} ${height}">
+  let svg = `<svg class="tree-svg" width="${svgWidthAttr}" height="${svgHeightAttr}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="${preserve}">
       <g class="tree-lines">${lines.join("\n")}</g>
       <g class="tree-leaders">${leaderLines.join("\n")}</g>
       <g class="tree-labels">${labels.join("\n")}</g>
@@ -372,6 +399,10 @@ function renderTreeSvg(root, containerId) {
   `;
 
   const container = document.getElementById(containerId);
+  if (!container) {
+    console.warn("renderTreeSvg: no container with id", containerId);
+    return;
+  }
   container.innerHTML = svg;
 
   // Background click to clear selection
@@ -390,7 +421,10 @@ function renderTreeSvg(root, containerId) {
     });
   }
 
-  SYNIMA.attachLabelClickHandlers(root);
+  if (!isMini) {
+    SYNIMA.attachLabelClickHandlers(root);
+  }
+
 }
 
 // Get tip names (current displayed labels)
@@ -532,7 +566,7 @@ SYNIMA.renameSelectedTaxon = function () {
 };
 
 // Root by selection (Figtree-style)
-SYNIMA.rootByTip = function (tipName) {
+SYNIMA.rootByTip = function (tipName, skipRender = false) {
 
   // Clone original tree always
   let root = cloneTree(SYNIMA_TREES.original);
@@ -616,12 +650,76 @@ SYNIMA.rootByTip = function (tipName) {
 
   SYNIMA_TREES.current = newRoot;
   localStorage.setItem(SYNIMA_PERSIST_KEYS.rootTip, tipName);
-  renderTreeSvg(newRoot, "tree-view-0");
+  if (!skipRender) {
+    renderTreeSvg(newRoot, "tree-view-0");
+  }
 };
 
-// -------------------------
+// =============================================================
+// GLOBAL TREE INITIALISATION (used by Tree tab AND Synteny tab)
+// =============================================================
+window.SYNIMA_TREES = window.SYNIMA_TREES || {};
+
+(function initGlobalTree() {
+  try {
+    const scriptEl = document.getElementById("data-tree");
+    if (!scriptEl || !scriptEl.textContent.trim()) {
+      console.warn("No data-tree JSON found for global tree init");
+      return;
+    }
+
+    const data = JSON.parse(scriptEl.textContent);
+    if (!data.trees || data.trees.length === 0) {
+      console.warn("No trees in data-tree JSON");
+      return;
+    }
+
+    const treeItem = data.trees[0];
+    const newickRaw = treeItem.newick || "";
+    const newick = extractNewick(newickRaw);
+
+    const parsed = parseNewick(newick);
+    setOriginalNames(parsed);
+
+    // initialise originals
+    SYNIMA_TREES.original = cloneTree(parsed);
+    SYNIMA_TREES.current  = cloneTree(parsed);
+
+    // restore settings
+    const savedNames = localStorage.getItem(SYNIMA_PERSIST_KEYS.names);
+    if (savedNames) {
+      SYNIMA_TAXON_NAMES = JSON.parse(savedNames);
+      applyRenamedTaxa(SYNIMA_TREES.current);
+    }
+
+    const savedLW = localStorage.getItem(SYNIMA_PERSIST_KEYS.lineWidth);
+    if (savedLW !== null) {
+      SYNIMA_LINE_WIDTH = parseInt(savedLW, 10);
+    }
+
+    const savedFS = localStorage.getItem(SYNIMA_PERSIST_KEYS.fontSize);
+    if (savedFS !== null) {
+      SYNIMA_FONT_SIZE = parseInt(savedFS, 10);
+    }
+
+    const savedAlign = localStorage.getItem(SYNIMA_PERSIST_KEYS.alignLabels);
+    if (savedAlign !== null) {
+      SYNIMA_ALIGN_LABELS = (savedAlign === "true");
+    }
+
+    const savedRoot = localStorage.getItem(SYNIMA_PERSIST_KEYS.rootTip);
+    if (savedRoot) {
+      SYNIMA.rootByTip(savedRoot, true);   // compute root, but DO NOT render yet
+    }
+
+    //console.log("Global tree initialised:", SYNIMA_TREES);
+
+  } catch (err) {
+    console.error("Global tree initialization failed", err);
+  }
+})();
+
 // Page function
-// -------------------------
 SYNIMA.showTree = function () {
   const app = document.getElementById("app");
   const scriptEl = document.getElementById("data-tree");
@@ -863,52 +961,10 @@ SYNIMA.showTree = function () {
 
   // Parse + draw tree
   try {
-    const parsed = parseNewick(newick);
-    setOriginalNames(parsed);
 
-    SYNIMA_TREES.original = cloneTree(parsed);
-    SYNIMA_TREES.current  = cloneTree(parsed);
-
-    // ===== RESTORE PERSISTED SETTINGS =====
-
-    // 1. Restored renamed taxa
-    const savedNames = localStorage.getItem(SYNIMA_PERSIST_KEYS.names);
-    if (savedNames) {
-      SYNIMA_TAXON_NAMES = JSON.parse(savedNames);
-      applyRenamedTaxa(SYNIMA_TREES.current);
-    }
-
-    // 2. Restore line width
-    const savedLW = localStorage.getItem(SYNIMA_PERSIST_KEYS.lineWidth);
-    if (savedLW !== null) {
-      SYNIMA_LINE_WIDTH = parseInt(savedLW, 10);
-      const lwSelect = document.getElementById("line-width-select");
-      if (lwSelect) lwSelect.value = savedLW;
-    }
-
-    // 3. Restore font size
-    const savedFS = localStorage.getItem(SYNIMA_PERSIST_KEYS.fontSize);
-    if (savedFS !== null) {
-      SYNIMA_FONT_SIZE = parseInt(savedFS, 10);
-      const fsSelect = document.getElementById("font-size-select");
-      if (fsSelect) fsSelect.value = savedFS;
-    }
-
-    // 4. Restore align labels checkbox
-    const savedAlign = localStorage.getItem(SYNIMA_PERSIST_KEYS.alignLabels);
-    if (savedAlign !== null) {
-      SYNIMA_ALIGN_LABELS = (savedAlign === "true");
-      const chk = document.getElementById("align-labels-checkbox");
-      if (chk) chk.checked = SYNIMA_ALIGN_LABELS;
-    }
-
-    // 5. Restore root if present
-    const savedRoot = localStorage.getItem(SYNIMA_PERSIST_KEYS.rootTip);
-    if (savedRoot) {
-      // apply to *current*, not original
-      SYNIMA.rootByTip(savedRoot);
-    }
-
+    // The tree is already initialized globally.
+    // Just render the current state.
+    applyRenamedTaxa(SYNIMA_TREES.current);
     renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
 
     // new code for rooting:
@@ -1222,4 +1278,15 @@ SYNIMA.exportPng = function () {
   img.src = url;
 };
 
+SYNIMA.getCurrentTipOrder = function () {
+  if (!SYNIMA_TREES.current) return [];
+  return SYNIMA.getTipNames(SYNIMA_TREES.current);
+};
 
+// Export functions for other modules (synteny.js)
+SYNIMA.renderTreeSvg = renderTreeSvg;
+SYNIMA.getCurrentTipOrder = SYNIMA.getCurrentTipOrder;  // already defined as SYNIMA.method
+// These are already defined on SYNIMA earlier, so do NOT reassign them:
+// SYNIMA.rootByTip
+// SYNIMA.resetRoot
+// SYNIMA.enableTaxonSelection
