@@ -3,6 +3,13 @@ window.SYNIMA = window.SYNIMA || {};
 SYNIMA.showAbout = function () {
   const app = document.getElementById("app");
 
+  const main = document.getElementById("app");
+  if (main) {
+      main.classList.add("max-w-6xl", "mx-auto");
+      main.style.maxWidth = "";
+      main.style.margin = "";
+  }
+
   app.innerHTML = `
     <h1 class="text-3xl font-bold mb-6">About</h1>
 

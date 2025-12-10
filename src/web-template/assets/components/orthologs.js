@@ -4,6 +4,13 @@ SYNIMA.showOrthologs = function () {
   const app = document.getElementById("app");
   const data = JSON.parse(document.getElementById("data-orthologs").textContent);
 
+  const main = document.getElementById("app");
+  if (main) {
+      main.classList.add("max-w-6xl", "mx-auto");
+      main.style.maxWidth = "";
+      main.style.margin = "";
+  }
+
   const params = data.params || null;
 
   if (!data.summaries || data.summaries.length === 0) {

@@ -10,6 +10,13 @@ SYNIMA.showMethods = function () {
     return;
   }
 
+  const main = document.getElementById("app");
+  if (main) {
+      main.classList.add("max-w-6xl", "mx-auto");
+      main.style.maxWidth = "";
+      main.style.margin = "";
+  }
+
   const methodsData = JSON.parse(methodsRaw.textContent);
   const orthData    = orthRaw ? JSON.parse(orthRaw.textContent) : null;
 

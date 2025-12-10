@@ -430,3 +430,8 @@ body {
   display: block;
   height: auto;
 }
+
+#synteny-main, #synteny-main svg {
+    background: none !important;
+    border: none !important;
+}

@@ -419,6 +419,23 @@ function renderTreeSvg(root, containerId, opts={}) {
     </svg>
   `;
 
+  // --------------------------------------
+  // Expose tip Y positions (for synteny)
+  // --------------------------------------
+  if (isMini) {
+      const tipY = {};
+      (function collectTips(n) {
+          if (!n.children || n.children.length === 0) {
+              tipY[n.name] = offsetY + n.y;   // absolute Y position in pixels
+          }
+          if (n.children) n.children.forEach(collectTips);
+      })(root);
+
+      // Save globally so synteny can retrieve them
+      window.SYNIMA = window.SYNIMA || {};
+      SYNIMA.tipYPositions = tipY;
+  }
+
   const container = document.getElementById(containerId);
   if (!container) {
     console.warn("renderTreeSvg: no container with id", containerId);
@@ -744,6 +761,13 @@ window.SYNIMA_TREES = window.SYNIMA_TREES || {};
 SYNIMA.showTree = function () {
   const app = document.getElementById("app");
   const scriptEl = document.getElementById("data-tree");
+
+  const main = document.getElementById("app");
+  if (main) {
+      main.classList.add("max-w-6xl", "mx-auto");
+      main.style.maxWidth = "";
+      main.style.margin = "";
+  }
 
   let data = { trees: [] };
   if (scriptEl && scriptEl.textContent.trim()) {
