@@ -344,10 +344,11 @@ body {
   stroke-width: 1.5;
 }
 
-.tree-label {
-  fill: #e2e8f0;   /* slate-200 */
+/*.tree-label {
+  fill: #e2e8f0;  
   font-size: 0.9rem;
 }
+*/
 
 /* Newick block styling, similar to R script */
 .newick-block {

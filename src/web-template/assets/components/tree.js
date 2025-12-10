@@ -257,16 +257,20 @@ function renderTreeSvg(root, containerId, opts={}) {
   // Expand vertical scale for mini tree BEFORE computing height
   if (isMini) {
       allNodes.forEach(n => {
-          n.y *= 4;    // or 5 if you prefer your previous spacing
+          n.y *= 6;
       });
   }
+
+  // Boost font size and line width in mini trees
+  const effectiveFontSize = isMini ? SYNIMA_FONT_SIZE * 3 : SYNIMA_FONT_SIZE;
+  const lineW = isMini ? SYNIMA_LINE_WIDTH * 3 : SYNIMA_LINE_WIDTH;
 
   let maxX = Math.max(...allNodes.map(n => n.x));
   let maxY = Math.max(...allNodes.map(n => n.y));
 
   // Horizontal scaling
   let scaleX = isMini ? 250 / (maxX || 1) : 500 / (maxX || 1);
-  let offsetX = isMini ? 10 : 20;
+  let offsetX = isMini ? 40 : 20;
   let offsetY = isMini ? 40 : 20;
 
   let lines = [];
@@ -282,10 +286,12 @@ function renderTreeSvg(root, containerId, opts={}) {
       let x2 = offsetX + child.x * scaleX;
       let y2 = offsetY + child.y;
 
+      
+
       // Vertical segment
-      lines.push(`<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y2}" stroke="white" stroke-width="${SYNIMA_LINE_WIDTH}" style="stroke-width:${SYNIMA_LINE_WIDTH}px;" />`);
+      lines.push(`<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y2}" stroke="white" stroke-width="${lineW}" style="stroke-width:${lineW}px;" />`);
       // Horizontal segment
-      lines.push(`<line x1="${x1}" y1="${y2}" x2="${x2}" y2="${y2}" stroke="white" stroke-width="${SYNIMA_LINE_WIDTH}" style="stroke-width:${SYNIMA_LINE_WIDTH}px;" />`);
+      lines.push(`<line x1="${x1}" y1="${y2}" x2="${x2}" y2="${y2}" stroke="white" stroke-width="${lineW}" style="stroke-width:${lineW}px;" />`);
 
       drawBranches(child);
     });
@@ -331,12 +337,9 @@ function renderTreeSvg(root, containerId, opts={}) {
 
       // label too big?
       let displayName = node.name;
-      if (isMini && displayName.length > 20) {
-          displayName = displayName.slice(0, 17) + "...";
+      if (isMini && displayName.length > 18) {
+          displayName = displayName.slice(0, 14) + "...";
       }
-
-      // Boost font size in mini trees
-      const effectiveFontSize = isMini ? SYNIMA_FONT_SIZE * 2 : SYNIMA_FONT_SIZE;
 
       // old font-size = font-size="${isMini ? SYNIMA_FONT_SIZE * 0.8 : SYNIMA_FONT_SIZE}" 
       labels.push(
@@ -364,20 +367,38 @@ function renderTreeSvg(root, containerId, opts={}) {
   let scalePxEnd = offsetX + scaleLen * scaleX;
   let scalePxMid = (scalePxStart + scalePxEnd) / 2;
 
+  const barY = maxY + offsetY + 40;
+  const textY = isMini
+      ? barY + effectiveFontSize * 1.2   // extra spacing for large mini fonts
+      : barY + 20;                       // original (≈40→60) spacing
+
+  //const scaleBarFont = isMini ? effectiveFontSize : SYNIMA_FONT_SIZE;
+  const scaleBarStroke = isMini ? 6 : 2;
+
   // Build scale bar SVG
   let scaleBar = `
-    <line x1="${scalePxStart}" y1="${maxY + offsetY + 40}"
-          x2="${scalePxEnd}"   y2="${maxY + offsetY + 40}"
-          stroke="white" stroke-width="2" />
+    <line x1="${scalePxStart}" y1="${barY}"
+      x2="${scalePxEnd}"   y2="${barY}"
+      stroke="white" stroke-width="${scaleBarStroke}" />
 
-    <text x="${scalePxMid}" y="${maxY + offsetY + 60}"
-          class="tree-label"
-          text-anchor="middle">${rounded}</text>
+    <text x="${scalePxMid}" y="${textY}"
+      fill="white" 
+      font-size="${effectiveFontSize}"
+      class="tree-label"
+      text-anchor="middle">${rounded}</text>
   `;
 
   // Overall SVG dimensions in user space
-  let width = isMini ? (offsetX + maxX * scaleX + 100) : 650;
-  let height = maxY + 100;
+  //let width = isMini ? (offsetX + maxX * scaleX + 100) : 650;
+  let width;
+  if (isMini) {
+      // give labels plenty of horizontal space
+      const labelRoom = effectiveFontSize * 8; 
+      width = offsetX + maxX * scaleX + labelRoom;
+  } else {
+      width = 650;
+  }
+  let height = textY + 20;
 
   let preserve = "xMinYMin meet";
   let svgWidthAttr = width;

@@ -75,10 +75,10 @@ SYNIMA.showSynteny = function () {
   <div style="display:flex; gap:20px;">
 
     <!-- MINI TREE COLUMN -->
-    <div style="flex:0 0 20%; min-width:260px; border-right:1px solid #444; padding-right:10px;">
-      <h2>Tree</h2>
+    <div style="flex:0 0 20%; min-width:260px; border-right:1px solid #444; padding-right:10px; padding-bottom:20px; overflow-y:auto; ">
+      <!--<h2>Tree</h2>-->
         <div id="synteny-tree-mini"
-             style="width:100%; overflow-x:auto; overflow-y:auto; max-height:none;">
+             style="width:100%; overflow-x:auto; overflow-y:auto; padding-bottom:30px; box-sizing:border-box;">
         </div>
     </div>
 
