@@ -408,6 +408,7 @@ function renderTreeSvg(root, containerId, opts={}) {
       preserve = "none"; 
       svgWidthAttr = "100%";    // but maintain full height
       svgHeightAttr = height;   // full natural height
+      window.SYNIMA.originalMiniTreeHeight = height;
   }
 
   //let svg = `<svg class="tree-svg" viewBox="0 0 ${width} ${height}">

@@ -55,18 +55,18 @@ SYNIMA.showSynteny = function () {
     }
 
     // 4. Print all genome metadata
-    config.genomes.forEach(g => {
-        html += `<h3>${g.name}</h3>`;
-        html += `<p>Total length: ${g.total_length}</p>`;
-        html += `<p>Contig order (inferred): ${g.inferred_order.join(", ")}</p>`;
-        html += `<p>Contig order (fasta): ${g.fasta_order.join(", ")}</p>`;
-        html += `<p>Contig lengths:</p>`;
-        html += `<ul>`;
-        g.contigs.forEach(c => {
-            html += `<li>${c.contig}: ${c.length}</li>`;
-        });
-        html += `</ul>`;
-    });
+    //config.genomes.forEach(g => {
+    //    html += `<h3>${g.name}</h3>`;
+    //    html += `<p>Total length: ${g.total_length}</p>`;
+    //    html += `<p>Contig order (inferred): ${g.inferred_order.join(", ")}</p>`;
+    //    html += `<p>Contig order (fasta): ${g.fasta_order.join(", ")}</p>`;
+    //    html += `<p>Contig lengths:</p>`;
+    //    html += `<ul>`;
+    //    g.contigs.forEach(c => {
+    //        html += `<li>${c.contig}: ${c.length}</li>`;
+    //    });
+    //    html += `</ul>`;
+    //});
 
     // 5. Preview aligncoords + spans
     html += `
@@ -85,7 +85,8 @@ SYNIMA.showSynteny = function () {
   <div style="display:flex; gap:20px;">
 
     <!-- MINI TREE COLUMN -->
-    <div style="flex:0 0 20%; min-width:260px; padding-right:10px; padding-bottom:20px; overflow-y:auto; ">
+    <!-- min-width:260px;  -->
+    <div style="flex:0 0 20%; min-height:400px; padding-right:0px; padding-bottom:20px; overflow-y:auto; ">
       <!--<h2>Tree</h2>-->
         <div id="synteny-tree-mini"
              style="width:100%; overflow-x:auto; overflow-y:auto; padding-bottom:30px; box-sizing:border-box;">
@@ -93,8 +94,10 @@ SYNIMA.showSynteny = function () {
     </div>
 
     <!-- SYNTENY MAIN COLUMN -->
-    <div style="flex:1; padding-left:0; background:none; min-height:auto; min-width:400px; overflow-x:auto; border:none;">
-      <div id="synteny-main" style="min-height:auto;"></div>
+    <!-- min-height:auto; min-width:400px; overflow-x:auto;  -->
+    <div style="flex:1 1 auto; min-height:400px; padding-left:0px; overflow-x:auto; overflow-y:hidden; background:none; border:none;">
+        <!-- min-height:auto; -->
+      <div id="synteny-main"></div>
     </div>
 
   </div>
@@ -115,12 +118,26 @@ SYNIMA.showSynteny = function () {
     // Render the Mini Tree
     renderTreeSvg(SYNIMA_TREES.current, "synteny-tree-mini", { mini:true });
 
-    // Render the Synteny browser
+    // size of tree
+    requestAnimationFrame(() => {
+        const svg = document.querySelector("#synteny-tree-mini svg");
 
-    // =============================================
+        if (svg) {
+            const rect = svg.getBoundingClientRect();
+            const renderedTreeHeight = rect.height;
+
+            // expose globally for use in synteny
+            window.SYNIMA = window.SYNIMA || {};
+            SYNIMA.renderedTreeHeight = renderedTreeHeight;
+        }
+
+        // Now that renderedTreeHeight is known, draw the synteny
+        renderSynteny();
+    });
+
+    // Render the Synteny browser
     // Phase 1: Basic synteny contig rectangles
-    // =============================================
-    (function renderSynteny() {
+    function renderSynteny() {
 
         const container = document.getElementById("synteny-main");
         if (!container) return;
@@ -136,17 +153,13 @@ SYNIMA.showSynteny = function () {
             .map(name => genomeMap[name])
             .filter(x => x);   // drop missing names
 
-        // Width of the synteny plot in pixels
-        //const plotWidthPx = 1200;
-        const availableWidth = document.getElementById("synteny-main").clientWidth;
+        // Determine the actual width available for synteny
+        const mainDiv = document.getElementById("synteny-main");
+        //const availableWidth = mainDiv ? mainDiv.clientWidth : 800;
+        const usable = mainDiv.getBoundingClientRect().width;
 
-        // minimum width = to prevent EVERYTHING from being squished
-        const minWidth = 600;
-
-        // maximum width = prevents rectangles from being huge
-        const maxWidth = 1800;
-
-        const plotWidthPx = Math.max(minWidth, Math.min(availableWidth, maxWidth));
+        // Give synteny the max width available
+        const plotWidthPx = Math.max(400, usable);
 
         // Find max genome length for scaling
         const maxLen = config.max_length;
@@ -174,20 +187,31 @@ SYNIMA.showSynteny = function () {
             console.warn("Mini-tree tip positions missing: synteny rows cannot align.");
         }
 
-        const maxSVGHeight = Math.max(...Object.values(tipY)) + 100;
+        //const maxSVGHeight = Math.max(...Object.values(tipY)) + 60;
+
+        const renderedTreeHeight = SYNIMA.renderedTreeHeight || 300; // fallback
+        const maxSVGHeight = renderedTreeHeight;
 
         let html = `
           <svg width="100%"
-               viewBox="0 0 ${plotWidthPx + 200} ${maxSVGHeight}"
+               viewBox="0 0 ${plotWidthPx} ${maxSVGHeight}"
                preserveAspectRatio="xMinYMin meet"
                style="background:#222; border:1px solid #444;">
         `;
 
         orderedGenomes.forEach(g => {
 
-            const y = tipY[g.name] || 0;    // fall back to 0 if missing
-            const miniScaleFactor = 1.83;
-            const yAdj = y / miniScaleFactor;
+            const original = SYNIMA.originalMiniTreeHeight || 300;
+            const rendered = SYNIMA.renderedTreeHeight || 300;
+
+            // vertical scale factor
+            let vScale = rendered / original;
+
+            // clamp to avoid extreme squashing/stretching
+            //vScale = Math.min(1.5, Math.max(0.7, vScale));
+
+            const yBase = tipY[g.name] ?? 0;
+            const yAdj  = yBase * vScale - 4;
 
             // taxa label
             //html += `
@@ -204,19 +228,34 @@ SYNIMA.showSynteny = function () {
                 const w = contig.length * scale;
                 const trimmed = trimLabelToWidth(ctx, ctgName, w - 6);
 
+                // Dynamically scale rectangle height based on vScale
+                const baseRectHeight = 40;
+                const rectH = Math.max(6, baseRectHeight * vScale);   // never let it go to zero
+                const rectY = yAdj - rectH / 2;
+
+                // Scale font size gently so labels remain readable
+                const baseFont = 12;
+                const fontSize = Math.max(8, baseFont * vScale);
+
+                // Text baseline adjustment (keeps text centered vertically)
+                const textY = rectY + rectH * 0.70;
+
+                // Center of the rectangle in X
+                const textX = x + w / 2;
+
                 html += `
                   <g class="synteny-ctg"
                      data-genome="${g.name}"
                      data-contig="${ctgName}"
                      data-orientation="+">
 
-                    <rect x="${x}" y="${yAdj - 12}" width="${w}" height="24"
+                    <rect x="${x}" y="${rectY}" width="${w}" height="${rectH}"
                           fill="#6699cc" stroke="white" stroke-width="1"></rect>
 
                     ${
                       trimmed
-                        ? `<text x="${x + 3}" y="${yAdj + 5}"
-                                 fill="white" font-size="12">${trimmed}</text>`
+                        ? `<text x="${textX}" y="${textY}"
+                                 fill="white" font-size="12" text-anchor="middle">${trimmed}</text>`
                         : ""
                     }
                   </g>
@@ -260,7 +299,7 @@ SYNIMA.showSynteny = function () {
             tooltip.style.display = "block";
         });
 
-    })();
+    }
 
 };
 
