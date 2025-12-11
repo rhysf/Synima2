@@ -427,7 +427,11 @@ function renderTreeSvg(root, containerId, opts={}) {
       const tipY = {};
       (function collectTips(n) {
           if (!n.children || n.children.length === 0) {
-              tipY[n.name] = offsetY + n.y;   // absolute Y position in pixels
+            // Use original name if available, otherwise fall back to current
+            const key = n.origName || n.name;
+            if (key) {
+                tipY[key] = offsetY + n.y;   // absolute Y position in pixels
+            }
           }
           if (n.children) n.children.forEach(collectTips);
       })(root);
@@ -1326,7 +1330,19 @@ SYNIMA.exportPng = function () {
 
 SYNIMA.getCurrentTipOrder = function () {
   if (!SYNIMA_TREES.current) return [];
-  return SYNIMA.getTipNames(SYNIMA_TREES.current);
+
+  const out = [];
+  (function walk(n) {
+    if (!n.children || n.children.length === 0) {
+      // Use original name as the stable ID for synteny
+      const key = n.origName || n.name;
+      if (key) out.push(key);
+    } else if (n.children) {
+      n.children.forEach(walk);
+    }
+  })(SYNIMA_TREES.current);
+
+  return out;
 };
 
 // Export functions for other modules (synteny.js)
