@@ -422,6 +422,12 @@ body {
   stroke-width: 0.5;
 }
 
+#annotate-btn.annotate-active {
+  background-color: #444;
+  border-color: #aaa;
+  box-shadow: inset 0 0 3px rgba(0,0,0,0.5);
+}
+
 .hidden { display: none; }
 .tree-label-selected { fill: yellow; stroke: black; stroke-width: 0.4; }
 
@@ -435,3 +441,4 @@ body {
     background: none !important;
     border: none !important;
 }
+

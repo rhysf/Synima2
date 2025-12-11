@@ -9,6 +9,7 @@ let SYNIMA_TREES = {
 
 SYNIMA_TAXON_NAMES = {}; // mapping oldName → newName
 SYNIMA.selectedLabelName = null;   // currently selected displayed name
+SYNIMA.annotateArmed = false;  // tracks "Annotate" armed state
 let SYNIMA_LINE_WIDTH = 2;   // default stroke width
 let SYNIMA_FONT_SIZE = 14;   // default tip label font-size
 
@@ -195,7 +196,7 @@ function layoutTree(root) {
   return root;
 }
 
-// Label click handlers (select / deselect / enable annotate)
+// Label click handlers (select / deselect / sync root dropdown / annotate-armed)
 SYNIMA.attachLabelClickHandlers = function(root) {
 
   const labels = document.querySelectorAll(".tree-label-text");
@@ -208,11 +209,14 @@ SYNIMA.attachLabelClickHandlers = function(root) {
 
       // Toggle off if clicking same taxon again
       if (SYNIMA.selectedLabelName === name) {
-          SYNIMA.selectedLabelName = null;
-          el.classList.remove("tree-label-selected");
-          const ann = document.getElementById("annotate-btn");
-          if (ann) ann.disabled = true;
-          return;
+        SYNIMA.selectedLabelName = null;
+        el.classList.remove("tree-label-selected");
+
+        // Clear "Root by tip" dropdown when deselecting
+        const rootSel = document.getElementById("tip-root-select");
+        if (rootSel) rootSel.value = "";
+
+        return;
       }
 
       // Remove highlight from others
@@ -222,12 +226,24 @@ SYNIMA.attachLabelClickHandlers = function(root) {
       // Highlight this one
       el.classList.add("tree-label-selected");
 
-      // record selected name
-      SYNIMA.selectedLabelName = name; // store globally
+      // Record selected name
+      SYNIMA.selectedLabelName = name;
 
-      // >>> ENABLE ANNOTATE BUTTON HERE <<<
-      const annBtn = document.getElementById("annotate-btn");
-      if (annBtn) annBtn.disabled = false;
+      // Sync "Root by tip" dropdown with this selection
+      const rootSel = document.getElementById("tip-root-select");
+      if (rootSel) {
+        // If this value exists as an option, select it
+        const opt = Array.from(rootSel.options).find(o => o.value === name);
+        if (opt) rootSel.value = name;
+      }
+
+      // If Annotate is armed, immediately open rename and un-arm
+      if (SYNIMA.annotateArmed && typeof SYNIMA.renameSelectedTaxon === "function") {
+        SYNIMA.renameSelectedTaxon();
+        SYNIMA.annotateArmed = false;
+        const annBtn = document.getElementById("annotate-btn");
+        if (annBtn) annBtn.classList.remove("annotate-active");
+      }
 
       console.log("Selected taxon:", name);
     });
@@ -373,7 +389,7 @@ function renderTreeSvg(root, containerId, opts={}) {
       : barY + 20;                       // original (≈40→60) spacing
 
   //const scaleBarFont = isMini ? effectiveFontSize : SYNIMA_FONT_SIZE;
-  const scaleBarStroke = isMini ? 6 : 2;
+  const scaleBarStroke = lineW //isMini ? 6 : 2;
 
   // Build scale bar SVG
   let scaleBar = `
@@ -459,8 +475,11 @@ function renderTreeSvg(root, containerId, opts={}) {
       document.querySelectorAll(".tree-label-text")
         .forEach(n => n.classList.remove("tree-label-selected"));
 
-      const ann = document.getElementById("annotate-btn");
-      if (ann) ann.disabled = true;
+      // Clear Root-by-tip dropdown when clicking empty background
+      const rootSel = document.getElementById("tip-root-select");
+      if (rootSel) rootSel.value = "";
+
+      // Do NOT disable annotate; it can always be armed
     });
   }
 
@@ -900,20 +919,19 @@ SYNIMA.showTree = function () {
       Line width:
       <select id="line-width-select">
         <option value="1">1</option>
-        <option value="2" selected>2</option>
+        <option value="2">2</option>
         <option value="3">3</option>
         <option value="4">4</option>
         <option value="5">5</option>
       </select>
     </label>
 
-
     <label style="margin-left: 10px;">
       Font size:
       <select id="font-size-select">
         <option value="10">10</option>
         <option value="12">12</option>
-        <option value="14" selected>14</option>
+        <option value="14">14</option>
         <option value="16">16</option>
         <option value="18">18</option>
         <option value="20">20</option>
@@ -921,7 +939,7 @@ SYNIMA.showTree = function () {
     </label>
 
 
-      <button id="annotate-btn" disabled>Annotate</button>
+      <button id="annotate-btn">Annotate</button>
       <div id="annotate-dropdown" 
          class="hidden absolute bg-white text-black border rounded shadow p-2 z-50"
          style="margin-top: 4px; width: 180px;">
@@ -974,15 +992,26 @@ SYNIMA.showTree = function () {
   if (chk) chk.checked = true;
 
   // allow taxa to be selected
-  document.getElementById("annotate-btn").addEventListener("click", () => {
-    SYNIMA.renameSelectedTaxon();
-  });
+  const annBtn = document.getElementById("annotate-btn");
+  if (annBtn) {
+    annBtn.addEventListener("click", () => {
+      if (SYNIMA.selectedLabelName) {
+        // A taxon is already selected → open rename now
+        SYNIMA.renameSelectedTaxon();
+      } else {
+        // No selection yet → toggle "armed" mode
+        SYNIMA.annotateArmed = !SYNIMA.annotateArmed;
+        annBtn.classList.toggle("annotate-active", SYNIMA.annotateArmed);
+      }
+    });
+  }
 
   // adjust line width
   const lwSelect = document.getElementById("line-width-select");
   lwSelect.addEventListener("change", () => {
-    SYNIMA_LINE_WIDTH = parseInt(lwSelect.value, 10);
-    localStorage.setItem(SYNIMA_PERSIST_KEYS.lineWidth, SYNIMA_LINE_WIDTH);
+    const v = parseInt(lwSelect.value, 10);
+    SYNIMA_LINE_WIDTH = v;
+    localStorage.setItem(SYNIMA_PERSIST_KEYS.lineWidth, String(v));
     renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   });
 
@@ -994,6 +1023,26 @@ SYNIMA.showTree = function () {
     renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   });
 
+  // === Restore persisted settings ===
+  const savedLW = localStorage.getItem(SYNIMA_PERSIST_KEYS.lineWidth);
+  if (savedLW !== null) {
+    SYNIMA_LINE_WIDTH = parseInt(savedLW, 10);
+    if (lwSelect) lwSelect.value = savedLW;
+  } else {
+    // default
+    SYNIMA_LINE_WIDTH = 2;
+    if (lwSelect) lwSelect.value = "2";
+  }
+
+  const savedFS = localStorage.getItem(SYNIMA_PERSIST_KEYS.fontSize);
+  if (savedFS !== null) {
+    SYNIMA_FONT_SIZE = parseInt(savedFS, 10);
+    if (fsSelect) fsSelect.value = savedFS;
+  } else {
+    // default
+    SYNIMA_FONT_SIZE = 14;
+    if (fsSelect) fsSelect.value = "14";
+  }
 
   // Fill Newick block safely
   const preEl = document.getElementById("newick-text");

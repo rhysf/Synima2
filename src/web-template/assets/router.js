@@ -9,8 +9,11 @@ SYNIMA.routes = {
   about: SYNIMA.showAbout
 };
 
+SYNIMA.currentPage = "orthologs";  // default
+
 SYNIMA.router = function (page) {
   const view = SYNIMA.routes[page] || SYNIMA.showOrthologs;
+  SYNIMA.currentPage = page;       // track which tab is active
   view();
 };
 

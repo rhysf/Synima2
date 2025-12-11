@@ -308,4 +308,8 @@ SYNIMA.showSynteny = function () {
 
 };
 
-window.addEventListener("resize", () => SYNIMA.showSynteny());
+window.addEventListener("resize", () => {
+  if (window.SYNIMA && SYNIMA.currentPage === "synteny") {
+    SYNIMA.showSynteny();
+  }
+});
