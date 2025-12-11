@@ -299,6 +299,11 @@ SYNIMA.showSynteny = function () {
             tooltip.style.display = "block";
         });
 
+        // Ensure tooltip disappears if the mouse leaves the synteny area entirely
+        container.addEventListener("mouseleave", () => {
+            tooltip.style.display = "none";
+        });
+
     }
 
 };
