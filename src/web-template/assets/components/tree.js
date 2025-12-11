@@ -1,6 +1,32 @@
 window.SYNIMA = window.SYNIMA || {};
 
+// Default alignment flag - will be overridden by localStorage if present
 let SYNIMA_ALIGN_LABELS = true;
+
+const SYNIMA_PERSIST_KEYS = {
+  names: "synima_tree_renames",
+  lineWidth: "synima_tree_line_width",
+  fontSize: "synima_tree_font_size",
+  alignLabels: "synima_tree_align_labels",
+  rootTip: "synima_tree_root_tip"
+};
+
+// updates align taxa flag from storage
+function syncAlignFromStorage() {
+  try {
+    const savedAlign = localStorage.getItem(SYNIMA_PERSIST_KEYS.alignLabels);
+    if (savedAlign !== null) {
+      SYNIMA_ALIGN_LABELS = (savedAlign === "true");
+    }
+    // if null: first run → keep whatever default you set in the global
+  } catch (e) {
+    console.warn("Could not read alignLabels from localStorage", e);
+    // localStorage might be blocked; ignore and keep default
+  }
+}
+
+// Pull any stored value into SYNIMA_ALIGN_LABELS once at startup
+//syncAlignFromStorage();
 
 let SYNIMA_TREES = {
   original: null,
@@ -13,13 +39,6 @@ SYNIMA.annotateArmed = false;  // tracks "Annotate" armed state
 let SYNIMA_LINE_WIDTH = 2;   // default stroke width
 let SYNIMA_FONT_SIZE = 14;   // default tip label font-size
 
-const SYNIMA_PERSIST_KEYS = {
-  names: "synima_tree_renames",
-  lineWidth: "synima_tree_line_width",
-  fontSize: "synima_tree_font_size",
-  alignLabels: "synima_tree_align_labels",
-  rootTip: "synima_tree_root_tip"
-};
 
 // Apply stored renames to a cloned tree
 function applyRenamedTaxa(node) {
@@ -764,15 +783,13 @@ window.SYNIMA_TREES = window.SYNIMA_TREES || {};
       SYNIMA_FONT_SIZE = parseInt(savedFS, 10);
     }
 
-    const savedAlign = localStorage.getItem(SYNIMA_PERSIST_KEYS.alignLabels);
-    if (savedAlign !== null) {
-      SYNIMA_ALIGN_LABELS = (savedAlign === "true");
-    }
-
     const savedRoot = localStorage.getItem(SYNIMA_PERSIST_KEYS.rootTip);
     if (savedRoot) {
       SYNIMA.rootByTip(savedRoot, true);   // compute root, but DO NOT render yet
     }
+
+    // Align labels: restore from localStorage
+    syncAlignFromStorage();
 
     //console.log("Global tree initialised:", SYNIMA_TREES);
 
@@ -985,11 +1002,9 @@ SYNIMA.showTree = function () {
     downloadMenu.classList.add("hidden");
   });
 
-  // Enable aligned labels by default
-  SYNIMA_ALIGN_LABELS = true;
-
+  // Reflect the current setting (loaded from localStorage at startup)
   const chk = document.getElementById("align-labels-checkbox");
-  if (chk) chk.checked = true;
+  if (chk) chk.checked = !!SYNIMA_ALIGN_LABELS;
 
   // allow taxa to be selected
   const annBtn = document.getElementById("annotate-btn");
@@ -1281,7 +1296,6 @@ SYNIMA.resetRoot = function () {
   SYNIMA_TAXON_NAMES = {};
   SYNIMA_LINE_WIDTH = 2;
   SYNIMA_FONT_SIZE = 14;
-  SYNIMA_ALIGN_LABELS = true;
 
   // Update dropdown UI controls
   document.getElementById("line-width-select").value = "2";
