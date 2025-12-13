@@ -282,10 +282,7 @@ fn group_features_by_parent<'a>(features: &'a [GffFeature], logger: &Logger) -> 
         }
 
         if grouped.is_empty() {
-            logger.warning(
-                "group_features_by_parent: gene-level grouping produced no entries; \
-                 falling back to CDS parent grouping.",
-            );
+            logger.warning("group_features_by_parent: gene-level grouping produced no entries; falling back to CDS parent grouping.");
         } else {
             // Parent type is explicitly "gene"
             return (grouped, "gene".to_string());
@@ -733,7 +730,7 @@ fn collapse_isoforms_keep_longest_cds(
     let mut collapsed_fastas = Vec::new();
     let mut kept_gene_ids = std::collections::HashSet::new();
 
-    for (gene, isoforms) in per_gene {
+    for (_gene, isoforms) in per_gene {
         let mut best: Option<Fasta> = None;
         let mut best_len: usize = 0;
 

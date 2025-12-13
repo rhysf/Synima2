@@ -442,3 +442,12 @@ body {
     border: none !important;
 }
 
+/* Synteny etc. */
+
+.panel-view {
+  background: #0f1b30;
+  border: 1px solid #334155;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}

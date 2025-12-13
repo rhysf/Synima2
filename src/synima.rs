@@ -126,13 +126,13 @@ pub struct Span {
     pub genome1: String,
     pub contig1: String,
     pub start1: u64,
-    pub stop1: u64,
+    //pub stop1: u64,
     pub length1: u64,
 
     pub genome2: String,
     pub contig2: String,
     pub start2: u64,
-    pub stop2: u64,
+    //pub stop2: u64,
     pub length2: u64,
 }
 
@@ -504,25 +504,18 @@ pub fn parse_aligncoords_spans_text(text: &str) -> Result<Vec<Span>> {
             genome1: gc1[0].to_string(),
             contig1: gc1[1].to_string(),
             start1: s1[0].parse().unwrap_or(0),
-            stop1:  s1[1].parse().unwrap_or(0),
+            //stop1:  s1[1].parse().unwrap_or(0),
             length1: len1,
 
             genome2: gc2[0].to_string(),
             contig2: gc2[1].to_string(),
             start2: s2[0].parse().unwrap_or(0),
-            stop2:  s2[1].parse().unwrap_or(0),
+            //stop2:  s2[1].parse().unwrap_or(0),
             length2: len2,
         });
     }
 
     Ok(out)
-}
-
-fn split_genome_contig(s: &str) -> Option<(String, String)> {
-    let mut parts = s.split(';');
-    let g = parts.next()?.trim().to_string();
-    let c = parts.next()?.trim().to_string();
-    Some((g, c))
 }
 
 /// Recreate Perl logic:

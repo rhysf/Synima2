@@ -14,7 +14,7 @@ pub fn reverse_complement(seq: &str) -> String {
         .collect()
 }
 
-pub fn translate_dna_to_peptide(dna: &str, id: &str, genetic_code: usize, _logger: &Logger) -> String {
+pub fn translate_dna_to_peptide(dna: &str, _id: &str, genetic_code: usize, _logger: &Logger) -> String {
 
     if dna.len() % 3 != 0 {
         //logger.warning(&format!("translate_dna_to_peptide: CDS for '{}' has length {} not divisible by 3", id, dna.len()));
