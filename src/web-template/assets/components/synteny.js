@@ -170,11 +170,11 @@ SYNIMA.showSynteny = function () {
     <div class="section">
 
         <!--<div style="display:flex; gap:20px;">-->
-        <div class="synteny-figure" style="display:flex; gap:20px;">
+        <div class="synteny-figure" style="display:flex; gap:10px;">
 
         <!-- MINI TREE COLUMN -->
         <!-- min-width:260px;  -->
-        <div style="flex:0 0 20%; min-height:400px; padding-right:0px; padding-bottom:20px; overflow-y:auto; ">
+        <div id="synteny-tree-col" style="flex:0 0 20%; min-height:400px; padding-right:0px; padding-bottom:20px; overflow-y:auto; ">
           <!--<h2>Tree</h2>-->
             <div id="synteny-tree-mini" 
                 class="panel-view" 
@@ -209,6 +209,16 @@ SYNIMA.showSynteny = function () {
         <label>
           <input type="radio" name="synteny-mode" value="aligncoords">
           Gene synteny 
+        </label>
+
+        <!-- Tree width -->
+        <label style="margin-left: 10px;">
+          Tree width:
+          <select id="synteny-tree-width-select">
+            <option value="20">20%</option>
+            <option value="15">15%</option>
+            <option value="10">10%</option>
+          </select>
         </label>
 
         <!-- label size -->
@@ -285,10 +295,10 @@ SYNIMA.showSynteny = function () {
 
     const maps = buildGenomeMaps(config);
 
+    // synteny mode
     const mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || window.SYNIMA_STATE.syntenyMode || "spans";
     const radio = document.querySelector(`input[name="synteny-mode"][value="${mode}"]`);
     if (radio) radio.checked = true;
-
     document.querySelectorAll('input[name="synteny-mode"]').forEach(el => {
       el.addEventListener("change", () => {
         window.SYNIMA_STATE.syntenyMode = el.value;
@@ -298,6 +308,28 @@ SYNIMA.showSynteny = function () {
         rerender();
       });
     });
+
+    // tree width
+    const tw = document.getElementById("synteny-tree-width-select");
+    if (tw) {
+      // initialize from saved state
+      tw.value = String(window.SYNIMA_STATE.syntenyTreeWidthPct ?? 20);
+      applySyntenyTreeWidth();
+
+      tw.addEventListener("change", () => {
+        const n = parseInt(tw.value, 10);
+        if (!Number.isNaN(n)) {
+          window.SYNIMA_STATE.syntenyTreeWidthPct = n;
+          try {
+            localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyTreeWidth, String(n));
+          } catch (e) {}
+          applySyntenyTreeWidth();
+
+          // optional: re-render synteny so layout recalculates plot width
+          if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+        }
+      });
+    }
 
     // label size option
     const fsSelect = document.getElementById("synteny-font-size-select");
@@ -479,6 +511,14 @@ function syncSyntenyFontFromStorage() {
   }
 }
 
+function applySyntenyTreeWidth() {
+    const col = document.getElementById("synteny-tree-col");
+    if (!col) return;
+
+    const pct = window.SYNIMA_STATE.syntenyTreeWidthPct ?? 20;
+    col.style.flex = `0 0 ${pct}%`;
+}
+
 SYNIMA.resetSynteny = function () {
 
     // defaults
@@ -490,6 +530,12 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyMode = defaultMode;
     window.SYNIMA_STATE.syntenyGapPx = 0;
     window.SYNIMA_STATE.syntenyTrackScale = 1.0;
+    window.SYNIMA_STATE.syntenyTreeWidthPct = 20;
+
+    // tree width
+    const tw = document.getElementById("synteny-tree-width-select");
+    if (tw) tw.value = "20";
+    applySyntenyTreeWidth();
 
     // reset UI: font select
     const fsSelect = document.getElementById("synteny-font-size-select");
@@ -515,6 +561,7 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyFontSize);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTrackScale);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyGap);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTreeWidth);
     } catch (e) {}
 
     // redraw

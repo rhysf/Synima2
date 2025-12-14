@@ -24,3 +24,6 @@ window.SYNIMA_STATE.syntenyGapPx = window.SYNIMA_STATE.syntenyGapPx ?? 0;
 
 window.SYNIMA_PERSIST_KEYS.syntenyTrackScale = "synima_synteny_track_scale";
 window.SYNIMA_STATE.syntenyTrackScale = window.SYNIMA_STATE.syntenyTrackScale ?? 1.0;
+
+window.SYNIMA_PERSIST_KEYS.syntenyTreeWidth = "synima_synteny_tree_width_pct";
+window.SYNIMA_STATE.syntenyTreeWidthPct = window.SYNIMA_STATE.syntenyTreeWidthPct ?? 20;
