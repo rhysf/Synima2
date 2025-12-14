@@ -480,3 +480,24 @@ body {
 .synteny-controls button:hover {
   background: #3b82f6;
 }
+
+.synteny-controls-group {
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  margin-top: 0.6rem;
+}
+
+.synteny-controls-group legend {
+  padding: 0 0.4rem;
+  color: white;
+  font-weight: 600;
+}
+
+.synteny-controls-group label {
+  margin-right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: white;
+}

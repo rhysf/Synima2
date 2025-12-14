@@ -33,6 +33,23 @@ function syncSyntenyModeFromStorage() {
         console.warn("Could not read synteny contig scale from localStorage", e);
     }
 
+    // synteny colours
+    try {
+        const c = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockColor);
+        if (c) window.SYNIMA_STATE.syntenyBlockColor = c;
+    } catch (e) {
+        console.warn("Could not read synteny colour from localStorage", e);
+    }
+
+    // synteny opacity
+    try {
+      const v = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockOpacity);
+      if (v !== null) {
+        const n = parseFloat(v);
+        if (!Number.isNaN(n)) window.SYNIMA_STATE.syntenyBlockOpacity = n;
+      }
+    } catch (e) {}
+
     // contig colours
     try {
         const saved1 = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode);
@@ -52,7 +69,7 @@ function syncSyntenyModeFromStorage() {
             window.SYNIMA_STATE.syntenyContigPalette = saved4;
         }
     } catch (e) {
-        console.warn("Could not read synteny colour options from localStorage", e);
+        console.warn("Could not read contig colour options from localStorage", e);
     }
 
     if (!window.SYNIMA_STATE.syntenyContigColorMode) window.SYNIMA_STATE.syntenyContigColorMode = "single";
@@ -197,96 +214,150 @@ SYNIMA.showSynteny = function () {
     // Synteny Plot Graphical Options
     // ----------------------------
     html += `
+    <div class="section">
+    <h2>Graphical Options</h2>
+
     <div class="synteny-controls">
 
-        <button onclick="SYNIMA.resetSynteny()" style="margin-left:10px;">Reset synteny</button>
+        <!-- Row 0: actions -->
+        <div class="synteny-controls-row">
+            <button onclick="SYNIMA.resetSynteny()" style="margin-left:10px;">Reset synteny</button>
+        </div>
 
-        <label>
-          <input type="radio" name="synteny-mode" value="spans" checked>
-          Contig synteny 
-        </label>
+        <!-- Row 1: data -->
+        <fieldset class="synteny-controls-group">
+            <legend>Data</legend>
 
-        <label>
-          <input type="radio" name="synteny-mode" value="aligncoords">
-          Gene synteny 
-        </label>
+            <label>
+              <input type="radio" name="synteny-mode" value="spans" checked>
+              Contig synteny 
+            </label>
 
-        <!-- Tree width -->
-        <label style="margin-left: 10px;">
-          Tree width:
-          <select id="synteny-tree-width-select">
-            <option value="20">20%</option>
-            <option value="15">15%</option>
-            <option value="10">10%</option>
-          </select>
-        </label>
+            <label>
+              <input type="radio" name="synteny-mode" value="aligncoords">
+              Gene synteny 
+            </label>
+        </fieldset>
 
-        <!-- label size -->
-        <label style="margin-left: 10px;">
-          Contig font size:
-          <select id="synteny-font-size-select">
-            <option value="6">6</option>
-            <option value="8">8</option>
-            <option value="10">10</option>
-            <option value="12">12</option>
-            <option value="14">14</option>
-            <option value="16">16</option>
-            <option value="18">18</option>
-            <option value="20">20</option>
-            <option value="22">22</option>
-            <option value="24">24</option>
-          </select>
-        </label>
+        <!-- Row 2: layout + size -->
+        <fieldset class="synteny-controls-group">
+            <legend>Layout and size</legend>
 
-        <!-- contig box scale -->
-        <label style="margin-left: 10px;">
-          Contig box height:
-          <select id="synteny-track-scale-select">
-            <option value="0.75">0.75×</option>
-            <option value="1">1×</option>
-            <option value="1.25">1.25×</option>
-            <option value="1.5">1.5×</option>
-            <option value="2">2×</option>
-          </select>
-        </label>
+            <!-- Tree width -->
+            <label style="margin-left: 10px;">
+              Tree width:
+              <select id="synteny-tree-width-select">
+                <option value="20">20%</option>
+                <option value="15">15%</option>
+                <option value="10">10%</option>
+              </select>
+            </label>
 
-        <!-- contig gap -->
-        <label style="margin-left: 10px;">
-          Contig gap:
-          <select id="synteny-gap-select">
-            <option value="0">0</option>
-            <option value="2">2</option>
-            <option value="4">4</option>
-            <option value="6">6</option>
-            <option value="8">8</option>
-            <option value="10">10</option>
-            <option value="15">15</option>
-            <option value="20">20</option>
-          </select>
-        </label>
+            <!-- label size -->
+            <label style="margin-left: 10px;">
+              Contig font size:
+              <select id="synteny-font-size-select">
+                <option value="6">6</option>
+                <option value="8">8</option>
+                <option value="10">10</option>
+                <option value="12">12</option>
+                <option value="14">14</option>
+                <option value="16">16</option>
+                <option value="18">18</option>
+                <option value="20">20</option>
+                <option value="22">22</option>
+                <option value="24">24</option>
+              </select>
+            </label>
 
-        <!-- contig gap -->
-        <label style="margin-left: 10px;">
-          Contig colour:
-          <select id="contig-colour-select">
-            <option value="#66cc99">Green Cyan</option>
-            <option value="#6699cc">Blue Gray</option>
-            <option value="#cc6699">Pink</option>
-            <option value="#cc9966">Light Orange</option>
-            <option value="#ffffff">White</option>
-            <option value="#ff0000">Red</option>
-            <option value="#000000">Black</option>
-            <option value="classic">Palette: Classic</option>
-            <option value="pastel">Palette: Pastel</option>
-            <option value="muted">Palette: Muted</option>
-            <option value="okabe">Palette: Okabe</option>
-            <option value="vibrant">Palette: Vibrant</option>
-            <option value="cool">Palette: Cool</option>
-            <option value="warm">Palette: Warm</option>
-          </select>
-        </label>
+            <!-- contig box scale -->
+            <label style="margin-left: 10px;">
+              Contig box height:
+              <select id="synteny-track-scale-select">
+                <option value="0.75">0.75×</option>
+                <option value="1">1×</option>
+                <option value="1.25">1.25×</option>
+                <option value="1.5">1.5×</option>
+                <option value="2">2×</option>
+              </select>
+            </label>
 
+            <!-- contig gap -->
+            <label style="margin-left: 10px;">
+              Contig gap:
+              <select id="synteny-gap-select">
+                <option value="0">0</option>
+                <option value="2">2</option>
+                <option value="4">4</option>
+                <option value="6">6</option>
+                <option value="8">8</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+              </select>
+            </label>
+        </fieldset>
 
+        <!-- Row 3: colours -->
+        <fieldset class="synteny-controls-group">
+            <legend>Colours</legend>
+
+            <!-- contig colours -->
+            <label style="margin-left: 10px;">
+              Contig colour:
+              <select id="contig-colour-select">
+                <option value="#66cc99">Green Cyan</option>
+                <option value="#6699cc">Blue Gray</option>
+                <option value="#cc6699">Pink</option>
+                <option value="#cc9966">Light Orange</option>
+                <option value="#ffffff">White</option>
+                <option value="#ff0000">Red</option>
+                <option value="#000000">Black</option>
+                <option value="classic">Palette: Classic</option>
+                <option value="pastel">Palette: Pastel</option>
+                <option value="muted">Palette: Muted</option>
+                <option value="okabe">Palette: Okabe</option>
+                <option value="vibrant">Palette: Vibrant</option>
+                <option value="cool">Palette: Cool</option>
+                <option value="warm">Palette: Warm</option>
+              </select>
+            </label>
+
+            <!-- synteny colours -->
+            <label style="margin-left: 10px;">
+              Synteny block colour:
+              <select id="synteny-block-colour-select">
+                <option value="#ffffff">White</option>
+                <option value="#d1d5db">Light grey</option>
+                <option value="#93c5fd">Light blue</option>
+                <option value="#a7f3d0">Mint</option>
+                <option value="#fde68a">Soft yellow</option>
+                <option value="#fca5a5">Soft red</option>
+                <option value="#c4b5fd">Lavender</option>
+                <option value="#22c55e">Green</option>
+                <option value="#f59e0b">Orange</option>
+                <option value="#60a5fa">Blue</option>
+              </select>
+            </label>
+
+            <!-- synteny opacity -->
+            <label style="margin-left: 10px;">
+              Synteny opacity:
+              <select id="synteny-block-opacity-select">
+                <option value="0.10">0.10</option>
+                <option value="0.20">0.20</option>
+                <option value="0.30">0.30</option>
+                <option value="0.40">0.40</option>
+                <option value="0.50">0.50</option>
+                <option value="0.60">0.60</option>
+                <option value="0.70">0.70</option>
+                <option value="0.80">0.80</option>
+                <option value="0.90">0.90</option>
+              </select>
+            </label>
+        </fieldset>
+
+      </div>
     </div>
     `;
 
@@ -465,6 +536,39 @@ SYNIMA.showSynteny = function () {
       });
     }
 
+    // synteny block colour
+    const blockColorSel = document.getElementById("synteny-block-colour-select");
+    if (blockColorSel) {
+      blockColorSel.value = window.SYNIMA_STATE.syntenyBlockColor || "#ffffff";
+
+      blockColorSel.addEventListener("change", () => {
+        const v = blockColorSel.value;
+        window.SYNIMA_STATE.syntenyBlockColor = v;
+        try {
+          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockColor, v);
+        } catch (e) {}
+        rerender();
+      });
+    }
+
+    // opacity
+    const opSel = document.getElementById("synteny-block-opacity-select");
+    if (opSel) {
+      const cur = Number(window.SYNIMA_STATE.syntenyBlockOpacity ?? 0.5);
+      opSel.value = cur.toFixed(2);
+
+      opSel.addEventListener("change", () => {
+        const n = parseFloat(opSel.value);
+        if (!Number.isNaN(n)) {
+          window.SYNIMA_STATE.syntenyBlockOpacity = n;
+          try {
+            localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockOpacity, n.toFixed(2));
+          } catch (e) {}
+          rerender();
+        }
+      });
+    }
+
     function rerender() {
         const mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || "spans";
 
@@ -633,6 +737,8 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyContigColorMode = SYNIMA_SYNTENY_DEFAULTS.contigColorMode;
     window.SYNIMA_STATE.syntenyContigBaseColor = SYNIMA_SYNTENY_DEFAULTS.contigBaseColor;
     window.SYNIMA_STATE.syntenyContigPalette   = SYNIMA_SYNTENY_DEFAULTS.contigPalette;
+    window.SYNIMA_STATE.syntenyBlockColor = "#ffffff";
+    window.SYNIMA_STATE.syntenyBlockOpacity = 0.5;
 
     // tree width
     const tw = document.getElementById("synteny-tree-width-select");
@@ -661,6 +767,14 @@ SYNIMA.resetSynteny = function () {
     const colorSelect = document.getElementById("contig-colour-select");
     if (colorSelect) colorSelect.value = SYNIMA_SYNTENY_DEFAULTS.contigBaseColor; // "#6699cc"
 
+    // contig block colour
+    const bc = document.getElementById("synteny-block-colour-select");
+    if (bc) bc.value = "#ffffff";
+
+    // opacity
+    const opSel = document.getElementById("synteny-block-opacity-select");
+    if (opSel) opSel.value = "0.5";
+
     // clear saved state
     try {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
@@ -674,6 +788,10 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigBaseColor);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigPalette);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides);
+
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockColor);
+
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockOpacity);
     } catch (e) {}
 
     // redraw
@@ -994,6 +1112,12 @@ function renderSyntenySvg(blocks, config, maps, layout) {
 
     const yFor = (gName) => (layout.yByGenome && layout.yByGenome[gName] !== undefined) ? layout.yByGenome[gName] : yFallback(gName);
 
+    // colour and opacity
+    const polyColor = (window.SYNIMA_STATE && window.SYNIMA_STATE.syntenyBlockColor) ? window.SYNIMA_STATE.syntenyBlockColor : "#ffffff";
+    const polyFillOpacity = (window.SYNIMA_STATE && Number.isFinite(window.SYNIMA_STATE.syntenyBlockOpacity)) ? window.SYNIMA_STATE.syntenyBlockOpacity : 0.5;
+
+    // keep stroke a bit lighter than fill
+    const polyStrokeOpacity = Math.max(0, Math.min(1, polyFillOpacity * 0.5));
 
     // Polygons first, then tracks and labels on top
     let polys = "";
@@ -1017,10 +1141,10 @@ function renderSyntenySvg(blocks, config, maps, layout) {
         polys += `
           <polygon
             points="${points}"
-            fill="#ffffff"
-            fill-opacity="0.5"
-            stroke="#ffffff"
-            stroke-opacity="0.25"
+            fill="${polyColor}"
+            fill-opacity="${polyFillOpacity}"
+            stroke="${polyColor}"
+            stroke-opacity="${polyStrokeOpacity}"
             stroke-width="0.5">
             <title>${escapeHtml(b.topGenome)}:${escapeHtml(b.topContig)} ${b.topAbsStart}-${b.topAbsEnd}
             ↔ ${escapeHtml(b.botGenome)}:${escapeHtml(b.botContig)} ${b.botAbsStart}-${b.botAbsEnd}

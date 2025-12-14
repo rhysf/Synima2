@@ -16,7 +16,10 @@ window.SYNIMA_PERSIST_KEYS = window.SYNIMA_PERSIST_KEYS || {
 	syntenyContigColorMode: "synima_synteny_contig_color_mode",
 	syntenyContigBaseColor: "synima_synteny_contig_base_color",
 	syntenyContigPalette:   "synima_synteny_contig_palette",
-	syntenyContigOverrides: "synima_synteny_contig_overrides"
+	syntenyContigOverrides: "synima_synteny_contig_overrides",
+
+	syntenyBlockColor: "synima_synteny_block_color",
+	syntenyBlockOpacity: "synima_synteny_block_opacity"
 };
 
 window.SYNIMA_STATE = window.SYNIMA_STATE || {};
@@ -46,3 +49,7 @@ window.SYNIMA_STATE.syntenyContigBaseColor = window.SYNIMA_STATE.syntenyContigBa
 window.SYNIMA_STATE.syntenyContigPalette = window.SYNIMA_STATE.syntenyContigPalette ?? "classic";
 window.SYNIMA_STATE.syntenyContigOverrides = window.SYNIMA_STATE.syntenyContigOverrides ?? {}; // {"genome|contig": "#rrggbb"}
 window.SYNIMA_STATE.selectedContigKey = window.SYNIMA_STATE.selectedContigKey ?? null;
+
+window.SYNIMA_STATE.syntenyBlockColor = window.SYNIMA_STATE.syntenyBlockColor ?? "#ffffff";
+
+window.SYNIMA_STATE.syntenyBlockOpacity = window.SYNIMA_STATE.syntenyBlockOpacity ?? 0.5;
