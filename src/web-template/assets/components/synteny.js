@@ -48,7 +48,17 @@ function syncSyntenyModeFromStorage() {
         const n = parseFloat(v);
         if (!Number.isNaN(n)) window.SYNIMA_STATE.syntenyBlockOpacity = n;
       }
-    } catch (e) {}
+    } catch (e) {
+        console.warn("Could not read synteny opacity from localStorage", e);
+    }
+
+    // background colour
+    try {
+        const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyBgColor);
+        if (saved) window.SYNIMA_STATE.syntenyBgColor = saved;
+    } catch (e) {
+        console.warn("Could not read background colour option from localStorage", e);
+    }
 
     // contig colours
     try {
@@ -355,6 +365,19 @@ SYNIMA.showSynteny = function () {
                 <option value="0.90">0.90</option>
               </select>
             </label>
+
+            <!-- Background colour -->
+            <label style="margin-left: 10px;">
+              Background colour:
+              <select id="synteny-bg-select">
+                <option value="#0f1b30">Navy</option>
+                <option value="#111827">Slate</option>
+                <option value="#111111">Charcoal</option>
+                <option value="#000000">Black</option>
+                <option value="#ffffff">White</option>
+              </select>
+            </label>
+
         </fieldset>
 
       </div>
@@ -415,6 +438,23 @@ SYNIMA.showSynteny = function () {
     });
 
     const maps = buildGenomeMaps(config);
+
+    // background colour
+    applySyntenyBackground();
+
+    const bgSel = document.getElementById("synteny-bg-select");
+    if (bgSel) {
+      bgSel.value = window.SYNIMA_STATE.syntenyBgColor || "#0f1b30";
+      bgSel.addEventListener("change", () => {
+        const bg = bgSel.value;
+        window.SYNIMA_STATE.syntenyBgColor = bg;
+        try {
+          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyBgColor, bg);
+        } catch (e) {}
+        applySyntenyBackground();
+        rerender(); // optional, only needed if you want the SVG itself to use BG too
+      });
+    }
 
     // synteny mode
     const mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || window.SYNIMA_STATE.syntenyMode || "spans";
@@ -716,6 +756,12 @@ function computeBaseFillForGenome(genomeIndex) {
   return getGenomePaletteColor(genomeIndex, palette);
 }
 
+function applySyntenyBackground() {
+    const bg = window.SYNIMA_STATE.syntenyBgColor || "#0f1b30";
+    const fig = document.querySelector(".synteny-figure");
+    if (fig) fig.style.setProperty("--synima-synteny-bg", bg);
+}
+
 SYNIMA.resetSynteny = function () {
 
     // defaults
@@ -739,6 +785,7 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyContigPalette   = SYNIMA_SYNTENY_DEFAULTS.contigPalette;
     window.SYNIMA_STATE.syntenyBlockColor = "#ffffff";
     window.SYNIMA_STATE.syntenyBlockOpacity = 0.5;
+    window.SYNIMA_STATE.syntenyBgColor = "#0f1b30";
 
     // tree width
     const tw = document.getElementById("synteny-tree-width-select");
@@ -773,7 +820,13 @@ SYNIMA.resetSynteny = function () {
 
     // opacity
     const opSel = document.getElementById("synteny-block-opacity-select");
-    if (opSel) opSel.value = "0.5";
+    if (opSel) opSel.value = "0.50";
+
+    // background colour
+    const bgSel = document.getElementById("synteny-bg-select");
+    if (bgSel) bgSel.value = "#0f1b30";
+    try { localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBgColor); } catch (e) {}
+    applySyntenyBackground();
 
     // clear saved state
     try {
@@ -1330,12 +1383,13 @@ function cloneSyntenySvgForExport(svgEl) {
     // if your styling is CSS-driven, do this:
     inlineSvgComputedStyles(clone);
 
-    // bake in the same dark background you use on-screen:
-    addSvgBackgroundRect(clone, "#0f1b30");   // or "#111" if you prefer
+    // Background colour you use on-screen:
+    const BG = window.SYNIMA_STATE?.syntenyBgColor || "#0f1b30";
+    addSvgBackgroundRect(clone, BG);
 
-  // Make exports print-friendly (optional).
-  // Remove if you want “exactly as seen”.
-  clone.setAttribute("style", "background:#ffffff;");
+    // Make exports print-friendly (optional).
+    // Remove if you want “exactly as seen”.
+    //clone.setAttribute("style", "background:#ffffff;");
 
   // Recolor white text/strokes to black so it exports clearly.
   clone.querySelectorAll("text").forEach(t => t.setAttribute("fill", "black"));
@@ -1432,7 +1486,9 @@ SYNIMA.exportSyntenyPng = function () {
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
 
     // White background
-    ctx.fillStyle = "white";
+    //ctx.fillStyle = "white";
+    // Background
+    ctx.fillStyle = window.SYNIMA_STATE?.syntenyBgColor || "#0f1b30";
     ctx.fillRect(0, 0, img.width, img.height);
 
     ctx.drawImage(img, 0, 0);
@@ -1510,7 +1566,9 @@ SYNIMA.exportSyntenyFigurePng = function () {
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
 
     // dark background in SVG units
-    ctx.fillStyle = "#0f1b30";
+    //ctx.fillStyle = "#0f1b30";
+    // Background colour
+    ctx.fillStyle = window.SYNIMA_STATE?.syntenyBgColor || "#0f1b30";
     ctx.fillRect(0, 0, outW, outH);
 
     // draw both images in SVG units
@@ -1540,7 +1598,7 @@ SYNIMA.exportSyntenyFigureSvg = function () {
   if (!treeSvg || !synSvg) return;
 
   const GAP = 10;                // SVG units
-  const BG  = "#0f1b30";         // same as your panel background
+  const BG = window.SYNIMA_STATE?.syntenyBgColor || "#0f1b30";         // same as panel background
 
   // Clone originals
   const treeClone = treeSvg.cloneNode(true);
