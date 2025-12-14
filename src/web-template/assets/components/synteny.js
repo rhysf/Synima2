@@ -174,7 +174,7 @@ SYNIMA.showSynteny = function () {
 
     </div>
 
-    <div class="choice-group text-white">
+    <div class="synteny-controls">
 
         <button onclick="SYNIMA.resetSynteny()" style="margin-left:10px;">Reset synteny</button>
 

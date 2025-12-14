@@ -462,6 +462,21 @@ body {
   overflow: hidden;
 }
 
-.choice-group label {
+/*choice-group*/
+.synteny-controls label {
   color: #ffffff;
+}
+
+.synteny-controls button {
+  background: #1e40af;
+  color: #e2e8f0;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.4rem;
+  border: none;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+
+.synteny-controls button:hover {
+  background: #3b82f6;
 }
