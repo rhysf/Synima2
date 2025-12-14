@@ -1,5 +1,8 @@
 window.SYNIMA = window.SYNIMA || {};
 
+window.SYNIMA_SYNTENY_FONT_SIZE = window.SYNIMA_SYNTENY_FONT_SIZE ?? 12;
+window.SYNIMA_SYNTENY_DEFAULT_MODE = window.SYNIMA_SYNTENY_DEFAULT_MODE ?? "spans";
+
 SYNIMA.showSynteny = function () {
 
     const app = document.getElementById("app");
@@ -165,6 +168,9 @@ SYNIMA.showSynteny = function () {
     </div>
 
     <div class="choice-group text-white">
+
+        <button onclick="SYNIMA.resetSynteny()" style="margin-left:10px;">Reset synteny</button>
+
         <label>
           <input type="radio" name="synteny-mode" value="spans" checked>
           Contig synteny 
@@ -371,6 +377,33 @@ function syncSyntenyFontFromStorage() {
   }
 }
 syncSyntenyFontFromStorage();
+
+SYNIMA.resetSynteny = function () {
+
+  // reset font size
+  SYNIMA_SYNTENY_FONT_SIZE = 12;
+  const fsSelect = document.getElementById("synteny-font-size-select");
+  if (fsSelect) fsSelect.value = "12";
+
+  // reset mode (radio)
+  const modeRadio = document.querySelector(
+    `input[name="synteny-mode"][value="${SYNIMA_SYNTENY_DEFAULT_MODE}"]`
+  );
+  if (modeRadio) modeRadio.checked = true;
+
+  // clear saved state
+  try {
+    localStorage.removeItem(SYNIMA_PERSIST_KEYS.syntenyMode);
+    localStorage.removeItem(SYNIMA_PERSIST_KEYS.syntenyFontSize);
+  } catch (e) {}
+
+  // redraw
+  if (typeof SYNIMA._syntenyRerender === "function") {
+    SYNIMA._syntenyRerender();
+  }
+
+  console.log("Synteny reset to defaults.");
+};
 
 
 // Safe HTML for <pre>

@@ -12,7 +12,8 @@ const SYNIMA_PERSIST_KEYS = {
   rootTip: "synima_tree_root_tip",
 
   // Synteny tab
-  syntenyFontSize: "synima_synteny_font_size"
+  syntenyFontSize: "synima_synteny_font_size",
+  syntenyMode: "synima_synteny_mode"
 };
 
 // updates align taxa flag from storage
@@ -45,7 +46,8 @@ let SYNIMA_LINE_WIDTH = 2;   // default stroke width
 let SYNIMA_FONT_SIZE = 14;   // default tip label font-size
 
 // synteny tab
-let SYNIMA_SYNTENY_FONT_SIZE = 12;
+//let SYNIMA_SYNTENY_FONT_SIZE = 12;
+//const SYNIMA_SYNTENY_DEFAULT_MODE = "spans";
 
 // Apply stored renames to a cloned tree
 function applyRenamedTaxa(node) {
