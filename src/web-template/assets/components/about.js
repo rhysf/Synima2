@@ -1,5 +1,3 @@
-window.SYNIMA = window.SYNIMA || {};
-
 SYNIMA.showAbout = function () {
   const app = document.getElementById("app");
 

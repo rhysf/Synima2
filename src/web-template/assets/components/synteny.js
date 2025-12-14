@@ -1,7 +1,14 @@
-window.SYNIMA = window.SYNIMA || {};
 
-window.SYNIMA_SYNTENY_FONT_SIZE = window.SYNIMA_SYNTENY_FONT_SIZE ?? 12;
-window.SYNIMA_SYNTENY_DEFAULT_MODE = window.SYNIMA_SYNTENY_DEFAULT_MODE ?? "spans";
+function syncSyntenyModeFromStorage() {
+  try {
+    const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
+    if (saved === "spans" || saved === "aligncoords") {
+      window.SYNIMA_STATE.syntenyMode = saved;
+    }
+  } catch (e) {
+    console.warn("Could not read synteny mode from localStorage", e);
+  }
+}
 
 SYNIMA.showSynteny = function () {
 
@@ -198,18 +205,23 @@ SYNIMA.showSynteny = function () {
           </select>
         </label>
 
-
     </div>
+    `;
 
-  `;
+    app.innerHTML = html;
 
-  app.innerHTML = html;
+    // ----------------------------
+    // Render logic
+    // ----------------------------
 
-  // ----------------------------
-  // Render logic
-  // ----------------------------
+    syncSyntenyModeFromStorage();
+    syncSyntenyFontFromStorage();
 
-  // Now the container exists, so render the mini tree
+    const initMode = window.SYNIMA_STATE.syntenyMode || "spans";
+    const initRadio = document.querySelector(`input[name="synteny-mode"][value="${initMode}"]`);
+    if (initRadio) initRadio.checked = true;
+
+    // Now the container exists, so render the mini tree
     if (window.SYNIMA_TREES && SYNIMA_TREES.current) {
       renderTreeSvg(SYNIMA_TREES.current, "synteny-tree-mini", { mini: true });
     } else {
@@ -222,9 +234,40 @@ SYNIMA.showSynteny = function () {
 
     const maps = buildGenomeMaps(config);
 
+    
+    const mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || window.SYNIMA_STATE.syntenyMode || "spans";
+    const radio = document.querySelector(`input[name="synteny-mode"][value="${mode}"]`);
+    if (radio) radio.checked = true;
+
+    //document.querySelectorAll('input[name="synteny-mode"]').forEach(el => {
+    //    el.addEventListener("change", rerender);
+    //});
     document.querySelectorAll('input[name="synteny-mode"]').forEach(el => {
-        el.addEventListener("change", rerender);
+      el.addEventListener("change", () => {
+        window.SYNIMA_STATE.syntenyMode = el.value;
+        try {
+            localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyMode, el.value);
+        } catch (e) {}
+        rerender();
+      });
     });
+
+    // label size option
+    const fsSelect = document.getElementById("synteny-font-size-select");
+    if (fsSelect) {
+        fsSelect.value = String(window.SYNIMA_STATE.syntenyFontSize ?? 12);
+
+        fsSelect.addEventListener("change", () => {
+            const n = parseInt(fsSelect.value, 10);
+            if (!Number.isNaN(n)) {
+                window.SYNIMA_STATE.syntenyFontSize = n;
+                try {
+                    localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyFontSize, String(n));
+                } catch (e) {}
+                rerender();
+            }
+        });
+    }
 
 
     function rerender() {
@@ -266,27 +309,6 @@ SYNIMA.showSynteny = function () {
 
     rerender();
     SYNIMA._syntenyRerender = rerender;
-
-    // add label size option
-    const syFsSelect = document.getElementById("synteny-font-size-select");
-    if (syFsSelect) {
-      // set the UI to the persisted value whenever you enter the tab
-      syFsSelect.value = String(SYNIMA_SYNTENY_FONT_SIZE);
-
-      syFsSelect.addEventListener("change", () => {
-        const n = parseInt(syFsSelect.value, 10);
-        if (!Number.isNaN(n)) {
-          SYNIMA_SYNTENY_FONT_SIZE = n;
-          try {
-            localStorage.setItem(SYNIMA_PERSIST_KEYS.syntenyFontSize, String(n));
-          } catch (e) {
-            console.warn("Could not write synteny font size to localStorage", e);
-          }
-          rerender();
-        }
-      });
-    }
-
 
     // Add hover tooltip
     const tooltip = document.createElement("div");
@@ -367,42 +389,47 @@ SYNIMA.showSynteny = function () {
 // Pull from storage once at load
 function syncSyntenyFontFromStorage() {
   try {
-    const saved = localStorage.getItem(SYNIMA_PERSIST_KEYS.syntenyFontSize);
+    const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyFontSize);
     if (saved !== null) {
       const n = parseInt(saved, 10);
-      if (!Number.isNaN(n)) SYNIMA_SYNTENY_FONT_SIZE = n;
+      if (!Number.isNaN(n)) window.SYNIMA_STATE.syntenyFontSize = n;
     }
   } catch (e) {
     console.warn("Could not read synteny font size from localStorage", e);
   }
 }
-syncSyntenyFontFromStorage();
 
 SYNIMA.resetSynteny = function () {
 
-  // reset font size
-  SYNIMA_SYNTENY_FONT_SIZE = 12;
-  const fsSelect = document.getElementById("synteny-font-size-select");
-  if (fsSelect) fsSelect.value = "12";
+    // defaults
+    const defaultMode = window.SYNIMA_SYNTENY_DEFAULT_MODE || "spans";
+    const defaultFont = 12;
 
-  // reset mode (radio)
-  const modeRadio = document.querySelector(
-    `input[name="synteny-mode"][value="${SYNIMA_SYNTENY_DEFAULT_MODE}"]`
-  );
-  if (modeRadio) modeRadio.checked = true;
+    // reset state
+    window.SYNIMA_STATE.syntenyFontSize = defaultFont;
+    window.SYNIMA_STATE.syntenyMode = defaultMode;
 
-  // clear saved state
-  try {
-    localStorage.removeItem(SYNIMA_PERSIST_KEYS.syntenyMode);
-    localStorage.removeItem(SYNIMA_PERSIST_KEYS.syntenyFontSize);
-  } catch (e) {}
+    // reset UI: font select
+    const fsSelect = document.getElementById("synteny-font-size-select");
+    if (fsSelect) fsSelect.value = String(defaultFont);
 
-  // redraw
-  if (typeof SYNIMA._syntenyRerender === "function") {
-    SYNIMA._syntenyRerender();
-  }
+    // reset UI: radio
+    const modeRadio = document.querySelector(
+        `input[name="synteny-mode"][value="${defaultMode}"]`
+    );
+    if (modeRadio) modeRadio.checked = true;
 
-  console.log("Synteny reset to defaults.");
+    // clear saved state
+    try {
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyFontSize);
+    } catch (e) {}
+
+    // redraw
+    if (typeof SYNIMA._syntenyRerender === "function") {
+        SYNIMA._syntenyRerender();
+    }
+    console.log("Synteny reset to defaults.");
 };
 
 
@@ -689,18 +716,19 @@ function prepareBlocksForPlot(blocks, config, maps, layout) {
 
 // Render a simple SVG: genome tracks + polygons
 function renderSyntenySvg(blocks, config, maps, layout) {
-  const svgW = layout.plotWidthPx;
-  const svgH = Math.max(layout.treeHeightPx, 200);
+    const svgW = layout.plotWidthPx;
+    const svgH = Math.max(layout.treeHeightPx, 200);
 
-  const trackHeight = layout.trackHeight;
+    const trackHeight = layout.trackHeight;
 
-  // fallback if tip positions not available
-  const topPad = 20;
-  const rowSpacing = 30;
-  const yFallback = (gName) => {
-    const idx = config.genomes.findIndex(g => g.name === gName);
-    return topPad + idx * rowSpacing;
-  };
+    // fallback if tip positions not available
+    const topPad = 20;
+    const rowSpacing = 30;
+    const yFallback = (gName) => {
+        const idx = config.genomes.findIndex(g => g.name === gName);
+        return topPad + idx * rowSpacing;
+    };
+
   const yFor = (gName) => (layout.yByGenome && layout.yByGenome[gName] !== undefined) ? layout.yByGenome[gName] : yFallback(gName);
 
 
@@ -752,11 +780,12 @@ function renderSyntenySvg(blocks, config, maps, layout) {
         const w = bpLen * layout.scaleX;
         if (w <= 0) continue;
 
-        //const fontSize = Math.max(10, Math.min(18, trackHeight * 0.45));
+        // Contig font size
         const autoFontSize = Math.max(10, Math.min(18, trackHeight * 0.45));
-        const userFontSize = (typeof SYNIMA_SYNTENY_FONT_SIZE === "number" && !Number.isNaN(SYNIMA_SYNTENY_FONT_SIZE))
-          ? SYNIMA_SYNTENY_FONT_SIZE
-          : autoFontSize;
+        const stateFont = window.SYNIMA_STATE && Number.isFinite(window.SYNIMA_STATE.syntenyFontSize) ? window.SYNIMA_STATE.syntenyFontSize : null;
+        //const legacyFont = (typeof window.SYNIMA_SYNTENY_FONT_SIZE === "number" && Number.isFinite(window.SYNIMA_SYNTENY_FONT_SIZE)) ? window.SYNIMA_SYNTENY_FONT_SIZE : null;
+        //const userFontSize = stateFont ?? legacyFont ?? autoFontSize;
+        const userFontSize = stateFont ?? autoFontSize;
 
         // optional clamp (keeps it sane)
         const fontSize = Math.max(6, Math.min(30, userFontSize));

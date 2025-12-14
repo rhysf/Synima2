@@ -3,19 +3,6 @@ window.SYNIMA = window.SYNIMA || {};
 // Default alignment flag - will be overridden by localStorage if present
 let SYNIMA_ALIGN_LABELS = true;
 
-const SYNIMA_PERSIST_KEYS = {
-  // tree tab
-  names: "synima_tree_renames",
-  lineWidth: "synima_tree_line_width",
-  fontSize: "synima_tree_font_size",
-  alignLabels: "synima_tree_align_labels",
-  rootTip: "synima_tree_root_tip",
-
-  // Synteny tab
-  syntenyFontSize: "synima_synteny_font_size",
-  syntenyMode: "synima_synteny_mode"
-};
-
 // updates align taxa flag from storage
 function syncAlignFromStorage() {
   try {

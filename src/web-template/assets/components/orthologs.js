@@ -1,5 +1,3 @@
-window.SYNIMA = window.SYNIMA || {};
-
 SYNIMA.showOrthologs = function () {
   const app = document.getElementById("app");
   const data = JSON.parse(document.getElementById("data-orthologs").textContent);

@@ -1,5 +1,3 @@
-window.SYNIMA = window.SYNIMA || {};
-
 SYNIMA.renderHeader = function () {
   const el = document.getElementById("header");
 

@@ -1,5 +1,3 @@
-window.SYNIMA = window.SYNIMA || {};
-
 SYNIMA.showMethods = function () {
   const app = document.getElementById("app");
   const methodsRaw = document.getElementById("data-methods");
