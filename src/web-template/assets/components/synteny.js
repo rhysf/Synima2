@@ -60,6 +60,14 @@ function syncSyntenyModeFromStorage() {
         console.warn("Could not read background colour option from localStorage", e);
     }
 
+    // font colour
+    try {
+      const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor);
+      if (saved) window.SYNIMA_STATE.syntenyLabelColor = saved;
+    } catch (e) {
+        console.warn("Could not read contig colour option from localStorage", e);
+    }
+
     // contig colours
     try {
         const saved1 = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode);
@@ -378,6 +386,19 @@ SYNIMA.showSynteny = function () {
               </select>
             </label>
 
+            <!-- Contig label colour -->
+            <label style="margin-left: 10px;">
+              Label colour:
+              <select id="synteny-label-colour-select">
+                <option value="#ffffff">White</option>
+                <option value="#000000">Black</option>
+                <option value="#0f1b30">Navy</option>
+                <option value="#d1d5db">Light grey</option>
+                <option value="#fbbf24">Amber</option>
+                <option value="#93c5fd">Light blue</option>
+              </select>
+            </label>
+
         </fieldset>
 
       </div>
@@ -609,6 +630,21 @@ SYNIMA.showSynteny = function () {
       });
     }
 
+    // contig label colour
+    const labelColorSel = document.getElementById("synteny-label-colour-select");
+    if (labelColorSel) {
+      labelColorSel.value = window.SYNIMA_STATE.syntenyLabelColor || "#ffffff";
+
+      labelColorSel.addEventListener("change", () => {
+        const v = labelColorSel.value;
+        window.SYNIMA_STATE.syntenyLabelColor = v;
+        try {
+          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor, v);
+        } catch (e) {}
+        rerender();
+      });
+    }
+
     function rerender() {
         const mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || "spans";
 
@@ -786,6 +822,7 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyBlockColor = "#ffffff";
     window.SYNIMA_STATE.syntenyBlockOpacity = 0.5;
     window.SYNIMA_STATE.syntenyBgColor = "#0f1b30";
+    window.SYNIMA_STATE.syntenyLabelColor = "#ffffff";
 
     // tree width
     const tw = document.getElementById("synteny-tree-width-select");
@@ -828,6 +865,10 @@ SYNIMA.resetSynteny = function () {
     try { localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBgColor); } catch (e) {}
     applySyntenyBackground();
 
+    // contig label colour
+    const lc = document.getElementById("synteny-label-colour-select");
+    if (lc) lc.value = "#ffffff";
+
     // clear saved state
     try {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
@@ -845,6 +886,8 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockColor);
 
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockOpacity);
+
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor);
     } catch (e) {}
 
     // redraw
@@ -1168,6 +1211,7 @@ function renderSyntenySvg(blocks, config, maps, layout) {
     // colour and opacity
     const polyColor = (window.SYNIMA_STATE && window.SYNIMA_STATE.syntenyBlockColor) ? window.SYNIMA_STATE.syntenyBlockColor : "#ffffff";
     const polyFillOpacity = (window.SYNIMA_STATE && Number.isFinite(window.SYNIMA_STATE.syntenyBlockOpacity)) ? window.SYNIMA_STATE.syntenyBlockOpacity : 0.5;
+    const labelFill = (window.SYNIMA_STATE && window.SYNIMA_STATE.syntenyLabelColor) ? window.SYNIMA_STATE.syntenyLabelColor : "#ffffff";
 
     // keep stroke a bit lighter than fill
     const polyStrokeOpacity = Math.max(0, Math.min(1, polyFillOpacity * 0.5));
@@ -1270,7 +1314,7 @@ function renderSyntenySvg(blocks, config, maps, layout) {
                 ${
                 (label && w >= 25)
                   ? `<text x="${textX}" y="${textY}"
-                           fill="#ffffff"
+                           fill="${labelFill}"
                            font-size="${fontSize}"
                            text-anchor="middle"
                            style="pointer-events:none; user-select:none;">
@@ -1391,14 +1435,14 @@ function cloneSyntenySvgForExport(svgEl) {
     // Remove if you want “exactly as seen”.
     //clone.setAttribute("style", "background:#ffffff;");
 
-  // Recolor white text/strokes to black so it exports clearly.
-  clone.querySelectorAll("text").forEach(t => t.setAttribute("fill", "black"));
-  clone.querySelectorAll("polygon, rect, line, path").forEach(el => {
-    const s = el.getAttribute("stroke");
-    if (s && (s === "#fff" || s === "#ffffff" || s === "white")) el.setAttribute("stroke", "black");
-  });
+    // Recolor white text/strokes to black so it exports clearly.
+    //clone.querySelectorAll("text").forEach(t => t.setAttribute("fill", "black"));
+    //clone.querySelectorAll("polygon, rect, line, path").forEach(el => {
+    //    const s = el.getAttribute("stroke");
+    //    if (s && (s === "#fff" || s === "#ffffff" || s === "white")) el.setAttribute("stroke", "black");
+    //});
 
-  return clone;
+    return clone;
 }
 
 function svgViewBoxWH(svgEl) {
@@ -1485,8 +1529,6 @@ SYNIMA.exportSyntenyPng = function () {
     const ctx = canvas.getContext("2d");
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
 
-    // White background
-    //ctx.fillStyle = "white";
     // Background
     ctx.fillStyle = window.SYNIMA_STATE?.syntenyBgColor || "#0f1b30";
     ctx.fillRect(0, 0, img.width, img.height);
@@ -1508,82 +1550,80 @@ SYNIMA.exportSyntenyPng = function () {
 
 SYNIMA.exportSyntenyFigurePng = function () {
     const treeSvg = document.querySelector("#synteny-tree-mini svg");
-  const synSvg  = document.querySelector("#synteny-plot svg");
-  if (!treeSvg || !synSvg) return;
+    const synSvg  = document.querySelector("#synteny-plot svg");
+    if (!treeSvg || !synSvg) return;
 
-  const treeClone = treeSvg.cloneNode(true);
-  const synClone  = cloneSyntenySvgForExport(synSvg);
+    const treeClone = treeSvg.cloneNode(true);
+    const synClone  = cloneSyntenySvgForExport(synSvg);
 
-  const tWH = svgViewBoxWH(treeClone);
-  const sWH = svgViewBoxWH(synClone);
+    const tWH = svgViewBoxWH(treeClone);
+    const sWH = svgViewBoxWH(synClone);
 
-  treeClone.setAttribute("width", tWH.w);
-  treeClone.setAttribute("height", tWH.h);
-  synClone.setAttribute("width", sWH.w);
-  synClone.setAttribute("height", sWH.h);
+    treeClone.setAttribute("width", tWH.w);
+    treeClone.setAttribute("height", tWH.h);
+    synClone.setAttribute("width", sWH.w);
+    synClone.setAttribute("height", sWH.h);
 
-  const treeUrl = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(treeClone)], { type: "image/svg+xml" }));
-  const synUrl  = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(synClone)],  { type: "image/svg+xml" }));
+    const treeUrl = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(treeClone)], { type: "image/svg+xml" }));
+    const synUrl  = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(synClone)],  { type: "image/svg+xml" }));
 
-  const treeImg = new Image();
-  const synImg  = new Image();
+    const treeImg = new Image();
+    const synImg  = new Image();
 
-  let loaded = 0;
-  const done = () => {
-    loaded++;
-    if (loaded !== 2) return;
+    let loaded = 0;
+    const done = () => {
+        loaded++;
+        if (loaded !== 2) return;
 
-    const SCALE = 3;
+        const SCALE = 3;
 
-    // Shrink-only target height (prevents tree from getting bigger)
-    const targetH = Math.min(tWH.h, sWH.h);
+        // Shrink-only target height (prevents tree from getting bigger)
+        const targetH = Math.min(tWH.h, sWH.h);
 
-    // Scale tree to match target height
-    const treeScale = (tWH.h > 0) ? (targetH / tWH.h) : 1;
-    const synScale  = (sWH.h > 0) ? (targetH / sWH.h) : 1;
+        // Scale tree to match target height
+        const treeScale = (tWH.h > 0) ? (targetH / tWH.h) : 1;
+        const synScale  = (sWH.h > 0) ? (targetH / sWH.h) : 1;
 
-    const treeDrawW = tWH.w * treeScale;
-    const treeDrawH = targetH;
+        const treeDrawW = tWH.w * treeScale;
+        const treeDrawH = targetH;
 
-    // If synteny height differs, scale synteny too (normally this will be 1)
-    const synDrawW = sWH.w * synScale;
-    const synDrawH = targetH;
+        // If synteny height differs, scale synteny too (normally this will be 1)
+        const synDrawW = sWH.w * synScale;
+        const synDrawH = targetH;
 
-    const GAP = 10; // in SVG units, tweak (0, 5, 10, 20)
+        const GAP = 10; // in SVG units, tweak (0, 5, 10, 20)
 
-    //const outW = (tWH.w + sWH.w);
-    //const outH = Math.max(tWH.h, sWH.h);
-    const outW = treeDrawW + GAP + synDrawW;
-    const outH = targetH;
+        //const outW = (tWH.w + sWH.w);
+        //const outH = Math.max(tWH.h, sWH.h);
+        const outW = treeDrawW + GAP + synDrawW;
+        const outH = targetH;
 
-    const canvas = document.createElement("canvas");
-    canvas.width = outW * SCALE;
-    canvas.height = outH * SCALE;
+        const canvas = document.createElement("canvas");
+        canvas.width = outW * SCALE;
+        canvas.height = outH * SCALE;
 
-    const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d");
 
-    // scale first so everything below uses "SVG units"
-    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+        // scale first so everything below uses "SVG units"
+        ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
 
-    // dark background in SVG units
-    //ctx.fillStyle = "#0f1b30";
-    // Background colour
-    ctx.fillStyle = window.SYNIMA_STATE?.syntenyBgColor || "#0f1b30";
-    ctx.fillRect(0, 0, outW, outH);
+        // Background colour
+        ctx.fillStyle = window.SYNIMA_STATE?.syntenyBgColor || "#0f1b30";
+        ctx.fillRect(0, 0, outW, outH);
 
-    // draw both images in SVG units
-    ctx.drawImage(treeImg, 0, 0, treeDrawW, treeDrawH);
-    ctx.drawImage(synImg, treeDrawW + GAP, 0, synDrawW, synDrawH);
+        // draw both images in SVG units
+        ctx.drawImage(treeImg, 0, 0, treeDrawW, treeDrawH);
+        ctx.drawImage(synImg, treeDrawW + GAP, 0, synDrawW, synDrawH);
 
-    const pngUrl = canvas.toDataURL("image/png");
-    const a = document.createElement("a");
-    a.href = pngUrl;
-    a.download = "synima_tree_and_synteny.png";
-    a.click();
+        const pngUrl = canvas.toDataURL("image/png");
+        const a = document.createElement("a");
+        a.href = pngUrl;
+        a.download = "synima_tree_and_synteny.png";
+        a.click();
 
-    URL.revokeObjectURL(treeUrl);
-    URL.revokeObjectURL(synUrl);
-  };
+        URL.revokeObjectURL(treeUrl);
+        URL.revokeObjectURL(synUrl);
+    };
 
     treeImg.onload = done;
     synImg.onload = done;
