@@ -43,6 +43,6 @@ window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides = "synima_synteny_contig_overr
 
 window.SYNIMA_STATE.syntenyContigColorMode = window.SYNIMA_STATE.syntenyContigColorMode ?? "single"; // single | palette_by_genome
 window.SYNIMA_STATE.syntenyContigBaseColor = window.SYNIMA_STATE.syntenyContigBaseColor ?? "#6699cc";
-window.SYNIMA_STATE.syntenyContigPalette = window.SYNIMA_STATE.syntenyContigPalette ?? "palette1";
+window.SYNIMA_STATE.syntenyContigPalette = window.SYNIMA_STATE.syntenyContigPalette ?? "classic";
 window.SYNIMA_STATE.syntenyContigOverrides = window.SYNIMA_STATE.syntenyContigOverrides ?? {}; // {"genome|contig": "#rrggbb"}
 window.SYNIMA_STATE.selectedContigKey = window.SYNIMA_STATE.selectedContigKey ?? null;

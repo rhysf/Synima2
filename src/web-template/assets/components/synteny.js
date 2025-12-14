@@ -57,7 +57,7 @@ function syncSyntenyModeFromStorage() {
 
     if (!window.SYNIMA_STATE.syntenyContigColorMode) window.SYNIMA_STATE.syntenyContigColorMode = "single";
     if (!window.SYNIMA_STATE.syntenyContigBaseColor) window.SYNIMA_STATE.syntenyContigBaseColor = "#6699cc";
-    if (!window.SYNIMA_STATE.syntenyContigPalette) window.SYNIMA_STATE.syntenyContigPalette = "palette1";
+    if (!window.SYNIMA_STATE.syntenyContigPalette) window.SYNIMA_STATE.syntenyContigPalette = "classic";
 
     if (typeof window.SYNIMA_STATE.syntenyContigOverrides === "string") {
       try {
@@ -276,8 +276,13 @@ SYNIMA.showSynteny = function () {
             <option value="#ffffff">White</option>
             <option value="#ff0000">Red</option>
             <option value="#000000">Black</option>
-            <option value="palette1">Palette by genome 1</option>
-            <option value="pastel">Palette by genome 2</option>
+            <option value="classic">Palette: Classic</option>
+            <option value="pastel">Palette: Pastel</option>
+            <option value="muted">Palette: Muted</option>
+            <option value="okabe">Palette: Okabe</option>
+            <option value="vibrant">Palette: Vibrant</option>
+            <option value="cool">Palette: Cool</option>
+            <option value="warm">Palette: Warm</option>
           </select>
         </label>
 
@@ -453,7 +458,7 @@ SYNIMA.showSynteny = function () {
         try {
           localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode, window.SYNIMA_STATE.syntenyContigColorMode);
           localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyContigBaseColor, window.SYNIMA_STATE.syntenyContigBaseColor || "#6699cc");
-          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyContigPalette, window.SYNIMA_STATE.syntenyContigPalette || "palette1");
+          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyContigPalette, window.SYNIMA_STATE.syntenyContigPalette || "classic");
         } catch (e) {}
 
         rerender();
@@ -579,11 +584,26 @@ function applySyntenyTreeWidth() {
 
 function getGenomePaletteColor(idx, paletteName) {
   const palettes = {
-    palette1: ["#6699cc", "#8bb174", "#d6a84f", "#c77d7d", "#7fa6a3", "#b08fbf"],
+    classic: ["#6699cc", "#8bb174", "#d6a84f", "#c77d7d", "#7fa6a3", "#b08fbf"],
     pastel:   ["#a3c4f3", "#bde0fe", "#caffbf", "#ffd6a5", "#ffadad", "#d0bfff"],
+
+    // Softer but higher-contrast than pastel (nice with white text)
+    muted:    ["#4C78A8", "#59A14F", "#F28E2B", "#E15759", "#76B7B2", "#B07AA1"],
+
+    // Colorblind-friendly-ish (Okabe-Ito inspired, avoids “muddy” mixes)
+    okabe:    ["#56B4E9", "#009E73", "#E69F00", "#D55E00", "#CC79A7", "#F0E442"],
+
+    // Bold / punchy (good if you want genomes to pop)
+    vibrant:  ["#3B82F6", "#22C55E", "#F59E0B", "#EF4444", "#14B8A6", "#A855F7"],
+
+    // Cool tones only (very clean on dark UI)
+    cool:     ["#60A5FA", "#38BDF8", "#2DD4BF", "#34D399", "#A78BFA", "#818CF8"],
+
+    // Warm tones only (looks “paper/ink” on dark background)
+    warm:     ["#FCA5A5", "#FDBA74", "#FCD34D", "#FBBF24", "#FB7185", "#F472B6"],
   };
 
-  const pal = palettes[paletteName] || palettes.palette1;
+  const pal = palettes[paletteName] || palettes.classic;
   return pal[Math.abs(idx) % pal.length];
 }
 
