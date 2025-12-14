@@ -20,6 +20,17 @@ function syncSyntenyModeFromStorage() {
     } catch (e) {
         console.warn("Could not read synteny contig gap from localStorage", e);
     }
+
+    // track scale
+    try {
+        const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyTrackScale);
+        if (saved !== null) {
+            const n = parseFloat(saved);
+            if (!Number.isNaN(n) && n > 0) window.SYNIMA_STATE.syntenyTrackScale = n;
+        }
+    } catch (e) {
+        console.warn("Could not read synteny contig scale from localStorage", e);
+    }
 }
 
 SYNIMA.showSynteny = function () {
@@ -217,6 +228,18 @@ SYNIMA.showSynteny = function () {
           </select>
         </label>
 
+        <!-- contig box scale -->
+        <label style="margin-left: 10px;">
+          Contig box height:
+          <select id="synteny-track-scale-select">
+            <option value="0.75">0.75×</option>
+            <option value="1">1×</option>
+            <option value="1.25">1.25×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+
         <!-- contig gap -->
         <label style="margin-left: 10px;">
           Contig gap:
@@ -231,6 +254,7 @@ SYNIMA.showSynteny = function () {
             <option value="20">20</option>
           </select>
         </label>
+
 
     </div>
     `;
@@ -290,6 +314,23 @@ SYNIMA.showSynteny = function () {
                 rerender();
             }
         });
+    }
+
+    // contig box scale
+    const thSel = document.getElementById("synteny-track-scale-select");
+    if (thSel) {
+      thSel.value = String(window.SYNIMA_STATE.syntenyTrackScale ?? 1.0);
+
+      thSel.addEventListener("change", () => {
+        const n = parseFloat(thSel.value);
+        if (!Number.isNaN(n) && n > 0) {
+          window.SYNIMA_STATE.syntenyTrackScale = n;
+          try {
+            localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyTrackScale, String(n));
+          } catch (e) {}
+          rerender();
+        }
+      });
     }
 
     // contig gap
@@ -448,6 +489,7 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyFontSize = defaultFont;
     window.SYNIMA_STATE.syntenyMode = defaultMode;
     window.SYNIMA_STATE.syntenyGapPx = 0;
+    window.SYNIMA_STATE.syntenyTrackScale = 1.0;
 
     // reset UI: font select
     const fsSelect = document.getElementById("synteny-font-size-select");
@@ -459,6 +501,10 @@ SYNIMA.resetSynteny = function () {
     );
     if (modeRadio) modeRadio.checked = true;
 
+    // reset contig box scale
+    const thSel = document.getElementById("synteny-track-scale-select");
+    if (thSel) thSel.value = "1";
+
     // reset contig gap
     const gapSelect = document.getElementById("synteny-gap-select");
     if (gapSelect) gapSelect.value = "0";
@@ -467,6 +513,7 @@ SYNIMA.resetSynteny = function () {
     try {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyFontSize);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTrackScale);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyGap);
     } catch (e) {}
 
@@ -786,7 +833,7 @@ function renderSyntenySvg(blocks, config, maps, layout) {
         return topPad + idx * rowSpacing;
     };
 
-  const yFor = (gName) => (layout.yByGenome && layout.yByGenome[gName] !== undefined) ? layout.yByGenome[gName] : yFallback(gName);
+    const yFor = (gName) => (layout.yByGenome && layout.yByGenome[gName] !== undefined) ? layout.yByGenome[gName] : yFallback(gName);
 
 
     // Polygons first, then tracks and labels on top
@@ -840,8 +887,6 @@ function renderSyntenySvg(blocks, config, maps, layout) {
         // Contig font size
         const autoFontSize = Math.max(10, Math.min(18, trackHeight * 0.45));
         const stateFont = window.SYNIMA_STATE && Number.isFinite(window.SYNIMA_STATE.syntenyFontSize) ? window.SYNIMA_STATE.syntenyFontSize : null;
-        //const legacyFont = (typeof window.SYNIMA_SYNTENY_FONT_SIZE === "number" && Number.isFinite(window.SYNIMA_SYNTENY_FONT_SIZE)) ? window.SYNIMA_SYNTENY_FONT_SIZE : null;
-        //const userFontSize = stateFont ?? legacyFont ?? autoFontSize;
         const userFontSize = stateFont ?? autoFontSize;
 
         // optional clamp (keeps it sane)
@@ -850,7 +895,7 @@ function renderSyntenySvg(blocks, config, maps, layout) {
 
         // Center text in the rectangle
         const textX = x + w / 2;
-        const textY = yRect + trackHeight * 0.70;
+        const textY = yRect + trackHeight * 0.68;
 
         // <rect x="${x}" y="${rectY}" width="${w}" height="${rectH}" fill="#6699cc" stroke="white" stroke-width="1"></rect>
         //             fill-opacity="0.10"
@@ -907,6 +952,8 @@ function buildSyntenyLayout(config, maps) {
     const xStart = 10;
     const xPadRight = 10;
 
+
+
     // contig gaps
     const gapPx = window.SYNIMA_STATE?.syntenyGapPx ?? 0;
     // Find the maximum number of gaps on any genome row
@@ -940,34 +987,45 @@ function buildSyntenyLayout(config, maps) {
     // Derive row spacing from rendered tree tips, then choose a track height
     let trackHeight = 22; // fallback
 
-  if (yByGenome && Object.keys(yByGenome).length >= 2) {
-    const ys = Object.values(yByGenome).slice().sort((a, b) => a - b);
+    if (yByGenome && Object.keys(yByGenome).length >= 2) {
+        const ys = Object.values(yByGenome).slice().sort((a, b) => a - b);
 
-    // nearest-neighbour diffs
-    const diffs = [];
-    for (let i = 1; i < ys.length; i++) diffs.push(ys[i] - ys[i - 1]);
+        // nearest-neighbour diffs
+        const diffs = [];
+        for (let i = 1; i < ys.length; i++) diffs.push(ys[i] - ys[i - 1]);
 
-    // median diff is robust
-    diffs.sort((a, b) => a - b);
-    const med = diffs[Math.floor(diffs.length / 2)] || 30;
+        // median diff is robust
+        diffs.sort((a, b) => a - b);
+        const med = diffs[Math.floor(diffs.length / 2)] || 30;
 
-    // track height as a fraction of row spacing
-    trackHeight = Math.max(10, Math.min(20, med * 0.325));
+        // track height as a fraction of row spacing
+        trackHeight = Math.max(10, Math.min(20, med * 0.325));
 
-    //console.log("Median tree row spacing:", med, "→ trackHeight:", trackHeight);
-  }
+        // user multiplier:
+        const fontPx = window.SYNIMA_STATE?.syntenyFontSize ?? 12;
+        const scale = window.SYNIMA_STATE?.syntenyTrackScale ?? 1.0;
+        trackHeight = trackHeight * scale;
 
-  return {
-    plotWidthPx,
-    treeHeightPx,
-    xStart,
-    xPadRight,
-    usablePlotWidth,
-    scaleX,
-    gapPx,
-    yByGenome,
-    trackHeight
-  };
+        // guarantee label fits inside box (+ a little padding):
+        trackHeight = Math.max(trackHeight, fontPx + 6);
+
+        // final clamp (optional, keeps it sane)
+        trackHeight = Math.max(10, Math.min(120, trackHeight));
+
+        //console.log("Median tree row spacing:", med, "→ trackHeight:", trackHeight);
+    }
+
+    return {
+        plotWidthPx,
+        treeHeightPx,
+        xStart,
+        xPadRight,
+        usablePlotWidth,
+        scaleX,
+        gapPx,
+        yByGenome,
+        trackHeight
+    };
 }
 
 function cloneSyntenySvgForExport(svgEl) {

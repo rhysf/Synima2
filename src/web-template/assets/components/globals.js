@@ -21,3 +21,6 @@ window.SYNIMA_STATE.syntenyMode = window.SYNIMA_STATE.syntenyMode ?? "spans";
 
 window.SYNIMA_PERSIST_KEYS.syntenyGap = "synima_synteny_gap_px";
 window.SYNIMA_STATE.syntenyGapPx = window.SYNIMA_STATE.syntenyGapPx ?? 0;
+
+window.SYNIMA_PERSIST_KEYS.syntenyTrackScale = "synima_synteny_track_scale";
+window.SYNIMA_STATE.syntenyTrackScale = window.SYNIMA_STATE.syntenyTrackScale ?? 1.0;
