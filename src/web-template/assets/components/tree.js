@@ -4,11 +4,15 @@ window.SYNIMA = window.SYNIMA || {};
 let SYNIMA_ALIGN_LABELS = true;
 
 const SYNIMA_PERSIST_KEYS = {
+  // tree tab
   names: "synima_tree_renames",
   lineWidth: "synima_tree_line_width",
   fontSize: "synima_tree_font_size",
   alignLabels: "synima_tree_align_labels",
-  rootTip: "synima_tree_root_tip"
+  rootTip: "synima_tree_root_tip",
+
+  // Synteny tab
+  syntenyFontSize: "synima_synteny_font_size"
 };
 
 // updates align taxa flag from storage
@@ -33,12 +37,15 @@ let SYNIMA_TREES = {
   current: null
 };
 
+// tree tab
 SYNIMA_TAXON_NAMES = {}; // mapping oldName → newName
 SYNIMA.selectedLabelName = null;   // currently selected displayed name
 SYNIMA.annotateArmed = false;  // tracks "Annotate" armed state
 let SYNIMA_LINE_WIDTH = 2;   // default stroke width
 let SYNIMA_FONT_SIZE = 14;   // default tip label font-size
 
+// synteny tab
+let SYNIMA_SYNTENY_FONT_SIZE = 12;
 
 // Apply stored renames to a cloned tree
 function applyRenamedTaxa(node) {
@@ -946,12 +953,16 @@ SYNIMA.showTree = function () {
     <label style="margin-left: 10px;">
       Font size:
       <select id="font-size-select">
+        <option value="6">6</option>
+        <option value="8">8</option>
         <option value="10">10</option>
         <option value="12">12</option>
         <option value="14">14</option>
         <option value="16">16</option>
         <option value="18">18</option>
         <option value="20">20</option>
+        <option value="22">22</option>
+        <option value="24">24</option>
       </select>
     </label>
 

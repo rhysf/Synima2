@@ -174,6 +174,25 @@ SYNIMA.showSynteny = function () {
           <input type="radio" name="synteny-mode" value="aligncoords">
           Gene synteny 
         </label>
+
+        <!-- label size -->
+        <label style="margin-left: 10px;">
+          Contig font size:
+          <select id="synteny-font-size-select">
+            <option value="6">6</option>
+            <option value="8">8</option>
+            <option value="10">10</option>
+            <option value="12">12</option>
+            <option value="14">14</option>
+            <option value="16">16</option>
+            <option value="18">18</option>
+            <option value="20">20</option>
+            <option value="22">22</option>
+            <option value="24">24</option>
+          </select>
+        </label>
+
+
     </div>
 
   `;
@@ -241,6 +260,26 @@ SYNIMA.showSynteny = function () {
 
     rerender();
     SYNIMA._syntenyRerender = rerender;
+
+    // add label size option
+    const syFsSelect = document.getElementById("synteny-font-size-select");
+    if (syFsSelect) {
+      // set the UI to the persisted value whenever you enter the tab
+      syFsSelect.value = String(SYNIMA_SYNTENY_FONT_SIZE);
+
+      syFsSelect.addEventListener("change", () => {
+        const n = parseInt(syFsSelect.value, 10);
+        if (!Number.isNaN(n)) {
+          SYNIMA_SYNTENY_FONT_SIZE = n;
+          try {
+            localStorage.setItem(SYNIMA_PERSIST_KEYS.syntenyFontSize, String(n));
+          } catch (e) {
+            console.warn("Could not write synteny font size to localStorage", e);
+          }
+          rerender();
+        }
+      });
+    }
 
 
     // Add hover tooltip
@@ -319,6 +358,20 @@ SYNIMA.showSynteny = function () {
 // Helpers
 // ----------------------------
 
+// Pull from storage once at load
+function syncSyntenyFontFromStorage() {
+  try {
+    const saved = localStorage.getItem(SYNIMA_PERSIST_KEYS.syntenyFontSize);
+    if (saved !== null) {
+      const n = parseInt(saved, 10);
+      if (!Number.isNaN(n)) SYNIMA_SYNTENY_FONT_SIZE = n;
+    }
+  } catch (e) {
+    console.warn("Could not read synteny font size from localStorage", e);
+  }
+}
+syncSyntenyFontFromStorage();
+
 
 // Safe HTML for <pre>
 function escapeHtml(str) {
@@ -344,26 +397,32 @@ function parseStartStop(ss) {
   return [a, b];
 }
 
-let _measureCtx = null;
+//let _measureCtx = null;
 
 function getMeasureCtx(fontPx) {
-  if (!_measureCtx) {
-    const c = document.createElement("canvas");
-    _measureCtx = c.getContext("2d");
-  }
-  _measureCtx.font = `${fontPx}px sans-serif`;
-  return _measureCtx;
+  //if (!_measureCtx) {
+    if (!getMeasureCtx._ctx) {
+        const c = document.createElement("canvas");
+        //_measureCtx = c.getContext("2d");
+        getMeasureCtx._ctx = c.getContext("2d");
+    }
+    const ctx = getMeasureCtx._ctx;
+    //_measureCtx.font = `${fontPx}px sans-serif`;
+    //return _measureCtx;
+    ctx.font = `${fontPx}px sans-serif`;
+    return ctx;
 }
 
 function trimLabelToWidth(text, maxW, fontPx) {
-  const ctx = getMeasureCtx(fontPx);
-  if (ctx.measureText(text).width <= maxW) return text;
+    if (!text || maxW <= 0) return "";
+    const ctx = getMeasureCtx(fontPx);
+    if (ctx.measureText(text).width <= maxW) return text;
 
-  let trimmed = text;
-  while (trimmed.length > 0 && ctx.measureText(trimmed + "…").width > maxW) {
-    trimmed = trimmed.slice(0, -1);
-  }
-  return trimmed.length ? (trimmed + "…") : "";
+    let trimmed = text;
+    while (trimmed.length > 0 && ctx.measureText(trimmed + "…").width > maxW) {
+        trimmed = trimmed.slice(0, -1);
+    }
+    return trimmed.length ? (trimmed + "…") : "";
 }
 
 function getGenomeOrderForAdjacency(config) {
@@ -660,7 +719,14 @@ function renderSyntenySvg(blocks, config, maps, layout) {
         const w = bpLen * layout.scaleX;
         if (w <= 0) continue;
 
-        const fontSize = Math.max(10, Math.min(18, trackHeight * 0.45));
+        //const fontSize = Math.max(10, Math.min(18, trackHeight * 0.45));
+        const autoFontSize = Math.max(10, Math.min(18, trackHeight * 0.45));
+        const userFontSize = (typeof SYNIMA_SYNTENY_FONT_SIZE === "number" && !Number.isNaN(SYNIMA_SYNTENY_FONT_SIZE))
+          ? SYNIMA_SYNTENY_FONT_SIZE
+          : autoFontSize;
+
+        // optional clamp (keeps it sane)
+        const fontSize = Math.max(6, Math.min(30, userFontSize));
         const label = trimLabelToWidth(contig, w - 6, fontSize);
 
         // Center text in the rectangle
