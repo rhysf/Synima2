@@ -41,7 +41,59 @@ SYNIMA.showSynteny = function () {
     // ----------------------------
     // Debug section
     // ----------------------------
-    let html = "<h1>Synteny Viewer</h1>";
+    let html = `<div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:6px;"><h1>Synteny Viewer</h1>`;
+    html += `<div style="position:relative; display:inline-block;">
+      <button id="synteny-download-btn" style="padding:2px 6px; margin:0;">
+        Download ▾
+      </button>
+
+      <div id="synteny-download-dropdown"
+           class="hidden"
+           style="
+             position:absolute;
+             right:0;
+             top:100%;
+             margin-top:2px;
+             background:white;
+             color:black;
+             border:1px solid #ccc;
+             border-radius:4px;
+             box-shadow:0 2px 4px rgba(0,0,0,0.2);
+             z-index:1000;
+             width:140px;
+           ">
+
+        <button id="synteny-download-svg"
+          style="display:block; width:100%; text-align:left; padding:4px 8px; border:none; background:none; cursor:pointer;"
+          onmouseover="this.style.background='#e5e5e5'"
+          onmouseout="this.style.background='none'">
+          Synteny (SVG)
+        </button>
+
+        <button id="synteny-download-png"
+          style="display:block; width:100%; text-align:left; padding:4px 8px; border:none; background:none; cursor:pointer;"
+          onmouseover="this.style.background='#e5e5e5'"
+          onmouseout="this.style.background='none'">
+          Synteny (PNG)
+        </button>
+
+        <button id="synteny-download-figure-png"
+          style="display:block; width:100%; text-align:left; padding:4px 8px; border:none; background:none; cursor:pointer;"
+          onmouseover="this.style.background='#e5e5e5'"
+          onmouseout="this.style.background='none'">
+          Tree + Synteny (PNG)
+        </button>
+
+        <button id="synteny-download-figure-svg"
+          style="display:block; width:100%; text-align:left; padding:4px 8px; border:none; background:none; cursor:pointer;"
+          onmouseover="this.style.background='#e5e5e5'"
+          onmouseout="this.style.background='none'">
+          Tree + Synteny (SVG)
+        </button>
+
+      </div>
+    </div>
+    </div>`;
     //html += `<p>Num genomes: ${config.num_genomes}</p>`;
     //html += `<p>Max genome length: ${config.max_length}</p>`;
     //html += `<p>Halfway index: ${config.halfway}</p>`;
@@ -227,6 +279,38 @@ SYNIMA.showSynteny = function () {
     // Ensure tooltip disappears if the mouse leaves the synteny area entirely
     plotEl.addEventListener("mouseleave", () => {
         tooltip.style.display = "none";
+    });
+
+    const dlBtn = document.getElementById("synteny-download-btn");
+    const dlMenu = document.getElementById("synteny-download-dropdown");
+
+    dlBtn?.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      dlMenu.classList.toggle("hidden");
+    });
+
+    document.getElementById("synteny-download-svg")?.addEventListener("click", () => {
+      dlMenu.classList.add("hidden");
+      SYNIMA.exportSyntenySvg();
+    });
+
+    document.getElementById("synteny-download-png")?.addEventListener("click", () => {
+      dlMenu.classList.add("hidden");
+      SYNIMA.exportSyntenyPng();
+    });
+
+    document.getElementById("synteny-download-figure-png")?.addEventListener("click", () => {
+      dlMenu.classList.add("hidden");
+      SYNIMA.exportSyntenyFigurePng();
+    });
+
+    document.getElementById("synteny-download-figure-svg")?.addEventListener("click", () => {
+      dlMenu.classList.add("hidden");
+      SYNIMA.exportSyntenyFigureSvg();
+    });
+
+    document.addEventListener("click", () => {
+      dlMenu?.classList.add("hidden");
     });
 
 }
@@ -688,185 +772,290 @@ function buildSyntenyLayout(config) {
   };
 }
 
+function cloneSyntenySvgForExport(svgEl) {
+    const clone = svgEl.cloneNode(true);
 
-// The old stuff:
-/*
-    
+    // if your styling is CSS-driven, do this:
+    inlineSvgComputedStyles(clone);
 
-    // Render the Synteny browser
-    // Phase 1: Basic synteny contig rectangles
-    function renderSynteny() {
+    // bake in the same dark background you use on-screen:
+    addSvgBackgroundRect(clone, "#0f1b30");   // or "#111" if you prefer
 
-        const container = document.getElementById("synteny-main");
-        if (!container) return;
+  // Make exports print-friendly (optional).
+  // Remove if you want “exactly as seen”.
+  clone.setAttribute("style", "background:#ffffff;");
 
-        const genomes = config.genomes;
+  // Recolor white text/strokes to black so it exports clearly.
+  clone.querySelectorAll("text").forEach(t => t.setAttribute("fill", "black"));
+  clone.querySelectorAll("polygon, rect, line, path").forEach(el => {
+    const s = el.getAttribute("stroke");
+    if (s && (s === "#fff" || s === "#ffffff" || s === "white")) el.setAttribute("stroke", "black");
+  });
 
-        // Map genome names to genome objects for quick lookup
-        const genomeMap = {};
-        genomes.forEach(g => genomeMap[g.name] = g);
+  return clone;
+}
 
-        // Take the ordered list from the tree
-        const orderedGenomes = genomeOrder
-            .map(name => genomeMap[name])
-            .filter(x => x);   // drop missing names
+function svgViewBoxWH(svgEl) {
+  const vb = (svgEl.getAttribute("viewBox") || "").trim();
+  if (!vb) return { w: 1200, h: 600 };
+  const parts = vb.split(/\s+/).map(Number);
+  return { w: parts[2] || 1200, h: parts[3] || 600 };
+}
 
-        // Determine the actual width available for synteny
-        const mainDiv = document.getElementById("synteny-main");
-        //const availableWidth = mainDiv ? mainDiv.clientWidth : 800;
-        const usable = mainDiv.getBoundingClientRect().width;
+function addSvgBackgroundRect(svgEl, fill) {
+  const vb = (svgEl.getAttribute("viewBox") || "").split(/\s+/).map(Number);
+  if (vb.length !== 4 || vb.some(n => Number.isNaN(n))) return;
+  const [, , vbW, vbH] = vb;
 
-        // Give synteny the max width available
-        const plotWidthPx = Math.max(400, usable);
+  const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  r.setAttribute("x", "0");
+  r.setAttribute("y", "0");
+  r.setAttribute("width", String(vbW));
+  r.setAttribute("height", String(vbH));
+  r.setAttribute("fill", fill);
 
-        // Find max genome length for scaling
-        const maxLen = config.max_length;
-        const scale = plotWidthPx / maxLen;
+  svgEl.insertBefore(r, svgEl.firstChild);
+}
 
-        // Helper: trim label to fit inside rectangle
-        function trimLabelToWidth(ctx, text, maxW) {
-            if (ctx.measureText(text).width <= maxW) return text;
-            let trimmed = text;
-            while (trimmed.length > 0 && ctx.measureText(trimmed + "…").width > maxW) {
-                trimmed = trimmed.slice(0, -1);
-            }
-            return trimmed.length === 0 ? "" : trimmed + "…";
-        }
+// Optional, but makes exports robust if your colors come from CSS classes:
+function inlineSvgComputedStyles(svgEl) {
+  const nodes = svgEl.querySelectorAll("*");
+  nodes.forEach(n => {
+    const cs = window.getComputedStyle(n);
 
-        // Pre-create canvas to measure text width
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-        ctx.font = "14px sans-serif";
+    // Only inline what we care about for visible output
+    if (cs.fill) n.setAttribute("fill", cs.fill);
+    if (cs.stroke) n.setAttribute("stroke", cs.stroke);
+    if (cs.strokeWidth) n.setAttribute("stroke-width", cs.strokeWidth);
 
-        // Must have mini-tree Y positions
-        const tipY = SYNIMA.tipYPositions || {};
-
-        if (!Object.keys(tipY).length) {
-            console.warn("Mini-tree tip positions missing: synteny rows cannot align.");
-        }
-
-        //const maxSVGHeight = Math.max(...Object.values(tipY)) + 60;
-
-        const renderedTreeHeight = SYNIMA.renderedTreeHeight || 300; // fallback
-        const maxSVGHeight = renderedTreeHeight;
-
-        let html = `
-          <svg width="100%"
-               viewBox="0 0 ${plotWidthPx} ${maxSVGHeight}"
-               preserveAspectRatio="xMinYMin meet"
-               style="background:#222; border:1px solid #444;">
-        `;
-
-        orderedGenomes.forEach(g => {
-
-            const original = SYNIMA.originalMiniTreeHeight || 300;
-            const rendered = SYNIMA.renderedTreeHeight || 300;
-
-            // vertical scale factor
-            let vScale = rendered / original;
-
-            // clamp to avoid extreme squashing/stretching
-            //vScale = Math.min(1.5, Math.max(0.7, vScale));
-
-            const yBase = tipY[g.name] ?? 0;
-            const yAdj  = yBase * vScale - 4;
-
-            // taxa label
-            //html += `
-            //  <text x="10" y="${yAdj + 5}" fill="white" font-size="14">${g.name}</text>
-            //`;
-
-            const xStart = 10;   // instead of 150
-            let x = xStart;
-
-            g.inferred_order.forEach(ctgName => {
-                const contig = g.contigs.find(c => c.contig === ctgName);
-                if (!contig) return;
-
-                const w = contig.length * scale;
-                const trimmed = trimLabelToWidth(ctx, ctgName, w - 6);
-
-                // Dynamically scale rectangle height based on vScale
-                const baseRectHeight = 40;
-                const rectH = Math.max(6, baseRectHeight * vScale);   // never let it go to zero
-                const rectY = yAdj - rectH / 2;
-
-                // Scale font size gently so labels remain readable
-                const baseFont = 12;
-                const fontSize = Math.max(8, baseFont * vScale);
-
-                // Text baseline adjustment (keeps text centered vertically)
-                const textY = rectY + rectH * 0.70;
-
-                // Center of the rectangle in X
-                const textX = x + w / 2;
-
-                html += `
-                  <g class="synteny-ctg"
-                     data-genome="${g.name}"
-                     data-contig="${ctgName}"
-                     data-orientation="+">
-
-                    <rect x="${x}" y="${rectY}" width="${w}" height="${rectH}"
-                          fill="#6699cc" stroke="white" stroke-width="1"></rect>
-
-                    ${
-                      trimmed
-                        ? `<text x="${textX}" y="${textY}"
-                                 fill="white" font-size="12" text-anchor="middle">${trimmed}</text>`
-                        : ""
-                    }
-                  </g>
-                `;
-
-                x += w;
-            });
-        });
-
-        html += `</svg>`;
-        container.innerHTML = html;
-
-        // Add hover tooltip
-        const tooltip = document.createElement("div");
-        tooltip.style.cssText = `
-            position:absolute; background:#333; color:white;
-            padding:5px 8px; border-radius:4px; font-size:12px;
-            pointer-events:none; display:none; z-index:99999;
-        `;
-        document.body.appendChild(tooltip);
-
-        container.addEventListener("mousemove", e => {
-            const ctg = e.target.closest(".synteny-ctg");
-            if (!ctg) {
-                tooltip.style.display = "none";
-                return;
-            }
-
-            const g = ctg.dataset.genome;
-            const c = ctg.dataset.contig;
-            const o = ctg.dataset.orientation;
-
-            tooltip.innerHTML = `
-                <b>${g}</b><br>
-                Contig: ${c}<br>
-                Orientation: ${o}
-            `;
-
-            tooltip.style.left = (e.pageX + 12) + "px";
-            tooltip.style.top = (e.pageY + 12) + "px";
-            tooltip.style.display = "block";
-        });
-
-        // Ensure tooltip disappears if the mouse leaves the synteny area entirely
-        container.addEventListener("mouseleave", () => {
-            tooltip.style.display = "none";
-        });
-
+    if (n.tagName.toLowerCase() === "text") {
+      if (cs.fontSize) n.setAttribute("font-size", cs.fontSize);
+      if (cs.fontFamily) n.setAttribute("font-family", cs.fontFamily);
     }
+  });
+}
 
+SYNIMA.exportSyntenySvg = function () {
+  const svgEl = document.querySelector("#synteny-plot svg");
+  if (!svgEl) return;
+
+  const clone = cloneSyntenySvgForExport(svgEl);
+  const svgData = new XMLSerializer().serializeToString(clone);
+
+  const blob = new Blob([svgData], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "synima_synteny.svg";
+  a.click();
+
+  URL.revokeObjectURL(url);
 };
 
-*/
+SYNIMA.exportSyntenyPng = function () {
+  const svgEl = document.querySelector("#synteny-plot svg");
+  if (!svgEl) return;
+
+  const clone = cloneSyntenySvgForExport(svgEl);
+
+  // Critical: set explicit width/height from viewBox
+  const { w, h } = svgViewBoxWH(clone);
+  clone.setAttribute("width", w);
+  clone.setAttribute("height", h);
+
+  const svgData = new XMLSerializer().serializeToString(clone);
+  const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+
+  const img = new Image();
+  img.onload = function () {
+    const SCALE = 3;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width * SCALE;
+    canvas.height = img.height * SCALE;
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+
+    // White background
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, img.width, img.height);
+
+    ctx.drawImage(img, 0, 0);
+
+    const pngUrl = canvas.toDataURL("image/png");
+
+    const a = document.createElement("a");
+    a.href = pngUrl;
+    a.download = "synima_synteny.png";
+    a.click();
+
+    URL.revokeObjectURL(url);
+  };
+
+  img.src = url;
+};
+
+SYNIMA.exportSyntenyFigurePng = function () {
+  const treeSvg = document.querySelector("#synteny-tree-mini svg");
+  const synSvg  = document.querySelector("#synteny-plot svg");
+  if (!treeSvg || !synSvg) return;
+
+  const treeClone = treeSvg.cloneNode(true);
+  const synClone  = cloneSyntenySvgForExport(synSvg);
+
+  const tWH = svgViewBoxWH(treeClone);
+  const sWH = svgViewBoxWH(synClone);
+
+  treeClone.setAttribute("width", tWH.w);
+  treeClone.setAttribute("height", tWH.h);
+  synClone.setAttribute("width", sWH.w);
+  synClone.setAttribute("height", sWH.h);
+
+  const treeUrl = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(treeClone)], { type: "image/svg+xml" }));
+  const synUrl  = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(synClone)],  { type: "image/svg+xml" }));
+
+  const treeImg = new Image();
+  const synImg  = new Image();
+
+  let loaded = 0;
+  const done = () => {
+    loaded++;
+    if (loaded !== 2) return;
+
+    const SCALE = 3;
+
+    // Shrink-only target height (prevents tree from getting bigger)
+    const targetH = Math.min(tWH.h, sWH.h);
+
+    // Scale tree to match target height
+    const treeScale = (tWH.h > 0) ? (targetH / tWH.h) : 1;
+    const synScale  = (sWH.h > 0) ? (targetH / sWH.h) : 1;
+
+    const treeDrawW = tWH.w * treeScale;
+    const treeDrawH = targetH;
+
+    // If synteny height differs, scale synteny too (normally this will be 1)
+    const synDrawW = sWH.w * synScale;
+    const synDrawH = targetH;
+
+    const GAP = 10; // in SVG units, tweak (0, 5, 10, 20)
+
+    //const outW = (tWH.w + sWH.w);
+    //const outH = Math.max(tWH.h, sWH.h);
+    const outW = treeDrawW + GAP + synDrawW;
+    const outH = targetH;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = outW * SCALE;
+    canvas.height = outH * SCALE;
+
+    const ctx = canvas.getContext("2d");
+
+    // scale first so everything below uses "SVG units"
+    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+
+    // dark background in SVG units
+    ctx.fillStyle = "#0f1b30";
+    ctx.fillRect(0, 0, outW, outH);
+
+    // draw both images in SVG units
+    ctx.drawImage(treeImg, 0, 0, treeDrawW, treeDrawH);
+    ctx.drawImage(synImg, treeDrawW + GAP, 0, synDrawW, synDrawH);
+
+    const pngUrl = canvas.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = pngUrl;
+    a.download = "synima_tree_and_synteny.png";
+    a.click();
+
+    URL.revokeObjectURL(treeUrl);
+    URL.revokeObjectURL(synUrl);
+  };
+
+  treeImg.onload = done;
+  synImg.onload = done;
+
+  treeImg.src = treeUrl;
+  synImg.src  = synUrl;
+};
+
+SYNIMA.exportSyntenyFigureSvg = function () {
+  const treeSvg = document.querySelector("#synteny-tree-mini svg");
+  const synSvg  = document.querySelector("#synteny-plot svg");
+  if (!treeSvg || !synSvg) return;
+
+  const GAP = 10;                // SVG units
+  const BG  = "#0f1b30";         // same as your panel background
+
+  // Clone originals
+  const treeClone = treeSvg.cloneNode(true);
+  const synClone  = cloneSyntenySvgForExport(synSvg);
+
+  // Ensure viewBox exists and get dimensions
+  const tWH = svgViewBoxWH(treeClone);
+  const sWH = svgViewBoxWH(synClone);
+
+  // Target height = synteny height (so they align)
+  const targetH = sWH.h || tWH.h || 300;
+
+  // Scale tree to match target height
+  const treeScale = (tWH.h > 0) ? (targetH / tWH.h) : 1;
+  const treeDrawW = tWH.w * treeScale;
+  const treeDrawH = targetH;
+
+  // Synteny scale (normally 1 because targetH = sWH.h)
+  const synScale = (sWH.h > 0) ? (targetH / sWH.h) : 1;
+  const synDrawW = sWH.w * synScale;
+  const synDrawH = targetH;
+
+  const outW = treeDrawW + GAP + synDrawW;
+  const outH = targetH;
+
+  // Wrapper SVG
+  const ns = "http://www.w3.org/2000/svg";
+  const wrapper = document.createElementNS(ns, "svg");
+  wrapper.setAttribute("xmlns", ns);
+  wrapper.setAttribute("width", outW);
+  wrapper.setAttribute("height", outH);
+  wrapper.setAttribute("viewBox", `0 0 ${outW} ${outH}`);
+
+  // Background rect
+  const bg = document.createElementNS(ns, "rect");
+  bg.setAttribute("x", "0");
+  bg.setAttribute("y", "0");
+  bg.setAttribute("width", outW);
+  bg.setAttribute("height", outH);
+  bg.setAttribute("fill", BG);
+  wrapper.appendChild(bg);
+
+  // Put tree inside a <g> and scale it
+  const gTree = document.createElementNS(ns, "g");
+  gTree.setAttribute("transform", `translate(0 0) scale(${treeScale})`);
+  // move children (not the outer <svg>) into the group
+  while (treeClone.childNodes.length) gTree.appendChild(treeClone.childNodes[0]);
+  wrapper.appendChild(gTree);
+
+  // Put synteny inside a <g> and translate + scale it
+  const gSyn = document.createElementNS(ns, "g");
+  gSyn.setAttribute("transform", `translate(${treeDrawW + GAP} 0) scale(${synScale})`);
+  while (synClone.childNodes.length) gSyn.appendChild(synClone.childNodes[0]);
+  wrapper.appendChild(gSyn);
+
+  // Download
+  const svgData = new XMLSerializer().serializeToString(wrapper);
+  const blob = new Blob([svgData], { type: "image/svg+xml" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "synima_tree_and_synteny.svg";
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
 
 window.addEventListener("resize", () => {
   if (window.SYNIMA && SYNIMA.currentPage === "synteny") {
