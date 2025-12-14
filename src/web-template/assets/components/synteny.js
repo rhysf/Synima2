@@ -1,13 +1,25 @@
 
 function syncSyntenyModeFromStorage() {
-  try {
-    const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
-    if (saved === "spans" || saved === "aligncoords") {
-      window.SYNIMA_STATE.syntenyMode = saved;
+    // synteny mode (spans vs gene/aligncoords)
+    try {
+        const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
+        if (saved === "spans" || saved === "aligncoords") {
+            window.SYNIMA_STATE.syntenyMode = saved;
+        }
+    } catch (e) {
+        console.warn("Could not read synteny mode from localStorage", e);
     }
-  } catch (e) {
-    console.warn("Could not read synteny mode from localStorage", e);
-  }
+
+    // contig gaps
+    try {
+        const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyGap);
+        if (saved !== null) {
+            const n = parseInt(saved, 10);
+            if (!Number.isNaN(n)) window.SYNIMA_STATE.syntenyGapPx = n;
+        }
+    } catch (e) {
+        console.warn("Could not read synteny contig gap from localStorage", e);
+    }
 }
 
 SYNIMA.showSynteny = function () {
@@ -205,6 +217,21 @@ SYNIMA.showSynteny = function () {
           </select>
         </label>
 
+        <!-- contig gap -->
+        <label style="margin-left: 10px;">
+          Contig gap:
+          <select id="synteny-gap-select">
+            <option value="0">0</option>
+            <option value="2">2</option>
+            <option value="4">4</option>
+            <option value="6">6</option>
+            <option value="8">8</option>
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
+          </select>
+        </label>
+
     </div>
     `;
 
@@ -228,20 +255,16 @@ SYNIMA.showSynteny = function () {
       console.warn("synteny: SYNIMA_TREES.current missing, cannot render mini tree");
     }
 
-    const statsEl = document.getElementById("synteny-stats");
-    const previewEl = document.getElementById("synteny-preview");
+    //const statsEl = document.getElementById("synteny-stats");
+    //const previewEl = document.getElementById("synteny-preview");
     const plotEl = document.getElementById("synteny-plot");
 
     const maps = buildGenomeMaps(config);
 
-    
     const mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || window.SYNIMA_STATE.syntenyMode || "spans";
     const radio = document.querySelector(`input[name="synteny-mode"][value="${mode}"]`);
     if (radio) radio.checked = true;
 
-    //document.querySelectorAll('input[name="synteny-mode"]').forEach(el => {
-    //    el.addEventListener("change", rerender);
-    //});
     document.querySelectorAll('input[name="synteny-mode"]').forEach(el => {
       el.addEventListener("change", () => {
         window.SYNIMA_STATE.syntenyMode = el.value;
@@ -269,6 +292,23 @@ SYNIMA.showSynteny = function () {
         });
     }
 
+    // contig gap
+    const gapSelect = document.getElementById("synteny-gap-select");
+    if (gapSelect) {
+      gapSelect.value = String(window.SYNIMA_STATE.syntenyGapPx ?? 0);
+
+      gapSelect.addEventListener("change", () => {
+        const n = parseInt(gapSelect.value, 10);
+        if (!Number.isNaN(n)) {
+          window.SYNIMA_STATE.syntenyGapPx = n;
+          try {
+            localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyGap, String(n));
+          } catch (e) {}
+          rerender();
+        }
+      });
+    }
+
 
     function rerender() {
         const mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || "spans";
@@ -280,8 +320,8 @@ SYNIMA.showSynteny = function () {
           blocks = parseAligncoordsText(aligncoords);
         }
 
-        //const prepared = prepareBlocksForPlot(blocks, config, maps);
-        const layout = buildSyntenyLayout(config);
+        const maps = buildGenomeMaps(config);
+        const layout = buildSyntenyLayout(config, maps);
         const prepared = prepareBlocksForPlot(blocks, config, maps, layout);
 
         //statsEl.textContent =
@@ -303,7 +343,6 @@ SYNIMA.showSynteny = function () {
         //  })
         //  .join("\n");
 
-        //plotEl.innerHTML = renderSyntenySvg(prepared.blocks, config);
         plotEl.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
     }
 
@@ -408,6 +447,7 @@ SYNIMA.resetSynteny = function () {
     // reset state
     window.SYNIMA_STATE.syntenyFontSize = defaultFont;
     window.SYNIMA_STATE.syntenyMode = defaultMode;
+    window.SYNIMA_STATE.syntenyGapPx = 0;
 
     // reset UI: font select
     const fsSelect = document.getElementById("synteny-font-size-select");
@@ -419,10 +459,15 @@ SYNIMA.resetSynteny = function () {
     );
     if (modeRadio) modeRadio.checked = true;
 
+    // reset contig gap
+    const gapSelect = document.getElementById("synteny-gap-select");
+    if (gapSelect) gapSelect.value = "0";
+
     // clear saved state
     try {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyFontSize);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyGap);
     } catch (e) {}
 
     // redraw
@@ -643,11 +688,11 @@ function prepareBlocksForPlot(blocks, config, maps, layout) {
     const scale = layout.scaleX;
     const x0 = layout.xStart;
 
-  let skippedUnknownGenome = 0;
-  let skippedUnknownContig = 0;
-  let skippedNonAdjacent = 0;
+    let skippedUnknownGenome = 0;
+    let skippedUnknownContig = 0;
+    let skippedNonAdjacent = 0;
 
-  const out = [];
+    const out = [];
 
   for (const b of blocks) {
 
@@ -691,10 +736,22 @@ function prepareBlocksForPlot(blocks, config, maps, layout) {
     const botAbsStart = botOff + Math.min(bot.s, bot.e);
     const botAbsEnd   = botOff + Math.max(bot.s, bot.e);
 
-    const x1lo = x0 + topAbsStart * scale;
-    const x1hi = x0 + topAbsEnd   * scale;
-    const x2lo = x0 + botAbsStart * scale;
-    const x2hi = x0 + botAbsEnd   * scale;
+    // new for contig gaps
+    const contigRank = {};
+    for (const g of config.genomes) {
+      const order = maps.contigOrder[g.name] || [];
+      const r = {};
+      order.forEach((ctg, i) => { r[ctg] = i; });
+      contigRank[g.name] = r;
+    }
+    const gapPx = layout.gapPx ?? 0;
+    const rTop = contigRank[top.genome]?.[top.contig] ?? 0;
+    const rBot = contigRank[bot.genome]?.[bot.contig] ?? 0;
+
+    const x1lo = x0 + topAbsStart * scale + rTop * gapPx;
+    const x1hi = x0 + topAbsEnd   * scale + rTop * gapPx;
+    const x2lo = x0 + botAbsStart * scale + rBot * gapPx;
+    const x2hi = x0 + botAbsEnd   * scale + rBot * gapPx;
 
     out.push({
       topGenome: top.genome,
@@ -826,8 +883,9 @@ function renderSyntenySvg(blocks, config, maps, layout) {
           }
               </g>
         `;
-        x += w;
-      }
+            //x += w;
+            x += w + layout.gapPx;
+        }
     }
 
   return `
@@ -838,39 +896,49 @@ function renderSyntenySvg(blocks, config, maps, layout) {
     `;
 }
 
-function buildSyntenyLayout(config) {
-  const plotEl = document.getElementById("synteny-plot");
-  const treeSvg = document.querySelector("#synteny-tree-mini svg");
+function buildSyntenyLayout(config, maps) {
+    const plotEl = document.getElementById("synteny-plot");
+    const treeSvg = document.querySelector("#synteny-tree-mini svg");
 
-  const plotWidthPx = plotEl ? plotEl.getBoundingClientRect().width : 800;
-  const treeHeightPx = treeSvg ? treeSvg.getBoundingClientRect().height : 300;
+    const plotWidthPx = plotEl ? plotEl.getBoundingClientRect().width : 800;
+    const treeHeightPx = treeSvg ? treeSvg.getBoundingClientRect().height : 300;
 
-  // left padding is not needed because the tree already shows labels
-  const xStart = 10;
-  const xPadRight = 10;
-  const usablePlotWidth = Math.max(100, plotWidthPx - xStart - xPadRight);
+    // left padding is not needed because the tree already shows labels
+    const xStart = 10;
+    const xPadRight = 10;
 
-  const scaleX = config.max_length > 0 ? (usablePlotWidth / config.max_length) : 1;
-
-  const tipY = (window.SYNIMA && SYNIMA.tipYPositions) ? SYNIMA.tipYPositions : null;
-  const originalH =
-    (window.SYNIMA && SYNIMA.originalMiniTreeHeight) ? SYNIMA.originalMiniTreeHeight :
-    (treeSvg && treeSvg.viewBox && treeSvg.viewBox.baseVal) ? treeSvg.viewBox.baseVal.height :
-    null;
-
-  const vScale = (tipY && originalH && originalH > 0) ? (treeHeightPx / originalH) : 1;
-
-  const yByGenome = {};
-  if (tipY) {
+    // contig gaps
+    const gapPx = window.SYNIMA_STATE?.syntenyGapPx ?? 0;
+    // Find the maximum number of gaps on any genome row
+    let maxGapTotalPx = 0;
     for (const g of config.genomes) {
-      if (tipY[g.name] !== undefined) {
-        yByGenome[g.name] = tipY[g.name] * vScale;
-      }
+        const order = maps.contigOrder[g.name] || [];
+        const gaps = Math.max(0, order.length - 1);
+        maxGapTotalPx = Math.max(maxGapTotalPx, gaps * gapPx);
     }
-  }
 
-  // Derive row spacing from rendered tree tips, then choose a track height
-  let trackHeight = 22; // fallback
+    const usablePlotWidth = Math.max(100, plotWidthPx - xStart - xPadRight - maxGapTotalPx);
+    const scaleX = config.max_length > 0 ? (usablePlotWidth / config.max_length) : 1;
+
+    const tipY = (window.SYNIMA && SYNIMA.tipYPositions) ? SYNIMA.tipYPositions : null;
+    const originalH =
+        (window.SYNIMA && SYNIMA.originalMiniTreeHeight) ? SYNIMA.originalMiniTreeHeight :
+        (treeSvg && treeSvg.viewBox && treeSvg.viewBox.baseVal) ? treeSvg.viewBox.baseVal.height :
+        null;
+
+    const vScale = (tipY && originalH && originalH > 0) ? (treeHeightPx / originalH) : 1;
+
+    const yByGenome = {};
+    if (tipY) {
+        for (const g of config.genomes) {
+            if (tipY[g.name] !== undefined) {
+                yByGenome[g.name] = tipY[g.name] * vScale;
+            }
+        }
+    }
+
+    // Derive row spacing from rendered tree tips, then choose a track height
+    let trackHeight = 22; // fallback
 
   if (yByGenome && Object.keys(yByGenome).length >= 2) {
     const ys = Object.values(yByGenome).slice().sort((a, b) => a - b);
@@ -893,8 +961,10 @@ function buildSyntenyLayout(config) {
     plotWidthPx,
     treeHeightPx,
     xStart,
+    xPadRight,
     usablePlotWidth,
     scaleX,
+    gapPx,
     yByGenome,
     trackHeight
   };

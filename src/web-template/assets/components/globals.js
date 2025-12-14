@@ -18,3 +18,6 @@ window.SYNIMA_PERSIST_KEYS = window.SYNIMA_PERSIST_KEYS || {
 window.SYNIMA_STATE = window.SYNIMA_STATE || {};
 window.SYNIMA_STATE.syntenyFontSize = window.SYNIMA_STATE.syntenyFontSize ?? 12;
 window.SYNIMA_STATE.syntenyMode = window.SYNIMA_STATE.syntenyMode ?? "spans";
+
+window.SYNIMA_PERSIST_KEYS.syntenyGap = "synima_synteny_gap_px";
+window.SYNIMA_STATE.syntenyGapPx = window.SYNIMA_STATE.syntenyGapPx ?? 0;
