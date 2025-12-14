@@ -446,8 +446,22 @@ body {
 
 .panel-view {
   background: #0f1b30;
-  border: 1px solid #334155;
+  border: none !important;
   padding: 0.75rem;
-  border-radius: 0.5rem;
   overflow: hidden;
+}
+
+/*border: 1px solid #334155;
+  border-radius: 0.5rem;*/
+
+.synteny-figure {
+  background: #0f1b30;
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.choice-group label {
+  color: #ffffff;
 }

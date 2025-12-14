@@ -64,15 +64,28 @@ SYNIMA.showSynteny = function () {
     //    });
     //    html += `</ul>`;
     //});
+    //  <details class="mt-4">
+    //    <div id="synteny-stats" class="text-sm"></div>
+    //    <summary>Parsed block preview (first 15)</summary>
+    //    <pre id="synteny-preview" class="text-xs"></pre>
+    //  </details>
 
     // ----------------------------
     // Viewer controls + plot container
     // ----------------------------
     //<h2>Synteny viewer</h2>
+    //  <div class="section">
+    //  <h2>Raw aligncoords</h2>
+    //  <pre>${escapeHtml(aligncoords.substring(0, 2000))}...</pre>
+    //  <h2>Raw aligncoords.spans</h2>
+    //  <pre>${escapeHtml(spansText.substring(0, 2000))}...</pre>
+    //</div>
+
     html += `
     <div class="section">
 
-        <div style="display:flex; gap:20px;">
+        <!--<div style="display:flex; gap:20px;">-->
+        <div class="synteny-figure" style="display:flex; gap:20px;">
 
         <!-- MINI TREE COLUMN -->
         <!-- min-width:260px;  -->
@@ -97,35 +110,20 @@ SYNIMA.showSynteny = function () {
 
       </div>
 
-
-
-      <details class="mt-4">
-        <div id="synteny-stats" class="text-sm"></div>
-
-        <summary>Parsed block preview (first 15)</summary>
-        <pre id="synteny-preview" class="text-xs"></pre>
-      </details>
     </div>
 
     <div class="choice-group text-white">
         <label>
           <input type="radio" name="synteny-mode" value="spans" checked>
-          Chromosome synteny (aligncoords.spans)
+          Contig synteny 
         </label>
 
         <label>
           <input type="radio" name="synteny-mode" value="aligncoords">
-          Gene synteny (aligncoords) (next)
+          Gene synteny 
         </label>
     </div>
 
-    <div class="section">
-      <h2>Raw aligncoords</h2>
-      <pre>${escapeHtml(aligncoords.substring(0, 2000))}...</pre>
-
-      <h2>Raw aligncoords.spans</h2>
-      <pre>${escapeHtml(spansText.substring(0, 2000))}...</pre>
-    </div>
   `;
 
   app.innerHTML = html;
@@ -159,32 +157,31 @@ SYNIMA.showSynteny = function () {
         if (mode === "spans") {
           blocks = parseAligncoordsSpansText(spansText);
         } else {
-          // Stub for now, so the toggle works.
-          blocks = [];
+          blocks = parseAligncoordsText(aligncoords);
         }
 
         //const prepared = prepareBlocksForPlot(blocks, config, maps);
         const layout = buildSyntenyLayout(config);
         const prepared = prepareBlocksForPlot(blocks, config, maps, layout);
 
-        statsEl.textContent =
-          `Mode: ${mode}. Parsed blocks: ${blocks.length}. Adjacent blocks: ${prepared.blocks.length}. ` +
-          `Skipped (non-adjacent): ${prepared.skippedNonAdjacent}. ` +
-          `Skipped (unknown genome): ${prepared.skippedUnknownGenome}. ` +
-          `Skipped (unknown contig): ${prepared.skippedUnknownContig}.`;
+        //statsEl.textContent =
+        //  `Mode: ${mode}. Parsed blocks: ${blocks.length}. Adjacent blocks: ${prepared.blocks.length}. ` +
+        //  `Skipped (non-adjacent): ${prepared.skippedNonAdjacent}. ` +
+        //  `Skipped (unknown genome): ${prepared.skippedUnknownGenome}. ` +
+        //  `Skipped (unknown contig): ${prepared.skippedUnknownContig}.`;
 
-        previewEl.textContent = prepared.blocks
-          .slice(0, 15)
-          .map(b => {
-            return [
-              `${b.topGenome}:${b.topContig} ${b.topAbsStart}-${b.topAbsEnd}`,
-              `${b.botGenome}:${b.botContig} ${b.botAbsStart}-${b.botAbsEnd}`,
-              `strand=${b.strand}`,
-              `x1=[${b.x1lo.toFixed(1)},${b.x1hi.toFixed(1)}]`,
-              `x2=[${b.x2lo.toFixed(1)},${b.x2hi.toFixed(1)}]`
-            ].join(" | ");
-          })
-          .join("\n");
+        //previewEl.textContent = prepared.blocks
+        //  .slice(0, 15)
+        //  .map(b => {
+        //    return [
+        //      `${b.topGenome}:${b.topContig} ${b.topAbsStart}-${b.topAbsEnd}`,
+        //      `${b.botGenome}:${b.botContig} ${b.botAbsStart}-${b.botAbsEnd}`,
+        //      `strand=${b.strand}`,
+        //      `x1=[${b.x1lo.toFixed(1)},${b.x1hi.toFixed(1)}]`,
+        //      `x2=[${b.x2lo.toFixed(1)},${b.x2hi.toFixed(1)}]`
+        //    ].join(" | ");
+        //  })
+        //  .join("\n");
 
         //plotEl.innerHTML = renderSyntenySvg(prepared.blocks, config);
         plotEl.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
@@ -213,10 +210,12 @@ SYNIMA.showSynteny = function () {
         const g = ctg.dataset.genome;
         const c = ctg.dataset.contig;
         const o = ctg.dataset.orientation;
+        const l = maps.contigLen?.[g]?.[c] ?? "unknown";
 
         tooltip.innerHTML = `
             <b>${g}</b><br>
             Contig: ${c}<br>
+            Length: ${l} bp<br>
             Orientation: ${o}
         `;
 
@@ -373,6 +372,53 @@ function parseAligncoordsSpansText(text) {
       len2: parseInt(len2s, 10) || 0,
       strand
     });
+  }
+
+  return blocks;
+}
+
+// Parse aligncoords (gene synteny) text
+function parseAligncoordsText(text) {
+  const blocks = [];
+  const lines = (text || "").split(/\r?\n/);
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+
+    // Skip headers like "## alignment ..." and any other comment-style lines
+    if (t.startsWith("#")) continue;
+
+    const cols = t.split("\t");
+    // Expect at least:
+    // g1, c1, gene1, s1, e1, MATCHES, g2, c2, gene2, s2, e2, ...
+    //if (cols.length < 11) continue;
+
+    //if (cols[5] !== "MATCHES") continue; // keeps us from accidentally parsing junk
+    const mi = cols.indexOf("MATCHES");
+    if (mi < 0) continue;
+
+    // Need: g1,c1,s1,e1 then after MATCHES: g2,c2,s2,e2
+    // Layout: [g1,c1,gene1,s1,e1,?,MATCHES,g2,c2,gene2,s2,e2,...]
+    if (cols.length <= mi + 5) continue;
+
+
+    const g1 = cols[0];
+    const c1 = cols[1];
+    const s1 = parseInt(cols[3], 10);
+    const e1 = parseInt(cols[4], 10);
+
+    const g2 = cols[mi + 1];
+    const c2 = cols[mi + 2];
+    const s2 = parseInt(cols[mi + 4], 10);
+    const e2 = parseInt(cols[mi + 5], 10);
+
+    if (!g1 || !c1 || !g2 || !c2) continue;
+    if ([s1, e1, s2, e2].some(v => Number.isNaN(v))) continue;
+
+    // Strand: same direction => '+', opposite direction => '-'
+    const strand = ((s1 <= e1) === (s2 <= e2)) ? "+" : "-";
+    blocks.push({ g1, c1, s1, e1, g2, c2, s2, e2, strand });
   }
 
   return blocks;
@@ -540,6 +586,7 @@ function renderSyntenySvg(blocks, config, maps, layout) {
         // <rect x="${x}" y="${rectY}" width="${w}" height="${rectH}" fill="#6699cc" stroke="white" stroke-width="1"></rect>
         //             fill-opacity="0.10"
         //             stroke-opacity="0.35"
+        // from rect: <title>${escapeHtml(g.name)}:${escapeHtml(contig)} (${bpLen} bp)</title>
         tracks += `
             <g class="synteny-ctg"
                      data-genome="${g.name}"
@@ -553,7 +600,6 @@ function renderSyntenySvg(blocks, config, maps, layout) {
             fill="#6699cc"
             stroke="#ffffff"
             stroke-width="1">
-            <title>${escapeHtml(g.name)}:${escapeHtml(contig)} (${bpLen} bp)</title>
           </rect>
             ${
             (label && w >= 25)
