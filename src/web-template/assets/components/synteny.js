@@ -1,4 +1,5 @@
 
+// Useful function to start with - finding default values that might have been preselected
 function syncSyntenyModeFromStorage() {
     // synteny mode (spans vs gene/aligncoords)
     try {
@@ -31,6 +32,41 @@ function syncSyntenyModeFromStorage() {
     } catch (e) {
         console.warn("Could not read synteny contig scale from localStorage", e);
     }
+
+    // contig colours
+    try {
+        const saved1 = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode);
+        const saved2 = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigBaseColor);
+        const saved3 = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides);
+        const saved4 = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigPalette);
+        if (saved1 !== null) {
+            window.SYNIMA_STATE.syntenyContigColorMode = saved1;
+        }
+        if (saved2 !== null) {
+            window.SYNIMA_STATE.syntenyContigBaseColor = saved2;
+        }
+        if (saved3 !== null) {
+            window.SYNIMA_STATE.syntenyContigOverrides = saved3;
+        }
+        if (saved4 !== null) {
+            window.SYNIMA_STATE.syntenyContigPalette = saved4;
+        }
+    } catch (e) {
+        console.warn("Could not read synteny colour options from localStorage", e);
+    }
+
+    if (!window.SYNIMA_STATE.syntenyContigColorMode) window.SYNIMA_STATE.syntenyContigColorMode = "single";
+    if (!window.SYNIMA_STATE.syntenyContigBaseColor) window.SYNIMA_STATE.syntenyContigBaseColor = "#6699cc";
+    if (!window.SYNIMA_STATE.syntenyContigPalette) window.SYNIMA_STATE.syntenyContigPalette = "palette1";
+
+    if (typeof window.SYNIMA_STATE.syntenyContigOverrides === "string") {
+      try {
+        window.SYNIMA_STATE.syntenyContigOverrides = JSON.parse(window.SYNIMA_STATE.syntenyContigOverrides) || {};
+      } catch (e) {
+        window.SYNIMA_STATE.syntenyContigOverrides = {};
+      }
+    }
+    if (!window.SYNIMA_STATE.syntenyContigOverrides) window.SYNIMA_STATE.syntenyContigOverrides = {};
 }
 
 SYNIMA.showSynteny = function () {
@@ -72,7 +108,7 @@ SYNIMA.showSynteny = function () {
     }
 
     // ----------------------------
-    // Debug section
+    // Header / Download
     // ----------------------------
     let html = `<div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:6px;"><h1>Synteny Viewer</h1>`;
     html += `<div style="position:relative; display:inline-block;">
@@ -127,76 +163,40 @@ SYNIMA.showSynteny = function () {
       </div>
     </div>
     </div>`;
-    //html += `<p>Num genomes: ${config.num_genomes}</p>`;
-    //html += `<p>Max genome length: ${config.max_length}</p>`;
-    //html += `<p>Halfway index: ${config.halfway}</p>`;
-    //html += `<p>Genome order from tree: `;
-    //if (genomeOrder.length === 0) {
-    //    html += `<em>No genome order extracted (tree not found or mismatch)</em></p>`;
-    //} else {
-    //    html += `${genomeOrder.join(" → ")}</p>`;
-    //}
-    // Print all genome metadata
-    //config.genomes.forEach(g => {
-    //    html += `<h3>${g.name}</h3>`;
-    //    html += `<p>Total length: ${g.total_length}</p>`;
-    //    html += `<p>Contig order (inferred): ${g.inferred_order.join(", ")}</p>`;
-    //    html += `<p>Contig order (fasta): ${g.fasta_order.join(", ")}</p>`;
-    //    html += `<p>Contig lengths:</p>`;
-    //    html += `<ul>`;
-    //    g.contigs.forEach(c => {
-    //        html += `<li>${c.contig}: ${c.length}</li>`;
-    //    });
-    //    html += `</ul>`;
-    //});
-    //  <details class="mt-4">
-    //    <div id="synteny-stats" class="text-sm"></div>
-    //    <summary>Parsed block preview (first 15)</summary>
-    //    <pre id="synteny-preview" class="text-xs"></pre>
-    //  </details>
 
     // ----------------------------
-    // Viewer controls + plot container
+    // Tree and Synteny Plot
     // ----------------------------
-    //<h2>Synteny viewer</h2>
-    //  <div class="section">
-    //  <h2>Raw aligncoords</h2>
-    //  <pre>${escapeHtml(aligncoords.substring(0, 2000))}...</pre>
-    //  <h2>Raw aligncoords.spans</h2>
-    //  <pre>${escapeHtml(spansText.substring(0, 2000))}...</pre>
-    //</div>
-
     html += `
     <div class="section">
 
         <!--<div style="display:flex; gap:20px;">-->
         <div class="synteny-figure" style="display:flex; gap:10px;">
 
-        <!-- MINI TREE COLUMN -->
-        <!-- min-width:260px;  -->
-        <div id="synteny-tree-col" style="flex:0 0 20%; min-height:400px; padding-right:0px; padding-bottom:20px; overflow-y:auto; ">
-          <!--<h2>Tree</h2>-->
-            <div id="synteny-tree-mini" 
-                class="panel-view" 
-                style="width:100%; overflow-x:auto; overflow-y:auto; padding-bottom:30px; box-sizing:border-box;">
-            </div>
-        </div>
-
-        <!-- SYNTENY MAIN COLUMN -->
-        <!-- min-height:auto; min-width:400px; overflow-x:auto;  -->
-        <div style="flex:1 1 auto; min-height:400px; padding-left:0px; overflow-x:auto; overflow-y:hidden;">
-            <!-- min-height:auto; -->
-
-            <div id="synteny-plot" 
-                class="panel-view overflow-x-auto">
+            <!-- MINI TREE COLUMN -->
+            <div id="synteny-tree-col" style="flex:0 0 20%; min-height:400px; padding-right:0px; padding-bottom:20px; overflow-y:auto; ">
+                <!--<h2>Tree</h2>-->
+                <div id="synteny-tree-mini" 
+                    class="panel-view" 
+                    style="width:100%; overflow-x:auto; overflow-y:auto; padding-bottom:30px; box-sizing:border-box;">
+                </div>
             </div>
 
+            <!-- SYNTENY MAIN COLUMN -->
+            <!-- min-height:auto; min-width:400px; overflow-x:auto;  -->
+            <div style="flex:1 1 auto; min-height:400px; padding-left:0px; overflow-x:auto; overflow-y:hidden;">
+                <!-- min-height:auto; -->
+                <div id="synteny-plot" 
+                    class="panel-view overflow-x-auto">
+                </div>
+            </div>
         </div>
+    </div>`;
 
-      </div>
-
-    </div>
-
+    // ----------------------------
+    // Synteny Plot Graphical Options
+    // ----------------------------
+    html += `
     <div class="synteny-controls">
 
         <button onclick="SYNIMA.resetSynteny()" style="margin-left:10px;">Reset synteny</button>
@@ -265,6 +265,22 @@ SYNIMA.showSynteny = function () {
           </select>
         </label>
 
+        <!-- contig gap -->
+        <label style="margin-left: 10px;">
+          Contig colour:
+          <select id="contig-colour-select">
+            <option value="#66cc99">Green Cyan</option>
+            <option value="#6699cc">Blue Gray</option>
+            <option value="#cc6699">Pink</option>
+            <option value="#cc9966">Light Orange</option>
+            <option value="#ffffff">White</option>
+            <option value="#ff0000">Red</option>
+            <option value="#000000">Black</option>
+            <option value="palette1">Palette by genome 1</option>
+            <option value="pastel">Palette by genome 2</option>
+          </select>
+        </label>
+
 
     </div>
     `;
@@ -292,6 +308,35 @@ SYNIMA.showSynteny = function () {
     //const statsEl = document.getElementById("synteny-stats");
     //const previewEl = document.getElementById("synteny-preview");
     const plotEl = document.getElementById("synteny-plot");
+
+    // select contig
+    plotEl.addEventListener("click", (e) => {
+      const ctg = e.target.closest(".synteny-ctg");
+      
+        // clicked empty space inside the plot
+        if (!ctg) {
+            if (window.SYNIMA_STATE.selectedContigKey) {
+              window.SYNIMA_STATE.selectedContigKey = null;
+              rerender();
+            }
+            return;
+        }
+
+        const g = ctg.dataset.genome;
+        const c = ctg.dataset.contig;
+        const key = `${g}|${c}`;
+
+        // toggle if clicking same contig again
+        if (window.SYNIMA_STATE.selectedContigKey === key) {
+            window.SYNIMA_STATE.selectedContigKey = null;
+        } else {
+            window.SYNIMA_STATE.selectedContigKey = key;
+        }
+
+        rerender();
+        e.stopPropagation();
+        //openContigEditor(e.pageX, e.pageY, g, c);
+    });
 
     const maps = buildGenomeMaps(config);
 
@@ -351,37 +396,69 @@ SYNIMA.showSynteny = function () {
     // contig box scale
     const thSel = document.getElementById("synteny-track-scale-select");
     if (thSel) {
-      thSel.value = String(window.SYNIMA_STATE.syntenyTrackScale ?? 1.0);
+        thSel.value = String(window.SYNIMA_STATE.syntenyTrackScale ?? 1.0);
 
-      thSel.addEventListener("change", () => {
-        const n = parseFloat(thSel.value);
-        if (!Number.isNaN(n) && n > 0) {
-          window.SYNIMA_STATE.syntenyTrackScale = n;
-          try {
-            localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyTrackScale, String(n));
-          } catch (e) {}
-          rerender();
-        }
-      });
+        thSel.addEventListener("change", () => {
+            const n = parseFloat(thSel.value);
+            if (!Number.isNaN(n) && n > 0) {
+                window.SYNIMA_STATE.syntenyTrackScale = n;
+                try {
+                    localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyTrackScale, String(n));
+                } catch (e) {}
+                rerender();
+            }
+        });
     }
 
     // contig gap
     const gapSelect = document.getElementById("synteny-gap-select");
     if (gapSelect) {
-      gapSelect.value = String(window.SYNIMA_STATE.syntenyGapPx ?? 0);
+        gapSelect.value = String(window.SYNIMA_STATE.syntenyGapPx ?? 0);
 
-      gapSelect.addEventListener("change", () => {
+        gapSelect.addEventListener("change", () => {
         const n = parseInt(gapSelect.value, 10);
-        if (!Number.isNaN(n)) {
-          window.SYNIMA_STATE.syntenyGapPx = n;
-          try {
-            localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyGap, String(n));
-          } catch (e) {}
-          rerender();
-        }
-      });
+            if (!Number.isNaN(n)) {
+                window.SYNIMA_STATE.syntenyGapPx = n;
+                try {
+                    localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyGap, String(n));
+                } catch (e) {}
+                rerender();
+            }
+        });
     }
 
+    // colour contig
+    const colorContig = document.getElementById("contig-colour-select");
+    if (colorContig) {
+      // init the dropdown from state
+      const mode = window.SYNIMA_STATE.syntenyContigColorMode || "single";
+      if (mode === "palette_by_genome") {
+        colorContig.value = window.SYNIMA_STATE.syntenyContigPalette || "palette1";
+      } else {
+        colorContig.value = window.SYNIMA_STATE.syntenyContigBaseColor || "#6699cc";
+      }
+
+      colorContig.addEventListener("change", () => {
+        const v = colorContig.value;
+
+        if (typeof v === "string" && v.startsWith("#")) {
+          window.SYNIMA_STATE.syntenyContigColorMode = "single";
+          window.SYNIMA_STATE.syntenyContigBaseColor = v;
+        } else {
+          // e.g. "palette1"
+          window.SYNIMA_STATE.syntenyContigColorMode = "palette_by_genome";
+          window.SYNIMA_STATE.syntenyContigPalette = v;
+        }
+
+        try {
+          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode, window.SYNIMA_STATE.syntenyContigColorMode);
+          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyContigBaseColor, window.SYNIMA_STATE.syntenyContigBaseColor || "#6699cc");
+          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyContigPalette, window.SYNIMA_STATE.syntenyContigPalette || "palette1");
+        } catch (e) {}
+
+        rerender();
+      });
+    }
 
     function rerender() {
         const mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || "spans";
@@ -396,25 +473,6 @@ SYNIMA.showSynteny = function () {
         const maps = buildGenomeMaps(config);
         const layout = buildSyntenyLayout(config, maps);
         const prepared = prepareBlocksForPlot(blocks, config, maps, layout);
-
-        //statsEl.textContent =
-        //  `Mode: ${mode}. Parsed blocks: ${blocks.length}. Adjacent blocks: ${prepared.blocks.length}. ` +
-        //  `Skipped (non-adjacent): ${prepared.skippedNonAdjacent}. ` +
-        //  `Skipped (unknown genome): ${prepared.skippedUnknownGenome}. ` +
-        //  `Skipped (unknown contig): ${prepared.skippedUnknownContig}.`;
-
-        //previewEl.textContent = prepared.blocks
-        //  .slice(0, 15)
-        //  .map(b => {
-        //    return [
-        //      `${b.topGenome}:${b.topContig} ${b.topAbsStart}-${b.topAbsEnd}`,
-        //      `${b.botGenome}:${b.botContig} ${b.botAbsStart}-${b.botAbsEnd}`,
-        //      `strand=${b.strand}`,
-        //      `x1=[${b.x1lo.toFixed(1)},${b.x1hi.toFixed(1)}]`,
-        //      `x2=[${b.x2lo.toFixed(1)},${b.x2hi.toFixed(1)}]`
-        //    ].join(" | ");
-        //  })
-        //  .join("\n");
 
         plotEl.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
     }
@@ -519,11 +577,32 @@ function applySyntenyTreeWidth() {
     col.style.flex = `0 0 ${pct}%`;
 }
 
+function getGenomePaletteColor(idx, paletteName) {
+  const palettes = {
+    palette1: ["#6699cc", "#8bb174", "#d6a84f", "#c77d7d", "#7fa6a3", "#b08fbf"],
+    pastel:   ["#a3c4f3", "#bde0fe", "#caffbf", "#ffd6a5", "#ffadad", "#d0bfff"],
+  };
+
+  const pal = palettes[paletteName] || palettes.palette1;
+  return pal[Math.abs(idx) % pal.length];
+}
+
+function computeBaseFillForGenome(genomeIndex) {
+  const palette = window.SYNIMA_STATE?.syntenyContigPalette || "palette1";
+  return getGenomePaletteColor(genomeIndex, palette);
+}
+
 SYNIMA.resetSynteny = function () {
 
     // defaults
     const defaultMode = window.SYNIMA_SYNTENY_DEFAULT_MODE || "spans";
     const defaultFont = 12;
+
+    const SYNIMA_SYNTENY_DEFAULTS = {
+        contigColorMode: "single",        // or "palette_by_genome"
+        contigBaseColor: "#6699cc",
+        contigPalette: "palette1"
+    };
 
     // reset state
     window.SYNIMA_STATE.syntenyFontSize = defaultFont;
@@ -531,6 +610,9 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyGapPx = 0;
     window.SYNIMA_STATE.syntenyTrackScale = 1.0;
     window.SYNIMA_STATE.syntenyTreeWidthPct = 20;
+    window.SYNIMA_STATE.syntenyContigColorMode = SYNIMA_SYNTENY_DEFAULTS.contigColorMode;
+    window.SYNIMA_STATE.syntenyContigBaseColor = SYNIMA_SYNTENY_DEFAULTS.contigBaseColor;
+    window.SYNIMA_STATE.syntenyContigPalette   = SYNIMA_SYNTENY_DEFAULTS.contigPalette;
 
     // tree width
     const tw = document.getElementById("synteny-tree-width-select");
@@ -555,6 +637,10 @@ SYNIMA.resetSynteny = function () {
     const gapSelect = document.getElementById("synteny-gap-select");
     if (gapSelect) gapSelect.value = "0";
 
+    // reset contig colour dropdown
+    const colorSelect = document.getElementById("contig-colour-select");
+    if (colorSelect) colorSelect.value = SYNIMA_SYNTENY_DEFAULTS.contigBaseColor; // "#6699cc"
+
     // clear saved state
     try {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
@@ -562,6 +648,12 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTrackScale);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyGap);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTreeWidth);
+
+        // colour keys
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigBaseColor);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigPalette);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides);
     } catch (e) {}
 
     // redraw
@@ -911,80 +1003,95 @@ function renderSyntenySvg(blocks, config, maps, layout) {
             stroke-opacity="0.25"
             stroke-width="0.5">
             <title>${escapeHtml(b.topGenome)}:${escapeHtml(b.topContig)} ${b.topAbsStart}-${b.topAbsEnd}
-    ↔ ${escapeHtml(b.botGenome)}:${escapeHtml(b.botContig)} ${b.botAbsStart}-${b.botAbsEnd}
-    strand=${escapeHtml(b.strand)}</title>
+            ↔ ${escapeHtml(b.botGenome)}:${escapeHtml(b.botContig)} ${b.botAbsStart}-${b.botAbsEnd}
+            strand=${escapeHtml(b.strand)}</title>
           </polygon>
         `;
     }
 
     let tracks = "";
-    for (const g of config.genomes) {
-      const y = yFor(g.name);
-      const yRect = y - trackHeight / 2;
+    //for (const g of config.genomes) {
+    for (const [i, g] of config.genomes.entries()) {
+        const y = yFor(g.name);
+        const yRect = y - trackHeight / 2;
 
-      const order = maps.contigOrder[g.name] || [];
-      const lenMap = maps.contigLen[g.name] || {};
+        const order = maps.contigOrder[g.name] || [];
+        const lenMap = maps.contigLen[g.name] || {};
 
-      let x = layout.xStart;
-      for (const contig of order) {
-        const bpLen = lenMap[contig] || 0;
-        const w = bpLen * layout.scaleX;
-        if (w <= 0) continue;
+        let x = layout.xStart;
 
-        // Contig font size
-        const autoFontSize = Math.max(10, Math.min(18, trackHeight * 0.45));
-        const stateFont = window.SYNIMA_STATE && Number.isFinite(window.SYNIMA_STATE.syntenyFontSize) ? window.SYNIMA_STATE.syntenyFontSize : null;
-        const userFontSize = stateFont ?? autoFontSize;
+        for (const contig of order) {
+            const bpLen = lenMap[contig] || 0;
+            const w = bpLen * layout.scaleX;
+            if (w <= 0) continue;
 
-        // optional clamp (keeps it sane)
-        const fontSize = Math.max(6, Math.min(30, userFontSize));
-        const label = trimLabelToWidth(contig, w - 6, fontSize);
+            // Contig font size
+            const autoFontSize = Math.max(10, Math.min(18, trackHeight * 0.45));
+            const stateFont = window.SYNIMA_STATE && Number.isFinite(window.SYNIMA_STATE.syntenyFontSize) ? window.SYNIMA_STATE.syntenyFontSize : null;
+            const userFontSize = stateFont ?? autoFontSize;
 
-        // Center text in the rectangle
-        const textX = x + w / 2;
-        const textY = yRect + trackHeight * 0.68;
+            // optional clamp (keeps it sane)
+            const fontSize = Math.max(6, Math.min(30, userFontSize));
+            const label = trimLabelToWidth(contig, w - 6, fontSize);
 
-        // <rect x="${x}" y="${rectY}" width="${w}" height="${rectH}" fill="#6699cc" stroke="white" stroke-width="1"></rect>
-        //             fill-opacity="0.10"
-        //             stroke-opacity="0.35"
-        // from rect: <title>${escapeHtml(g.name)}:${escapeHtml(contig)} (${bpLen} bp)</title>
-        tracks += `
-            <g class="synteny-ctg"
-                     data-genome="${g.name}"
-                     data-contig="${contig}"
-                     data-orientation="+">
-          <rect
-            x="${x}"
-            y="${yRect}"
-            width="${w}"
-            height="${trackHeight}"
-            fill="#6699cc"
-            stroke="#ffffff"
-            stroke-width="1">
-          </rect>
-            ${
-            (label && w >= 25)
-              ? `<text x="${textX}" y="${textY}"
-                       fill="#ffffff"
-                       font-size="${fontSize}"
-                       text-anchor="middle"
-                       style="pointer-events:none; user-select:none;">
-                   ${escapeHtml(label)}
-                 </text>`
-              : ""
-          }
-              </g>
-        `;
-            //x += w;
+            // Center text in the rectangle
+            const textX = x + w / 2;
+            const textY = yRect + trackHeight * 0.68;
+
+            // colour and select
+            const overrides = window.SYNIMA_STATE.syntenyContigOverrides || {};
+            const key = `${g.name}|${contig}`;
+
+            const mode = window.SYNIMA_STATE.syntenyContigColorMode || "single";
+            let fill = window.SYNIMA_STATE.syntenyContigBaseColor || "#6699cc";
+
+            if (mode === "palette_by_genome") {
+                //fill = computeBaseFillForGenome(g.name);
+                fill = computeBaseFillForGenome(i);
+            }
+            if (overrides[key]) { fill = overrides[key]; }
+
+            const isSelected = (window.SYNIMA_STATE.selectedContigKey === key);
+            const stroke = isSelected ? "#facc15" : "#ffffff";
+            const strokeW = isSelected ? 2.5 : 1;
+
+            tracks += `
+                <g class="synteny-ctg"
+                    data-genome="${g.name}"
+                    data-contig="${contig}"
+                    data-orientation="+">
+
+                <rect
+                    x="${x}"
+                    y="${yRect}"
+                    width="${w}"
+                    height="${trackHeight}"
+                    fill="${fill}"
+                    stroke="${stroke}"
+                    stroke-width="${strokeW}">
+                </rect>
+                ${
+                (label && w >= 25)
+                  ? `<text x="${textX}" y="${textY}"
+                           fill="#ffffff"
+                           font-size="${fontSize}"
+                           text-anchor="middle"
+                           style="pointer-events:none; user-select:none;">
+                       ${escapeHtml(label)}
+                     </text>`
+                  : ""
+                }
+                </g>
+            `;
             x += w + layout.gapPx;
         }
     }
 
-  return `
-    <svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
+    return `
+        <svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
         ${polys}
         ${tracks}
-    </svg>
+        </svg>
     `;
 }
 
@@ -998,8 +1105,6 @@ function buildSyntenyLayout(config, maps) {
     // left padding is not needed because the tree already shows labels
     const xStart = 10;
     const xPadRight = 10;
-
-
 
     // contig gaps
     const gapPx = window.SYNIMA_STATE?.syntenyGapPx ?? 0;
@@ -1202,7 +1307,7 @@ SYNIMA.exportSyntenyPng = function () {
 };
 
 SYNIMA.exportSyntenyFigurePng = function () {
-  const treeSvg = document.querySelector("#synteny-tree-mini svg");
+    const treeSvg = document.querySelector("#synteny-tree-mini svg");
   const synSvg  = document.querySelector("#synteny-plot svg");
   if (!treeSvg || !synSvg) return;
 
@@ -1278,11 +1383,11 @@ SYNIMA.exportSyntenyFigurePng = function () {
     URL.revokeObjectURL(synUrl);
   };
 
-  treeImg.onload = done;
-  synImg.onload = done;
+    treeImg.onload = done;
+    synImg.onload = done;
 
-  treeImg.src = treeUrl;
-  synImg.src  = synUrl;
+    treeImg.src = treeUrl;
+    synImg.src  = synUrl;
 };
 
 SYNIMA.exportSyntenyFigureSvg = function () {
@@ -1359,6 +1464,19 @@ SYNIMA.exportSyntenyFigureSvg = function () {
 
   URL.revokeObjectURL(url);
 };
+
+// selecting contigs
+if (!SYNIMA._syntenyOutsideClickBound) {
+    SYNIMA._syntenyOutsideClickBound = true;
+
+    document.addEventListener("click", (e) => {
+        if (e.target.closest("#synteny-plot")) return;
+        if (!window.SYNIMA_STATE.selectedContigKey) return;
+
+        window.SYNIMA_STATE.selectedContigKey = null;
+        if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+    });
+}
 
 window.addEventListener("resize", () => {
   if (window.SYNIMA && SYNIMA.currentPage === "synteny") {
