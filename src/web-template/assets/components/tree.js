@@ -8,6 +8,7 @@ let SYNIMA_ALIGN_LABELS = true;
 
 // updates align taxa flag from storage
 function syncAlignFromStorage() {
+  // align tips?
   try {
     const savedAlign = localStorage.getItem(SYNIMA_PERSIST_KEYS.alignLabels);
     if (savedAlign !== null) {
@@ -18,6 +19,15 @@ function syncAlignFromStorage() {
     console.warn("Could not read alignLabels from localStorage", e);
     // localStorage might be blocked; ignore and keep default
   }
+
+  // add in scale Yaxis of tree
+  try {
+    const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.treeYScale);
+    if (saved !== null) {
+      const n = parseFloat(saved);
+      if (Number.isFinite(n)) window.SYNIMA_STATE.treeYScale = n;
+    }
+  } catch (e) {}
 }
 
 // Pull any stored value into SYNIMA_ALIGN_LABELS once at startup
@@ -288,12 +298,19 @@ function renderTreeSvg(root, containerId, opts={}) {
     if (n.children) n.children.forEach(walk);
   })(root);
 
+  const userYScale = (window.SYNIMA_STATE && Number.isFinite(window.SYNIMA_STATE.treeYScale)) ? window.SYNIMA_STATE.treeYScale : 1.0;
+
+  // Expand vertical scale BEFORE computing height
+  const baseMini = isMini ? 6 : 1;
+  const yMult = baseMini * userYScale;
+
   // Expand vertical scale for mini tree BEFORE computing height
-  if (isMini) {
-      allNodes.forEach(n => {
-          n.y *= 6;
-      });
-  }
+  //if (isMini) {
+  allNodes.forEach(n => {
+    //n.y *= 6;
+    n.y *= yMult;
+  });
+  //}
 
   // Boost font size and line width in mini trees
   const effectiveFontSize = isMini ? SYNIMA_FONT_SIZE * 3 : SYNIMA_FONT_SIZE;
@@ -1209,6 +1226,20 @@ SYNIMA.showTree = function () {
         <fieldset class="tree-controls-group">
           <legend>Layout</legend>
 
+          <label style="margin-left: 10px;">
+            Expansion:
+            <select id="tree-y-scale-select">
+              <option value="1">1×</option>
+              <option value="1.2">1.2×</option>
+              <option value="1.4">1.4×</option>
+              <option value="1.6">1.6×</option>
+              <option value="1.8">1.8×</option>
+              <option value="2">2×</option>
+              <option value="2.4">2.4×</option>
+              <option value="3">3×</option>
+            </select>
+          </label>
+
           <label>
             <input type="checkbox" id="align-labels-checkbox" />
               Align tip labels
@@ -1220,7 +1251,7 @@ SYNIMA.showTree = function () {
           <legend>Appearance</legend>
 
           <label style="margin-left: 10px;">
-            Line width:
+            Line Weight:
             <select id="line-width-select">
               <option value="1">1</option>
               <option value="2">2</option>
@@ -1322,6 +1353,27 @@ SYNIMA.showTree = function () {
         SYNIMA.annotateArmed = !SYNIMA.annotateArmed;
         annBtn.classList.toggle("annotate-active", SYNIMA.annotateArmed);
       }
+    });
+  }
+
+  // adjust heigh scale
+  const ySel = document.getElementById("tree-y-scale-select");
+  if (ySel) {
+    ySel.value = String(window.SYNIMA_STATE?.treeYScale ?? 1.0);
+
+    ySel.addEventListener("change", () => {
+      const n = parseFloat(ySel.value);
+      if (!Number.isFinite(n)) return;
+
+      window.SYNIMA_STATE.treeYScale = n;
+      try {
+        localStorage.setItem(window.SYNIMA_PERSIST_KEYS.treeYScale, String(n));
+      } catch (e) {}
+
+      if (SYNIMA_TREES.current) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+
+      // Optional: if synteny is open and depends on mini-tree tip positions, rerender it too.
+      if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
     });
   }
 
@@ -1433,48 +1485,71 @@ SYNIMA.resetRoot = function () {
     return;
   }
 
-  // reset line widths
-  SYNIMA_LINE_WIDTH = 2;
+  // ----------------------------
+  // Defaults
+  // ----------------------------
+  const DEFAULTS = {
+    yScale: 1.0,
+    lineWidth: 2,
+    fontSize: 14,
+    alignLabels: true,
+    rootTip: SYNIMA_MIDPOINT_VALUE
+  };
+
+  // ----------------------------
+  // 1) Reset in-memory state
+  // ----------------------------
+  window.SYNIMA_STATE.treeYScale = DEFAULTS.yScale;
+  SYNIMA_LINE_WIDTH = DEFAULTS.lineWidth;
+  SYNIMA_FONT_SIZE = DEFAULTS.fontSize;
+  SYNIMA_ALIGN_LABELS = DEFAULTS.alignLabels;
+
+  SYNIMA_TAXON_NAMES = {};
+  SYNIMA.selectedLabelName = null;
+  SYNIMA.annotateArmed = false;
+
+  // ----------------------------
+  // 2) Reset persisted state
+  // ----------------------------
+  try {
+    localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.treeYScale);
+    localStorage.removeItem(SYNIMA_PERSIST_KEYS.names);
+    localStorage.removeItem(SYNIMA_PERSIST_KEYS.lineWidth);
+    localStorage.removeItem(SYNIMA_PERSIST_KEYS.fontSize);
+    localStorage.removeItem(SYNIMA_PERSIST_KEYS.alignLabels);
+    //localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip);
+
+    // Reset rooting to midpoint as your default
+    localStorage.setItem(SYNIMA_PERSIST_KEYS.rootTip, SYNIMA_MIDPOINT_VALUE);
+  } catch (e) {}
+
+  // ----------------------------
+  // 3) Reset UI controls
+  // ----------------------------
+
+  // y-axis scale
+  const ySel = document.getElementById("tree-y-scale-select");
+  if (ySel) ySel.value = "1";
+
+  // line widths
   const lwSelect = document.getElementById("line-width-select");
   if (lwSelect) lwSelect.value = "2";
 
-  // reset font size
-  SYNIMA_FONT_SIZE = 14;
+  // font size
   const fsSelect = document.getElementById("font-size-select");
   if (fsSelect) fsSelect.value = "14";
 
-  // Reset renames
-  SYNIMA_TAXON_NAMES = {};
-  SYNIMA.selectedLabelName = null;
+  // labels aligned
+  const chk = document.getElementById("align-labels-checkbox");
+  if (chk) chk.checked = true;
 
   // hide dropdown if open
   const dd = document.getElementById("annotate-dropdown");
   if (dd) dd.classList.add("hidden");
 
-  // Default: labels aligned
-  SYNIMA_ALIGN_LABELS = true;
-  const chk = document.getElementById("align-labels-checkbox");
-  if (chk) chk.checked = true;
-
-  // Clear saved state
-  localStorage.removeItem(SYNIMA_PERSIST_KEYS.names);
-  localStorage.removeItem(SYNIMA_PERSIST_KEYS.lineWidth);
-  localStorage.removeItem(SYNIMA_PERSIST_KEYS.fontSize);
-  localStorage.removeItem(SYNIMA_PERSIST_KEYS.alignLabels);
-  //localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip);
-  localStorage.setItem(SYNIMA_PERSIST_KEYS.rootTip, SYNIMA_MIDPOINT_VALUE);
-
-  // Reset globals
-  SYNIMA_TAXON_NAMES = {};
-  SYNIMA_LINE_WIDTH = 2;
-  SYNIMA_FONT_SIZE = 14;
-
-  // Update dropdown UI controls
-  document.getElementById("line-width-select").value = "2";
-  document.getElementById("font-size-select").value = "14";
-  document.getElementById("align-labels-checkbox").checked = true;
-
-  // clone pristine original
+  // ----------------------------
+  // 4) Rebuild tree and apply default rooting
+  // ----------------------------
   SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
 
   // apply default rooting (midpoint)
@@ -1482,7 +1557,14 @@ SYNIMA.resetRoot = function () {
     SYNIMA.midpointRoot(true); // true = suppressRender, if you implemented that pattern
   }
 
-  // redraw
+  // Update dropdown UI controls
+  //document.getElementById("line-width-select").value = "2";
+  //document.getElementById("font-size-select").value = "14";
+  //document.getElementById("align-labels-checkbox").checked = true;
+  
+  // ----------------------------
+  // 5) Render + refresh controls
+  // ----------------------------
   const el = document.getElementById("tree-view-0");
   if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   SYNIMA.buildRootByTipDropdown();

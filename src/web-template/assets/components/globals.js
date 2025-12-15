@@ -9,6 +9,7 @@ window.SYNIMA_PERSIST_KEYS = window.SYNIMA_PERSIST_KEYS || {
 	fontSize: "synima_tree_font_size",
 	alignLabels: "synima_tree_align_labels",
 	rootTip: "synima_tree_root_tip",
+	treeYScale: "synima_tree_y_scale",
 
 	// Synteny tab
 	syntenyFontSize: "synima_synteny_font_size",
@@ -42,24 +43,23 @@ window.SYNIMA_STATE.syntenyTrackScale = window.SYNIMA_STATE.syntenyTrackScale ??
 window.SYNIMA_PERSIST_KEYS.syntenyTreeWidth = "synima_synteny_tree_width_pct";
 window.SYNIMA_STATE.syntenyTreeWidthPct = window.SYNIMA_STATE.syntenyTreeWidthPct ?? 20;
 
+// tree extra
+window.SYNIMA_STATE.treeYScale = window.SYNIMA_STATE.treeYScale ?? 1.0;
+
 // contig colours
 window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode = "synima_synteny_contig_color_mode";
 window.SYNIMA_PERSIST_KEYS.syntenyContigBaseColor = "synima_synteny_contig_base_color";
 window.SYNIMA_PERSIST_KEYS.syntenyContigPalette = "synima_synteny_contig_palette";
 window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides = "synima_synteny_contig_overrides";
 
+// synteny colours  etc.
 window.SYNIMA_STATE.syntenyContigColorMode = window.SYNIMA_STATE.syntenyContigColorMode ?? "single"; // single | palette_by_genome
 window.SYNIMA_STATE.syntenyContigBaseColor = window.SYNIMA_STATE.syntenyContigBaseColor ?? "#6699cc";
 window.SYNIMA_STATE.syntenyContigPalette = window.SYNIMA_STATE.syntenyContigPalette ?? "classic";
 window.SYNIMA_STATE.syntenyContigOverrides = window.SYNIMA_STATE.syntenyContigOverrides ?? {}; // {"genome|contig": "#rrggbb"}
 window.SYNIMA_STATE.selectedContigKey = window.SYNIMA_STATE.selectedContigKey ?? null;
-
 window.SYNIMA_STATE.syntenyBlockColor = window.SYNIMA_STATE.syntenyBlockColor ?? "#ffffff";
-
 window.SYNIMA_STATE.syntenyBlockOpacity = window.SYNIMA_STATE.syntenyBlockOpacity ?? 0.5;
-
 window.SYNIMA_STATE.syntenyBgColor = window.SYNIMA_STATE.syntenyBgColor ?? "#0f1b30";
-
 window.SYNIMA_STATE.syntenyLabelColor = window.SYNIMA_STATE.syntenyLabelColor ?? "#ffffff";
-
 window.SYNIMA_MIDPOINT_VALUE = window.SYNIMA_MIDPOINT_VALUE || "__SYNIMA_MIDPOINT__";
