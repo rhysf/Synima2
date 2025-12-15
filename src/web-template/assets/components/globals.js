@@ -11,6 +11,11 @@ window.SYNIMA_PERSIST_KEYS = window.SYNIMA_PERSIST_KEYS || {
 	rootTip: "synima_tree_root_tip",
 	treeYScale: "synima_tree_y_scale",
 
+	// NEW tree appearance
+	treeBgColor: "synima_tree_bg_color",
+	treeLabelColor: "synima_tree_label_color",
+	treeBranchColor: "synima_tree_branch_color",
+
 	// Synteny tab
 	syntenyFontSize: "synima_synteny_font_size",
 	syntenyMode: "synima_synteny_mode",
@@ -45,6 +50,9 @@ window.SYNIMA_STATE.syntenyTreeWidthPct = window.SYNIMA_STATE.syntenyTreeWidthPc
 
 // tree extra
 window.SYNIMA_STATE.treeYScale = window.SYNIMA_STATE.treeYScale ?? 1.0;
+window.SYNIMA_STATE.treeBgColor = window.SYNIMA_STATE.treeBgColor ?? "#0f1b30";
+window.SYNIMA_STATE.treeLabelColor = window.SYNIMA_STATE.treeLabelColor ?? "#ffffff";
+window.SYNIMA_STATE.treeBranchColor = window.SYNIMA_STATE.treeBranchColor ?? "#ffffff";
 
 // contig colours
 window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode = "synima_synteny_contig_color_mode";

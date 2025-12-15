@@ -323,9 +323,9 @@ body {
 
 
 /* TREE */
-
+/* background: #0f1b30; */
 .tree-view {
-  background: #0f1b30;
+  background: var(--synima-tree-bg, #0f1b30);
   border: 1px solid #334155;
   padding: 1rem;
   border-radius: 0.5rem;
@@ -339,9 +339,11 @@ body {
   height: auto;
 }
 
+/* 
+  stroke: #64748b;
+   slate-500 */
 .tree-lines line {
-  stroke: #64748b; /* slate-500 */
-  stroke-width: 1.5;
+  stroke-width: 2px;
 }
 
 /*.tree-label {

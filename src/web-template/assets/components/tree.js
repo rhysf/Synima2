@@ -28,6 +28,18 @@ function syncAlignFromStorage() {
       if (Number.isFinite(n)) window.SYNIMA_STATE.treeYScale = n;
     }
   } catch (e) {}
+
+  // add in background colour, branch colour and taxa label colour
+  try {
+    const bg = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.treeBgColor);
+    if (bg) window.SYNIMA_STATE.treeBgColor = bg;
+
+    const lc = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.treeLabelColor);
+    if (lc) window.SYNIMA_STATE.treeLabelColor = lc;
+
+    const bc = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.treeBranchColor);
+    if (bc) window.SYNIMA_STATE.treeBranchColor = bc;
+  } catch (e) {}
 }
 
 // Pull any stored value into SYNIMA_ALIGN_LABELS once at startup
@@ -298,7 +310,11 @@ function renderTreeSvg(root, containerId, opts={}) {
     if (n.children) n.children.forEach(walk);
   })(root);
 
+  // user options
   const userYScale = (window.SYNIMA_STATE && Number.isFinite(window.SYNIMA_STATE.treeYScale)) ? window.SYNIMA_STATE.treeYScale : 1.0;
+  const bgColor = window.SYNIMA_STATE?.treeBgColor || "#0f1b30";
+  const labelColor = window.SYNIMA_STATE?.treeLabelColor || "white";
+  const branchColor = window.SYNIMA_STATE?.treeBranchColor || "white";
 
   // Expand vertical scale BEFORE computing height
   const baseMini = isMini ? 6 : 1;
@@ -337,12 +353,10 @@ function renderTreeSvg(root, containerId, opts={}) {
       let x2 = offsetX + child.x * scaleX;
       let y2 = offsetY + child.y;
 
-      
-
       // Vertical segment
-      lines.push(`<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y2}" stroke="white" stroke-width="${lineW}" style="stroke-width:${lineW}px;" />`);
+      lines.push(`<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y2}" stroke="${branchColor}" stroke-width="${lineW}" style="stroke:${branchColor}; stroke-width:${lineW}px;" />`);
       // Horizontal segment
-      lines.push(`<line x1="${x1}" y1="${y2}" x2="${x2}" y2="${y2}" stroke="white" stroke-width="${lineW}" style="stroke-width:${lineW}px;" />`);
+      lines.push(`<line x1="${x1}" y1="${y2}" x2="${x2}" y2="${y2}" stroke="${branchColor}" stroke-width="${lineW}" style="stroke:${branchColor}; stroke-width:${lineW}px;" />`);
 
       drawBranches(child);
     });
@@ -373,7 +387,7 @@ function renderTreeSvg(root, containerId, opts={}) {
         leaderLines.push(`
           <line x1="${leaderStartX}" y1="${offsetY + node.y}"
                 x2="${labelX - 5}" y2="${offsetY + node.y}"
-                stroke="white"
+                stroke="${branchColor}"
                 stroke-width="1"
                 stroke-dasharray="3,3" />
         `);
@@ -397,7 +411,8 @@ function renderTreeSvg(root, containerId, opts={}) {
         `<text class="tree-label-text"
            data-tip-name="${node.name}"
            x="${x}" y="${y}"
-           fill="white" 
+           fill="${labelColor}" 
+           style="fill:${labelColor};" 
            font-size="${effectiveFontSize}"
            font-family="sans-serif">
             ${displayName}
@@ -430,10 +445,10 @@ function renderTreeSvg(root, containerId, opts={}) {
   let scaleBar = `
     <line x1="${scalePxStart}" y1="${barY}"
       x2="${scalePxEnd}"   y2="${barY}"
-      stroke="white" stroke-width="${scaleBarStroke}" />
+      stroke="${branchColor}" stroke-width="${scaleBarStroke}" />
 
     <text x="${scalePxMid}" y="${textY}"
-      fill="white" 
+      fill="${labelColor}" 
       font-size="${effectiveFontSize}"
       class="tree-label"
       text-anchor="middle">${rounded}</text>
@@ -522,6 +537,14 @@ function renderTreeSvg(root, containerId, opts={}) {
     SYNIMA.attachLabelClickHandlers(root);
   }
 
+}
+
+// background colour
+function applyTreeBackground() {
+  const el = document.getElementById("tree-view-0");
+  if (!el) return;
+  const bg = window.SYNIMA_STATE?.treeBgColor || "#0f1b30";
+  el.style.setProperty("--synima-tree-bg", bg);
 }
 
 // Get tip names (current displayed labels)
@@ -1260,6 +1283,43 @@ SYNIMA.showTree = function () {
               <option value="5">5</option>
             </select>
           </label>
+
+          <label style="margin-left: 10px;">
+            Background colour:
+            <select id="tree-bg-select">
+              <option value="#0f1b30">Navy</option>
+              <option value="#111827">Slate</option>
+              <option value="#111111">Charcoal</option>
+              <option value="#000000">Black</option>
+              <option value="#ffffff">White</option>
+            </select>
+          </label>
+
+          <label style="margin-left: 10px;">
+            Taxa label colour:
+            <select id="tree-label-colour-select">
+              <option value="#ffffff">White</option>
+              <option value="#000000">Black</option>
+              <option value="#0f1b30">Navy</option>
+              <option value="#d1d5db">Light grey</option>
+              <option value="#fbbf24">Amber</option>
+              <option value="#93c5fd">Light blue</option>
+            </select>
+          </label>
+
+          <label style="margin-left: 10px;">
+            Branch colour:
+            <select id="tree-branch-colour-select">
+              <option value="#ffffff">White</option>
+              <option value="#000000">Black</option>
+              <option value="#66cc99">Green Cyan</option>
+              <option value="#6699cc">Blue Gray</option>
+              <option value="#cc6699">Pink</option>
+              <option value="#cc9966">Light Orange</option>
+              <option value="#ff0000">Red</option>
+            </select>
+          </label>
+
         </fieldset>
 
         <!-- Trees -->
@@ -1310,6 +1370,7 @@ SYNIMA.showTree = function () {
   `;
 
   app.innerHTML = html;
+  applyTreeBackground();
 
   // DOWNLOAD DROPDOWN LOGIC
   const downloadBtn = document.getElementById("download-btn");
@@ -1356,6 +1417,47 @@ SYNIMA.showTree = function () {
     });
   }
 
+  function applyTreeAppearance() {
+    if (SYNIMA_TREES?.current) {
+      const el = document.getElementById("tree-view-0");
+      if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+    }
+  }
+
+  // Background
+  const bgSel = document.getElementById("tree-bg-select");
+  if (bgSel) {
+    bgSel.value = window.SYNIMA_STATE.treeBgColor || "#0f1b30";
+    bgSel.addEventListener("change", () => {
+      window.SYNIMA_STATE.treeBgColor = bgSel.value;
+      try { localStorage.setItem(window.SYNIMA_PERSIST_KEYS.treeBgColor, bgSel.value); } catch (e) {}
+      applyTreeBackground();
+      applyTreeAppearance();
+    });
+  }
+
+  // Label colour
+  const labSel = document.getElementById("tree-label-colour-select");
+  if (labSel) {
+    labSel.value = window.SYNIMA_STATE.treeLabelColor || "#ffffff";
+    labSel.addEventListener("change", () => {
+      window.SYNIMA_STATE.treeLabelColor = labSel.value;
+      try { localStorage.setItem(window.SYNIMA_PERSIST_KEYS.treeLabelColor, labSel.value); } catch (e) {}
+      applyTreeAppearance();
+    });
+  }
+
+  // Branch colour
+  const brSel = document.getElementById("tree-branch-colour-select");
+  if (brSel) {
+    brSel.value = window.SYNIMA_STATE.treeBranchColor || "#ffffff";
+    brSel.addEventListener("change", () => {
+      window.SYNIMA_STATE.treeBranchColor = brSel.value;
+      try { localStorage.setItem(window.SYNIMA_PERSIST_KEYS.treeBranchColor, brSel.value); } catch (e) {}
+      applyTreeAppearance();
+    });
+  }
+
   // adjust heigh scale
   const ySel = document.getElementById("tree-y-scale-select");
   if (ySel) {
@@ -1366,11 +1468,8 @@ SYNIMA.showTree = function () {
       if (!Number.isFinite(n)) return;
 
       window.SYNIMA_STATE.treeYScale = n;
-      try {
-        localStorage.setItem(window.SYNIMA_PERSIST_KEYS.treeYScale, String(n));
-      } catch (e) {}
-
-      if (SYNIMA_TREES.current) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+      try { localStorage.setItem(window.SYNIMA_PERSIST_KEYS.treeYScale, String(n)); } catch (e) {}
+      applyTreeAppearance();
 
       // Optional: if synteny is open and depends on mini-tree tip positions, rerender it too.
       if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
@@ -1383,8 +1482,7 @@ SYNIMA.showTree = function () {
     const v = parseInt(lwSelect.value, 10);
     SYNIMA_LINE_WIDTH = v;
     localStorage.setItem(SYNIMA_PERSIST_KEYS.lineWidth, String(v));
-    const el = document.getElementById("tree-view-0");
-    if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+    applyTreeAppearance();
   });
 
   // adjust font size
@@ -1392,8 +1490,7 @@ SYNIMA.showTree = function () {
   fsSelect.addEventListener("change", () => {
     SYNIMA_FONT_SIZE = parseInt(fsSelect.value, 10);
     localStorage.setItem(SYNIMA_PERSIST_KEYS.fontSize, SYNIMA_FONT_SIZE);
-    const el = document.getElementById("tree-view-0");
-    if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+    applyTreeAppearance();
   });
 
   // Restore persisted settings
@@ -1508,6 +1605,10 @@ SYNIMA.resetRoot = function () {
   SYNIMA.selectedLabelName = null;
   SYNIMA.annotateArmed = false;
 
+  window.SYNIMA_STATE.treeBgColor = "#0f1b30";
+  window.SYNIMA_STATE.treeLabelColor = "#ffffff";
+  window.SYNIMA_STATE.treeBranchColor = "#ffffff";
+
   // ----------------------------
   // 2) Reset persisted state
   // ----------------------------
@@ -1518,6 +1619,9 @@ SYNIMA.resetRoot = function () {
     localStorage.removeItem(SYNIMA_PERSIST_KEYS.fontSize);
     localStorage.removeItem(SYNIMA_PERSIST_KEYS.alignLabels);
     //localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip);
+    localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.treeBgColor);
+    localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.treeLabelColor);
+    localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.treeBranchColor);
 
     // Reset rooting to midpoint as your default
     localStorage.setItem(SYNIMA_PERSIST_KEYS.rootTip, SYNIMA_MIDPOINT_VALUE);
@@ -1547,6 +1651,17 @@ SYNIMA.resetRoot = function () {
   const dd = document.getElementById("annotate-dropdown");
   if (dd) dd.classList.add("hidden");
 
+  // colours
+  const bgSel = document.getElementById("tree-bg-select");
+  if (bgSel) bgSel.value = "#0f1b30";
+  applyTreeBackground();
+
+  const labSel = document.getElementById("tree-label-colour-select");
+  if (labSel) labSel.value = "#ffffff";
+
+  const brSel = document.getElementById("tree-branch-colour-select");
+  if (brSel) brSel.value = "#ffffff";
+
   // ----------------------------
   // 4) Rebuild tree and apply default rooting
   // ----------------------------
@@ -1572,6 +1687,26 @@ SYNIMA.resetRoot = function () {
   console.log("Tree reset");
 };
 
+function addSvgBackgroundRect(svg, color) {
+  const vb = svg.getAttribute("viewBox");
+  if (!vb) return;
+
+  const parts = vb.trim().split(/\s+/).map(Number);
+  if (parts.length !== 4) return;
+
+  const [x, y, w, h] = parts;
+
+  const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  rect.setAttribute("x", String(x));
+  rect.setAttribute("y", String(y));
+  rect.setAttribute("width", String(w));
+  rect.setAttribute("height", String(h));
+  rect.setAttribute("fill", color);
+
+  // Put it first so it sits behind everything else
+  svg.insertBefore(rect, svg.firstChild);
+}
+
 SYNIMA.exportSvg = function () {
   const svgEl = document.querySelector("#tree-view-0 svg");
   if (!svgEl) return;
@@ -1580,13 +1715,25 @@ SYNIMA.exportSvg = function () {
   const clone = svgEl.cloneNode(true);
 
   // Convert all white strokes/fills to black
-  clone.querySelectorAll("line").forEach(line => {
-    line.setAttribute("stroke", "black");
-  });
+  //clone.querySelectorAll("line").forEach(line => {
+  //  line.setAttribute("stroke", "black");
+  //});
 
-  clone.querySelectorAll("text").forEach(txt => {
-    txt.setAttribute("fill", "black");
-  });
+  //clone.querySelectorAll("text").forEach(txt => {
+  //  txt.setAttribute("fill", "black");
+  //});
+
+  // pick the same bg the PNG exporter uses
+  const treeEl = document.getElementById("tree-view-0");
+  const bg =
+    (window.SYNIMA_STATE && window.SYNIMA_STATE.treeBgColor) ||
+    (treeEl ? getComputedStyle(treeEl).backgroundColor : null) ||
+    "#0f1b30";
+
+  addSvgBackgroundRect(clone, bg);
+
+  // (optional but harmless) ensure namespace is present
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
 
   const svgData = new XMLSerializer().serializeToString(clone);
   const blob = new Blob([svgData], { type: "image/svg+xml" });
@@ -1604,14 +1751,16 @@ SYNIMA.exportPng = function () {
   const svgEl = document.querySelector("#tree-view-0 svg");
   if (!svgEl) return;
 
-  // Clone and recolor white→black
+  // Clone 
   const clone = svgEl.cloneNode(true);
-  clone.querySelectorAll("line").forEach(line => {
-    line.setAttribute("stroke", "black");
-  });
-  clone.querySelectorAll("text").forEach(txt => {
-    txt.setAttribute("fill", "black");
-  });
+
+  // recolor white→black
+  //clone.querySelectorAll("line").forEach(line => {
+  //  line.setAttribute("stroke", "black");
+  //});
+  //clone.querySelectorAll("text").forEach(txt => {
+  //  txt.setAttribute("fill", "black");
+  //});
 
   // Ensure width + height exist in the SVG tag (critically important!)
   const viewBox = clone.getAttribute("viewBox").split(/\s+/);
@@ -1635,7 +1784,22 @@ SYNIMA.exportPng = function () {
     canvas.height = img.height * SCALE;
 
     const ctx = canvas.getContext("2d");
+
+    // Use the chosen tree background (fallback to computed CSS background)
+    const treeEl = document.getElementById("tree-view-0");
+    const bg =
+      (window.SYNIMA_STATE && window.SYNIMA_STATE.treeBgColor) ||
+      (treeEl ? getComputedStyle(treeEl).backgroundColor : null) ||
+      "#0f1b30";
+
+    // Work in SVG units
     ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+
+    // Paint background first (otherwise it stays transparent)
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, img.width, img.height);
+
+    // Then draw the SVG
     ctx.drawImage(img, 0, 0);
 
     const pngUrl = canvas.toDataURL("image/png");
