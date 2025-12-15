@@ -1,5 +1,8 @@
 window.SYNIMA = window.SYNIMA || {};
 
+window.SYNIMA_MIDPOINT_VALUE = window.SYNIMA_MIDPOINT_VALUE || "__SYNIMA_MIDPOINT__";
+const SYNIMA_MIDPOINT_VALUE = window.SYNIMA_MIDPOINT_VALUE;
+
 // Default alignment flag - will be overridden by localStorage if present
 let SYNIMA_ALIGN_LABELS = true;
 
@@ -519,41 +522,57 @@ SYNIMA.getTipNames = function(root) {
 
 // Root-by-tip dropdown builder
 SYNIMA.buildRootByTipDropdown = function () {
-  const controls = document.querySelector(".tree-controls");
-  if (!controls || !SYNIMA_TREES.current) return;
-
-  // Remove existing dropdown + button if any
-  const oldSelect = document.getElementById("tip-root-select");
-  if (oldSelect && oldSelect.parentElement) {
-    oldSelect.parentElement.remove(); // removes label wrapper
-  }
-  const oldBtn = document.getElementById("apply-tip-root");
-  if (oldBtn) oldBtn.remove();
+  const host = document.getElementById("rooting-controls");
+  if (!host || !SYNIMA_TREES.current) return;
 
   const tips = SYNIMA.getTipNames(SYNIMA_TREES.current);
   if (!tips || tips.length === 0) return;
 
-  let dropdownHtml = `
-    <label style="margin-left: 10px;">
-      Root by tip:
+  host.innerHTML = `
+    <label>
+      Rooting:
       <select id="tip-root-select">
-        <option value="">Select…</option>
+        <option value="">User selection</option>
+        <option value="${SYNIMA_MIDPOINT_VALUE}">Midpoint</option>
         ${tips.map(t => `<option value="${t}">${t}</option>`).join("")}
       </select>
     </label>
-    <button id="apply-tip-root">Apply</button>
+    <button id="apply-tip-root" type="button">Apply</button>
   `;
 
-  controls.insertAdjacentHTML("beforeend", dropdownHtml);
-
+  const sel = document.getElementById("tip-root-select");
   const btn = document.getElementById("apply-tip-root");
-  if (btn) {
+
+  // sync the “Root by tip” dropdown to the saved value
+  if (sel) {
+    const savedRoot = localStorage.getItem(SYNIMA_PERSIST_KEYS.rootTip);
+    if (savedRoot) sel.value = savedRoot;
+  }
+
+  if (btn && sel) {
     btn.addEventListener("click", () => {
-      const chosen = document.getElementById("tip-root-select").value;
-      if (chosen) SYNIMA.rootByTip(chosen);
+      const selected = sel.value;
+
+      // "User selection" = turn off rooting (including midpoint)
+      if (!selected) {
+        if (SYNIMA_TREES && SYNIMA_TREES.original) {
+          SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
+          applyRenamedTaxa(SYNIMA_TREES.current); // keep any renames
+          try { localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip); } catch (e) {}
+          renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+          SYNIMA.buildRootByTipDropdown(); // refresh dropdown to show "User selection"
+        }
+        return;
+      }
+
+      if (selected === SYNIMA_MIDPOINT_VALUE) {
+        SYNIMA.midpointRoot(false);
+      } else {
+        SYNIMA.rootByTip(selected);
+      }
     });
   }
-};
+}
 
 // Modal-based rename
 SYNIMA.applyRename = function (oldDisplayedName, newName) {
@@ -649,7 +668,11 @@ SYNIMA.renameSelectedTaxon = function () {
 };
 
 // Root by selection (Figtree-style)
-SYNIMA.rootByTip = function (tipName, skipRender = false) {
+SYNIMA.rootByTip = function (tipName, skipRender) {
+
+  if (tipName === SYNIMA_MIDPOINT_VALUE) {
+    return SYNIMA.midpointRoot(skipRender);
+  }
 
   // Clone original tree always
   let root = cloneTree(SYNIMA_TREES.original);
@@ -738,6 +761,232 @@ SYNIMA.rootByTip = function (tipName, skipRender = false) {
   }
 };
 
+
+// Midpoint root code
+function buildAdjacencyFromTree(root) {
+  const adj = new Map();
+  const nodes = [];
+
+  function addEdge(a, b, w) {
+    if (!adj.has(a)) adj.set(a, []);
+    if (!adj.has(b)) adj.set(b, []);
+    adj.get(a).push({ node: b, w });
+    adj.get(b).push({ node: a, w });
+  }
+
+  (function walk(n, parent) {
+    nodes.push(n);
+    if (!adj.has(n)) adj.set(n, []);
+
+    if (parent) {
+      const w = (typeof n.length === "number" && Number.isFinite(n.length)) ? n.length : 0;
+      addEdge(parent, n, w);
+    }
+
+    if (n.children && n.children.length) {
+      for (const c of n.children) walk(c, n);
+    }
+  })(root, null);
+
+  return { adj, nodes };
+}
+
+function isLeafByAdjacency(node, adj) {
+  const deg = (adj.get(node) || []).length;
+  // In an undirected tree, tips have degree 1.
+  // If the whole tree is a single node, degree can be 0.
+  return deg <= 1;
+}
+
+function farthestTipFrom(start, adj) {
+  const dist = new Map();
+  const prev = new Map();
+
+  const stack = [start];
+  dist.set(start, 0);
+
+  while (stack.length) {
+    const cur = stack.pop();
+    const curD = dist.get(cur);
+
+    for (const { node: nb, w } of (adj.get(cur) || [])) {
+      if (dist.has(nb)) continue;
+      dist.set(nb, curD + w);
+      prev.set(nb, cur);
+      stack.push(nb);
+    }
+  }
+
+  let bestNode = start;
+  let bestDist = 0;
+
+  for (const [n, d] of dist.entries()) {
+    if (!isLeafByAdjacency(n, adj)) continue;
+    if (d > bestDist) {
+      bestDist = d;
+      bestNode = n;
+    }
+  }
+
+  return { node: bestNode, dist: bestDist, prev, distMap: dist };
+}
+
+function edgeWeight(adj, a, b) {
+  const xs = adj.get(a) || [];
+  for (const e of xs) {
+    if (e.node === b) return e.w;
+  }
+  return 0;
+}
+
+function buildRootedSubtreeFromAdj(node, parent, lenToParent, adj) {
+  const out = {
+    name: node.name ?? null,
+    origName: node.origName ?? null,
+    length: lenToParent,
+    children: []
+  };
+
+  for (const { node: nb, w } of (adj.get(node) || [])) {
+    if (nb === parent) continue;
+    out.children.push(buildRootedSubtreeFromAdj(nb, node, w, adj));
+  }
+
+  return out;
+}
+
+SYNIMA.midpointRoot = function (fromStorage = false) {
+  if (!SYNIMA_TREES.original) {
+    console.warn("midpointRoot: No original tree stored.");
+    return;
+  }
+
+  // Toggle behavior: if already midpoint-rooted and user applies again, revert to unrooted.
+  if (!fromStorage) {
+    const prev = localStorage.getItem(SYNIMA_PERSIST_KEYS.rootTip);
+    if (prev === SYNIMA_MIDPOINT_VALUE) {
+      localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip);
+      SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
+      applyRenamedTaxa(SYNIMA_TREES.current);
+      renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+      SYNIMA.buildRootByTipDropdown();
+      console.log("Midpoint root toggled off (reverted to unrooted).");
+      return;
+    }
+  }
+
+  // Work from a fresh clone of the original (like rootByTip does)
+  const base = cloneTree(SYNIMA_TREES.original);
+  applyRenamedTaxa(base);
+
+  const { adj, nodes } = buildAdjacencyFromTree(base);
+  if (nodes.length < 2) {
+    SYNIMA_TREES.current = base;
+    renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+    return;
+  }
+
+  const start = nodes.find(n => isLeafByAdjacency(n, adj)) || nodes[0];
+
+  // Tree diameter via 2 passes
+  const Ares = farthestTipFrom(start, adj);
+  const Bres = farthestTipFrom(Ares.node, adj);
+
+  const A = Ares.node;
+  const B = Bres.node;
+  const total = Bres.dist;
+
+  console.group("Midpoint rooting");
+  console.log("Diameter tip A:", A?.name, "tip B:", B?.name, "diameter length:", total);
+
+  // Reconstruct path A -> B using prev map from the second pass (which started at A)
+  const path = [];
+  let cur = B;
+  while (cur && cur !== A) {
+    path.push(cur);
+    cur = Bres.prev.get(cur);
+  }
+  if (cur !== A) {
+    console.warn("midpointRoot: could not reconstruct A->B path; leaving tree unchanged");
+    console.groupEnd();
+    return;
+  }
+  path.push(A);
+  path.reverse();
+
+  console.log("Path node count:", path.length);
+
+  // Find midpoint position along path
+  const target = total / 2;
+  let acc = 0;
+
+  let u = null;
+  let v = null;
+  let along = 0;
+  let w = 0;
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    const ew = edgeWeight(adj, a, b);
+
+    if (acc + ew >= target) {
+      u = a;
+      v = b;
+      w = ew;
+      along = target - acc; // distance from u towards v
+      break;
+    }
+    acc += ew;
+  }
+
+  if (!u || !v) {
+    console.warn("midpointRoot: midpoint edge not found; leaving tree unchanged");
+    console.groupEnd();
+    return;
+  }
+
+  console.log("Midpoint on edge:", u.name, "<->", v.name, "edgeLen:", w, "offsetFromU:", along);
+
+  let newTree;
+
+  // If midpoint lands exactly on an existing node, just root at that node.
+  if (w === 0 || along <= 0) {
+    console.log("Midpoint coincides with node:", u.name);
+    newTree = buildRootedSubtreeFromAdj(u, null, 0, adj);
+  } else if (along >= w) {
+    console.log("Midpoint coincides with node:", v.name);
+    newTree = buildRootedSubtreeFromAdj(v, null, 0, adj);
+  } else {
+    // Midpoint is inside the edge, split it and create a new root node
+    const du = along;
+    const dv = w - along;
+
+    const left = buildRootedSubtreeFromAdj(u, v, du, adj);
+    const right = buildRootedSubtreeFromAdj(v, u, dv, adj);
+
+    newTree = {
+      name: null,
+      origName: null,
+      length: 0,
+      children: [left, right]
+    };
+
+    console.log("Created new root inside edge; split lengths:", { du, dv });
+  }
+
+  SYNIMA_TREES.current = newTree;
+
+  if (!fromStorage) {
+    localStorage.setItem(SYNIMA_PERSIST_KEYS.rootTip, SYNIMA_MIDPOINT_VALUE);
+  }
+
+  renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+  SYNIMA.buildRootByTipDropdown();
+
+  console.groupEnd();
+};
+
 // =============================================================
 // GLOBAL TREE INITIALISATION (used by Tree tab AND Synteny tab)
 // =============================================================
@@ -787,7 +1036,9 @@ window.SYNIMA_TREES = window.SYNIMA_TREES || {};
 
     const savedRoot = localStorage.getItem(SYNIMA_PERSIST_KEYS.rootTip);
     if (savedRoot) {
-      SYNIMA.rootByTip(savedRoot, true);   // compute root, but DO NOT render yet
+      SYNIMA.rootByTip(savedRoot, true); // skipRender true
+    } else {
+      SYNIMA.midpointRoot(true); // do midpoint by default, and do not render yet
     }
 
     // Align labels: restore from localStorage
@@ -976,14 +1227,7 @@ SYNIMA.showTree = function () {
         <fieldset class="tree-controls-group">
           <legend>Trees</legend>
 
-          <label>
-            Root by tip:
-            <select id="tip-root-select">
-              <option value="">Select…</option>
-            </select>
-          </label>
-
-          <button id="apply-tip-root" type="button">Apply</button>
+          <div id="rooting-controls"></div>
 
           <div id="tip-root-dialog" class="tip-dialog hidden"></div>
         </fieldset>
@@ -1141,7 +1385,7 @@ SYNIMA.showTree = function () {
       const tips = SYNIMA.getTipNames(SYNIMA_TREES.current);
 
       tipSelect.innerHTML =
-        `<option value="">Select…</option>` +
+        `<option value="">User selection</option>` +
         tips.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
     }
 
@@ -1158,6 +1402,9 @@ SYNIMA.showTree = function () {
       "<p>Could not render tree.</p>";
   }
 
+  // add rooting dropdown menu
+  SYNIMA.buildRootByTipDropdown();
+
   document.getElementById("align-labels-checkbox").addEventListener("change", e => {
     SYNIMA_ALIGN_LABELS = e.target.checked;
     localStorage.setItem(SYNIMA_PERSIST_KEYS.alignLabels, SYNIMA_ALIGN_LABELS);
@@ -1165,143 +1412,6 @@ SYNIMA.showTree = function () {
       renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
     }
   });
-
-};
-
-SYNIMA.midpointRoot = function () {
-  console.log("=== MIDPOINT ROOT: STAGE 1 ===");
-
-  const root = SYNIMA_TREES.original
-    ? cloneTree(SYNIMA_TREES.original)
-    : null;
-
-  if (!root) {
-    console.warn("No tree loaded.");
-    return;
-  }
-
-  // --- 1. Compute depths and parent pointers ---
-  function addParents(node, parent = null, depth = 0) {
-    node.parent = parent;
-    node.depth = depth;
-    if (node.children) {
-      node.children.forEach(child =>
-        addParents(child, node, depth + (child.length || 0))
-      );
-    }
-  }
-  addParents(root);
-
-  // --- 2. Collect leaves ---
-  let leaves = [];
-  (function gather(n) {
-    if (!n.children || n.children.length === 0) leaves.push(n);
-    else n.children.forEach(gather);
-  })(root);
-
-  console.log("Leaves:");
-  leaves.forEach(l => {
-    console.log(`  ${l.name}: depth ${l.depth}`);
-  });
-
-  // --- 3. LCA helper ---
-  function lca(a, b) {
-    let visited = new Set();
-    let x = a;
-    while (x) {
-      visited.add(x);
-      x = x.parent;
-    }
-    x = b;
-    while (x) {
-      if (visited.has(x)) return x;
-      x = x.parent;
-    }
-    return null;
-  }
-
-  // --- 4. Compute farthest leaf pair ---
-  let bestA = null;
-  let bestB = null;
-  let bestDist = -1;
-
-  for (let i = 0; i < leaves.length; i++) {
-    for (let j = i + 1; j < leaves.length; j++) {
-      let A = leaves[i];
-      let B = leaves[j];
-      let L = lca(A, B);
-      let dist = A.depth + B.depth - 2 * (L ? L.depth : 0);
-
-      if (dist > bestDist) {
-        bestDist = dist;
-        bestA = A;
-        bestB = B;
-      }
-    }
-  }
-
-  console.log(`Farthest pair: ${bestA.name} – ${bestB.name}`);
-  console.log(`Distance: ${bestDist}`);
-  console.log(`Midpoint target from ${bestA.name}: ${bestDist / 2}`);
-
-  console.log("=== END OF STAGE 1 ===");
-
-
-  console.log("=== MIDPOINT ROOT: STAGE 2 (path reconstruction) ===");
-
-  // Helper: path from node to root
-  function pathToRoot(n) {
-    let out = [];
-    while (n) {
-      out.push(n);
-      n = n.parent;
-    }
-    return out;
-  }
-
-  let pathA = pathToRoot(bestA);  // CA1280 → root
-  let pathB = pathToRoot(bestB);  // CNB2 → root
-
-  // Find LCA again
-  let mapA = new Map();
-  pathA.forEach((n, i) => mapA.set(n, i));
-
-  let lcaNode = null;
-  let idxA = -1;
-  let idxB = -1;
-
-  for (let j = 0; j < pathB.length; j++) {
-    let n = pathB[j];
-    if (mapA.has(n)) {
-      lcaNode = n;
-      idxA = mapA.get(n);
-      idxB = j;
-      break;
-    }
-  }
-
-  console.log("LCA node:", lcaNode.name || "(internal)");
-
-  // Build explicit path A → LCA → B
-  let path = [];
-
-  // A → ... → LCA
-  for (let i = 0; i <= idxA; i++) {
-    path.push(pathA[i]);
-  }
-
-  // from LCA back down to B (excluding LCA)
-  for (let j = idxB - 1; j >= 0; j--) {
-    path.push(pathB[j]);
-  }
-
-  console.log("Path from A to B:");
-  for (let i = 0; i < path.length; i++) {
-    let n = path[i];
-    console.log(`  ${i}. ${n.name || "(internal)"} depth=${n.depth}`);
-  }
-
-  console.log("=== END STAGE 2 ===");
 
 };
 

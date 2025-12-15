@@ -61,3 +61,5 @@ window.SYNIMA_STATE.syntenyBlockOpacity = window.SYNIMA_STATE.syntenyBlockOpacit
 window.SYNIMA_STATE.syntenyBgColor = window.SYNIMA_STATE.syntenyBgColor ?? "#0f1b30";
 
 window.SYNIMA_STATE.syntenyLabelColor = window.SYNIMA_STATE.syntenyLabelColor ?? "#ffffff";
+
+window.SYNIMA_MIDPOINT_VALUE = window.SYNIMA_MIDPOINT_VALUE || "__SYNIMA_MIDPOINT__";
