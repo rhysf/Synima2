@@ -124,8 +124,12 @@ function openContigEditor(ev, genome, contig) {
   const orientation = "+";
 
   const key = `${genome}|${contig}`;
+
   const nameOverrides = window.SYNIMA_STATE.syntenyContigNameOverrides || {};
   const curName = nameOverrides[key] || contig;
+
+  const overrides = window.SYNIMA_STATE.syntenyContigOverrides || {};
+  const curColor = overrides[key] || "";
 
   // position relative to plot
   const plotRect = document.getElementById("synteny-plot").getBoundingClientRect();
@@ -153,6 +157,23 @@ function openContigEditor(ev, genome, contig) {
       <div style="margin-top:10px;">
         <label style="display:block; font-size:12px; margin-bottom:4px;">Rename contig</label>
         <input id="ctg-rename-input" type="text" value="${curName}">
+
+        <!-- colours -->
+        <div style="margin-top:10px;">
+        <label style="display:block; font-size:12px; margin-bottom:4px;">Contig colour</label>
+        <select id="ctg-colour-select">
+          <option value="">Default</option>
+          <option value="#66cc99">Green Cyan</option>
+          <option value="#6699cc">Blue Gray</option>
+          <option value="#cc6699">Pink</option>
+          <option value="#cc9966">Light Orange</option>
+          <option value="#ffffff">White</option>
+          <option value="#ff0000">Red</option>
+          <option value="#000000">Black</option>
+        </select>
+      </div>
+
+
         <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
           <button id="ctg-rename-cancel" type="button">Cancel</button>
           <button id="ctg-rename-apply" type="button">Apply</button>
@@ -160,6 +181,10 @@ function openContigEditor(ev, genome, contig) {
       </div>
     </div>
   `;
+
+  // initial colour
+  const colSel = document.getElementById("ctg-colour-select");
+  if (colSel) colSel.value = curColor;
 
   editorEl.classList.remove("hidden");
 
@@ -193,6 +218,7 @@ function openContigEditor(ev, genome, contig) {
     if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
   });
 
+  // rename contig
   document.getElementById("ctg-rename-apply")?.addEventListener("click", () => {
     const val = document.getElementById("ctg-rename-input")?.value?.trim() || "";
     window.SYNIMA_STATE.syntenyContigNameOverrides ||= {};
@@ -206,6 +232,24 @@ function openContigEditor(ev, genome, contig) {
     } catch (e) {}
 
     closeContigEditor();
+    if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+  });
+
+  // recolor
+  document.getElementById("ctg-colour-select")?.addEventListener("change", (e) => {
+    const v = e.target.value; // "" means default
+    window.SYNIMA_STATE.syntenyContigOverrides ||= {};
+
+    if (!v) delete window.SYNIMA_STATE.syntenyContigOverrides[key];
+    else window.SYNIMA_STATE.syntenyContigOverrides[key] = v;
+
+    try {
+      localStorage.setItem(
+        window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides,
+        JSON.stringify(window.SYNIMA_STATE.syntenyContigOverrides)
+      );
+    } catch (err) {}
+
     if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
   });
 }
@@ -1891,6 +1935,8 @@ if (!SYNIMA._syntenyOutsideClickBound) {
   SYNIMA._syntenyOutsideClickBound = true;
 
   document.addEventListener("click", (e) => {
+    if (e.target.closest("#synteny-contig-editor")) return;
+    if (e.target.closest("#synteny-plot")) return;
     if (!window.SYNIMA_STATE?.selectedContigKey) return;
 
     // IMPORTANT: treat clicks in the plot OR in the editor as "inside"
