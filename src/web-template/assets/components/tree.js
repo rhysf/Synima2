@@ -272,7 +272,7 @@ SYNIMA.attachLabelClickHandlers = function(root) {
 function renderTreeSvg(root, containerId, opts={}) {
   const isMini = opts.mini || false;
 
-  console.log(">>> RENDER START, tree:", JSON.stringify(root));
+  //console.log(">>> RENDER START, tree:", JSON.stringify(root));
 
   // Ensure dropdown closes when tree is re-rendered
   const dd = document.getElementById("annotate-dropdown");
@@ -559,7 +559,9 @@ SYNIMA.buildRootByTipDropdown = function () {
           SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
           applyRenamedTaxa(SYNIMA_TREES.current); // keep any renames
           try { localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip); } catch (e) {}
-          renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+
+          const el = document.getElementById("tree-view-0");
+          if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
           SYNIMA.buildRootByTipDropdown(); // refresh dropdown to show "User selection"
         }
         return;
@@ -604,7 +606,8 @@ SYNIMA.applyRename = function (oldDisplayedName, newName) {
   // PERSIST THE RENAME MAP
   localStorage.setItem(SYNIMA_PERSIST_KEYS.names, JSON.stringify(SYNIMA_TAXON_NAMES));
 
-  renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+  const el = document.getElementById("tree-view-0");
+  if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   SYNIMA.buildRootByTipDropdown();
 };
 
@@ -757,7 +760,8 @@ SYNIMA.rootByTip = function (tipName, skipRender) {
   SYNIMA_TREES.current = newRoot;
   localStorage.setItem(SYNIMA_PERSIST_KEYS.rootTip, tipName);
   if (!skipRender) {
-    renderTreeSvg(newRoot, "tree-view-0");
+    const el = document.getElementById("tree-view-0");
+    if (el) renderTreeSvg(newRoot, "tree-view-0");
   }
 };
 
@@ -868,7 +872,9 @@ SYNIMA.midpointRoot = function (fromStorage = false) {
       localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip);
       SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
       applyRenamedTaxa(SYNIMA_TREES.current);
-      renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+
+      const el = document.getElementById("tree-view-0");
+      if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
       SYNIMA.buildRootByTipDropdown();
       console.log("Midpoint root toggled off (reverted to unrooted).");
       return;
@@ -882,7 +888,8 @@ SYNIMA.midpointRoot = function (fromStorage = false) {
   const { adj, nodes } = buildAdjacencyFromTree(base);
   if (nodes.length < 2) {
     SYNIMA_TREES.current = base;
-    renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+    const el = document.getElementById("tree-view-0");
+    if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
     return;
   }
 
@@ -896,8 +903,8 @@ SYNIMA.midpointRoot = function (fromStorage = false) {
   const B = Bres.node;
   const total = Bres.dist;
 
-  console.group("Midpoint rooting");
-  console.log("Diameter tip A:", A?.name, "tip B:", B?.name, "diameter length:", total);
+  //console.group("Midpoint rooting");
+  //console.log("Diameter tip A:", A?.name, "tip B:", B?.name, "diameter length:", total);
 
   // Reconstruct path A -> B using prev map from the second pass (which started at A)
   const path = [];
@@ -908,13 +915,13 @@ SYNIMA.midpointRoot = function (fromStorage = false) {
   }
   if (cur !== A) {
     console.warn("midpointRoot: could not reconstruct A->B path; leaving tree unchanged");
-    console.groupEnd();
+    //console.groupEnd();
     return;
   }
   path.push(A);
   path.reverse();
 
-  console.log("Path node count:", path.length);
+  //console.log("Path node count:", path.length);
 
   // Find midpoint position along path
   const target = total / 2;
@@ -942,11 +949,11 @@ SYNIMA.midpointRoot = function (fromStorage = false) {
 
   if (!u || !v) {
     console.warn("midpointRoot: midpoint edge not found; leaving tree unchanged");
-    console.groupEnd();
+    //console.groupEnd();
     return;
   }
 
-  console.log("Midpoint on edge:", u.name, "<->", v.name, "edgeLen:", w, "offsetFromU:", along);
+  //console.log("Midpoint on edge:", u.name, "<->", v.name, "edgeLen:", w, "offsetFromU:", along);
 
   let newTree;
 
@@ -972,7 +979,7 @@ SYNIMA.midpointRoot = function (fromStorage = false) {
       children: [left, right]
     };
 
-    console.log("Created new root inside edge; split lengths:", { du, dv });
+    //console.log("Created new root inside edge; split lengths:", { du, dv });
   }
 
   SYNIMA_TREES.current = newTree;
@@ -981,7 +988,8 @@ SYNIMA.midpointRoot = function (fromStorage = false) {
     localStorage.setItem(SYNIMA_PERSIST_KEYS.rootTip, SYNIMA_MIDPOINT_VALUE);
   }
 
-  renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+  const el = document.getElementById("tree-view-0");
+  if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   SYNIMA.buildRootByTipDropdown();
 
   console.groupEnd();
@@ -1323,15 +1331,17 @@ SYNIMA.showTree = function () {
     const v = parseInt(lwSelect.value, 10);
     SYNIMA_LINE_WIDTH = v;
     localStorage.setItem(SYNIMA_PERSIST_KEYS.lineWidth, String(v));
-    renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+    const el = document.getElementById("tree-view-0");
+    if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   });
 
   // adjust font size
   const fsSelect = document.getElementById("font-size-select");
   fsSelect.addEventListener("change", () => {
     SYNIMA_FONT_SIZE = parseInt(fsSelect.value, 10);
-    localStorage.setItem(SYNIMA_PERSIST_KEYS.fontSize, SYNIMA_FONT_SIZE);  
-    renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+    localStorage.setItem(SYNIMA_PERSIST_KEYS.fontSize, SYNIMA_FONT_SIZE);
+    const el = document.getElementById("tree-view-0");
+    if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   });
 
   // Restore persisted settings
@@ -1375,7 +1385,8 @@ SYNIMA.showTree = function () {
     // The tree is already initialized globally.
     // Just render the current state.
     applyRenamedTaxa(SYNIMA_TREES.current);
-    renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+    const el = document.getElementById("tree-view-0");
+    if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
 
     // Populate "Root by tip" select now that the tree exists
     const tipSelect = document.getElementById("tip-root-select");
@@ -1409,7 +1420,8 @@ SYNIMA.showTree = function () {
     SYNIMA_ALIGN_LABELS = e.target.checked;
     localStorage.setItem(SYNIMA_PERSIST_KEYS.alignLabels, SYNIMA_ALIGN_LABELS);
     if (SYNIMA_TREES.current) {
-      renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+      const el = document.getElementById("tree-view-0");
+      if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
     }
   });
 
@@ -1449,7 +1461,8 @@ SYNIMA.resetRoot = function () {
   localStorage.removeItem(SYNIMA_PERSIST_KEYS.lineWidth);
   localStorage.removeItem(SYNIMA_PERSIST_KEYS.fontSize);
   localStorage.removeItem(SYNIMA_PERSIST_KEYS.alignLabels);
-  localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip);
+  //localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip);
+  localStorage.setItem(SYNIMA_PERSIST_KEYS.rootTip, SYNIMA_MIDPOINT_VALUE);
 
   // Reset globals
   SYNIMA_TAXON_NAMES = {};
@@ -1464,11 +1477,17 @@ SYNIMA.resetRoot = function () {
   // clone pristine original
   SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
 
+  // apply default rooting (midpoint)
+  if (typeof SYNIMA.midpointRoot === "function") {
+    SYNIMA.midpointRoot(true); // true = suppressRender, if you implemented that pattern
+  }
+
   // redraw
-  renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+  const el = document.getElementById("tree-view-0");
+  if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   SYNIMA.buildRootByTipDropdown();
 
-  console.log("Tree reset to original unrooted version.");
+  console.log("Tree reset");
 };
 
 SYNIMA.exportSvg = function () {
