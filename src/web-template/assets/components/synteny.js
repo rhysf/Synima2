@@ -68,6 +68,14 @@ function syncSyntenyModeFromStorage() {
         console.warn("Could not read contig colour option from localStorage", e);
     }
 
+    // contig rename etc.
+    try {
+      const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigNames);
+      if (saved) window.SYNIMA_STATE.syntenyContigNameOverrides = JSON.parse(saved);
+    } catch (e) {
+      console.warn("Could not read contig name overrides from localStorage", e);
+    }
+
     // contig colours
     try {
         const saved1 = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode);
@@ -102,6 +110,103 @@ function syncSyntenyModeFromStorage() {
       }
     }
     if (!window.SYNIMA_STATE.syntenyContigOverrides) window.SYNIMA_STATE.syntenyContigOverrides = {};
+}
+
+function openContigEditor(ev, genome, contig) {
+  const editorEl = document.getElementById("synteny-contig-editor");
+  if (!editorEl) return;
+
+  const maps = window.SYNIMA_STATE._lastMaps; // optional, or pass maps in; see note below
+  const len = maps?.contigLen?.[genome]?.[contig] ?? "unknown";
+
+  // We know you currently write data-orientation="+"
+  // so this will show "+" for now, but it's ready for later when you implement flipping
+  const orientation = "+";
+
+  const key = `${genome}|${contig}`;
+  const nameOverrides = window.SYNIMA_STATE.syntenyContigNameOverrides || {};
+  const curName = nameOverrides[key] || contig;
+
+  // position relative to plot
+  const plotRect = document.getElementById("synteny-plot").getBoundingClientRect();
+  const x = Math.max(10, ev.clientX - plotRect.left + 10);
+  const y = Math.max(10, ev.clientY - plotRect.top + 10);
+
+  editorEl.style.position = "absolute";
+  editorEl.style.left = `${x}px`;
+  editorEl.style.top = `${y}px`;
+  editorEl.style.zIndex = "100000";
+
+  editorEl.innerHTML = `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-weight:700;">${genome}: ${contig}</div>
+        <button class="close" id="ctg-close" type="button">×</button>
+      </div>
+
+      <div style="margin-top:6px; font-size:12px; opacity:0.9;">
+        Length: ${len} bp<br>
+        Orientation: ${orientation}
+      </div>
+
+      <div style="margin-top:10px;">
+        <label style="display:block; font-size:12px; margin-bottom:4px;">Rename contig</label>
+        <input id="ctg-rename-input" type="text" value="${curName}">
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
+          <button id="ctg-rename-cancel" type="button">Cancel</button>
+          <button id="ctg-rename-apply" type="button">Apply</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  editorEl.classList.remove("hidden");
+
+  // Initial placement near cursor
+  editorEl.style.left = (ev.clientX + 12) + "px";
+  editorEl.style.top  = (ev.clientY + 12) + "px";
+
+  // Clamp into viewport (fixes bottom-of-plot partially hidden)
+  const r = editorEl.getBoundingClientRect();
+  let left = ev.clientX + 12;
+  let top  = ev.clientY + 12;
+  if (left + r.width > window.innerWidth - 8) left = window.innerWidth - r.width - 8;
+  if (top + r.height > window.innerHeight - 8) top = window.innerHeight - r.height - 8;
+  if (left < 8) left = 8;
+  if (top < 8) top = 8;
+  editorEl.style.left = left + "px";
+  editorEl.style.top  = top + "px";
+
+    function closeContigEditor() {
+      if (editorEl) editorEl.classList.add("hidden");
+    }
+
+  document.getElementById("ctg-close")?.addEventListener("click", () => {
+    window.SYNIMA_STATE.selectedContigKey = null;
+    closeContigEditor();
+    if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+  });
+
+  document.getElementById("ctg-rename-cancel")?.addEventListener("click", () => {
+    closeContigEditor();
+    if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+  });
+
+  document.getElementById("ctg-rename-apply")?.addEventListener("click", () => {
+    const val = document.getElementById("ctg-rename-input")?.value?.trim() || "";
+    window.SYNIMA_STATE.syntenyContigNameOverrides ||= {};
+
+    if (!val || val === contig) delete window.SYNIMA_STATE.syntenyContigNameOverrides[key];
+    else window.SYNIMA_STATE.syntenyContigNameOverrides[key] = val;
+
+    try {
+      localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyContigNames,
+        JSON.stringify(window.SYNIMA_STATE.syntenyContigNameOverrides));
+    } catch (e) {}
+
+    closeContigEditor();
+    if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+  });
 }
 
 SYNIMA.showSynteny = function () {
@@ -221,8 +326,9 @@ SYNIMA.showSynteny = function () {
             <!-- min-height:auto; min-width:400px; overflow-x:auto;  -->
             <div style="flex:1 1 auto; min-height:400px; padding-left:0px; overflow-x:auto; overflow-y:hidden;">
                 <!-- min-height:auto; -->
-                <div id="synteny-plot" 
-                    class="panel-view overflow-x-auto">
+                <div id="synteny-plot" class="panel-view overflow-x-auto" style="position:relative;">
+                    <div id="synteny-plot-svg"></div>
+                    <div id="synteny-contig-editor" class="synima-contig-editor hidden"></div>
                 </div>
             </div>
         </div>
@@ -428,17 +534,77 @@ SYNIMA.showSynteny = function () {
     //const statsEl = document.getElementById("synteny-stats");
     //const previewEl = document.getElementById("synteny-preview");
     const plotEl = document.getElementById("synteny-plot");
+    const editorEl = document.getElementById("synteny-contig-editor");
+
+    // Editor box location
+    if (editorEl && editorEl.parentElement !== document.body) {
+      document.body.appendChild(editorEl);
+      editorEl.style.position = "fixed";
+      editorEl.style.zIndex = "100000";
+    }
+
+    // Add hover tooltip
+    const tooltip = document.createElement("div");
+    tooltip.style.cssText = `
+        position:absolute; background:#333; color:white;
+        padding:5px 8px; border-radius:4px; font-size:12px;
+        pointer-events:none; display:none; z-index:99999;
+        `;
+    document.body.appendChild(tooltip);
+
+    plotEl.addEventListener("mousemove", e => {
+
+        // If editor is open OR a contig is selected, hide tooltip and stop.
+        if (!editorEl.classList.contains("hidden") || window.SYNIMA_STATE.selectedContigKey) {
+            tooltip.style.display = "none";
+            return;
+        }
+
+        const ctg = e.target.closest(".synteny-ctg");
+        if (!ctg) {
+            tooltip.style.display = "none";
+            return;
+        }
+
+        const g = ctg.dataset.genome;
+        const c = ctg.dataset.contig;
+        const o = ctg.dataset.orientation;
+        const l = maps.contigLen?.[g]?.[c] ?? "unknown";
+
+        tooltip.innerHTML = `
+            <b>${g}</b><br>
+            Contig: ${c}<br>
+            Length: ${l} bp<br>
+            Orientation: ${o}
+        `;
+
+        tooltip.style.left = (e.pageX + 12) + "px";
+        tooltip.style.top = (e.pageY + 12) + "px";
+        tooltip.style.display = "block";
+    });
+
+    // Ensure tooltip disappears if the mouse leaves the synteny area entirely
+    plotEl.addEventListener("mouseleave", () => {
+        tooltip.style.display = "none";
+    });
+
+    function closeContigEditor() {
+      if (editorEl) editorEl.classList.add("hidden");
+    }
 
     // select contig
     plotEl.addEventListener("click", (e) => {
-      const ctg = e.target.closest(".synteny-ctg");
+        const ctg = e.target.closest(".synteny-ctg");
+
+        // hide hover tooltip immediately on click
+        if (tooltip) tooltip.style.display = "none";
       
-        // clicked empty space inside the plot
+        // click outside any contig, and not inside editor
         if (!ctg) {
-            if (window.SYNIMA_STATE.selectedContigKey) {
-              window.SYNIMA_STATE.selectedContigKey = null;
-              rerender();
-            }
+            if (editorEl && editorEl.contains(e.target)) return;
+            window.SYNIMA_STATE.selectedContigKey = null;
+            closeContigEditor();
+            rerender();
             return;
         }
 
@@ -446,23 +612,35 @@ SYNIMA.showSynteny = function () {
         const c = ctg.dataset.contig;
         const key = `${g}|${c}`;
 
-        // toggle if clicking same contig again
-        if (window.SYNIMA_STATE.selectedContigKey === key) {
-            window.SYNIMA_STATE.selectedContigKey = null;
+        const wasSelected = (window.SYNIMA_STATE.selectedContigKey === key);
+
+        // toggle
+        window.SYNIMA_STATE.selectedContigKey = wasSelected ? null : key;
+
+        if (wasSelected) {
+            closeContigEditor();
         } else {
-            window.SYNIMA_STATE.selectedContigKey = key;
+            openContigEditor(e, g, c);
         }
 
         rerender();
-        e.stopPropagation();
-        //openContigEditor(e.pageX, e.pageY, g, c);
     });
+
+    // Escape closes editor + highlight
+    if (!window.SYNIMA_STATE._syntenyEscHooked) {
+      window.SYNIMA_STATE._syntenyEscHooked = true;
+      document.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        window.SYNIMA_STATE.selectedContigKey = null;
+        closeContigEditor();
+        if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+      });
+    }
 
     const maps = buildGenomeMaps(config);
 
     // background colour
     applySyntenyBackground();
-
     const bgSel = document.getElementById("synteny-bg-select");
     if (bgSel) {
       bgSel.value = window.SYNIMA_STATE.syntenyBgColor || "#0f1b30";
@@ -656,52 +834,17 @@ SYNIMA.showSynteny = function () {
         }
 
         const maps = buildGenomeMaps(config);
+        window.SYNIMA_STATE._syntenyLastMaps = maps;
         const layout = buildSyntenyLayout(config, maps);
         const prepared = prepareBlocksForPlot(blocks, config, maps, layout);
 
-        plotEl.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
+        //plotEl.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
+        const svgHost = document.getElementById("synteny-plot-svg");
+        if (svgHost) svgHost.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
     }
 
     rerender();
     SYNIMA._syntenyRerender = rerender;
-
-    // Add hover tooltip
-    const tooltip = document.createElement("div");
-    tooltip.style.cssText = `
-        position:absolute; background:#333; color:white;
-        padding:5px 8px; border-radius:4px; font-size:12px;
-        pointer-events:none; display:none; z-index:99999;
-        `;
-    document.body.appendChild(tooltip);
-
-    plotEl.addEventListener("mousemove", e => {
-        const ctg = e.target.closest(".synteny-ctg");
-        if (!ctg) {
-            tooltip.style.display = "none";
-            return;
-        }
-
-        const g = ctg.dataset.genome;
-        const c = ctg.dataset.contig;
-        const o = ctg.dataset.orientation;
-        const l = maps.contigLen?.[g]?.[c] ?? "unknown";
-
-        tooltip.innerHTML = `
-            <b>${g}</b><br>
-            Contig: ${c}<br>
-            Length: ${l} bp<br>
-            Orientation: ${o}
-        `;
-
-        tooltip.style.left = (e.pageX + 12) + "px";
-        tooltip.style.top = (e.pageY + 12) + "px";
-        tooltip.style.display = "block";
-    });
-
-    // Ensure tooltip disappears if the mouse leaves the synteny area entirely
-    plotEl.addEventListener("mouseleave", () => {
-        tooltip.style.display = "none";
-    });
 
     const dlBtn = document.getElementById("synteny-download-btn");
     const dlMenu = document.getElementById("synteny-download-dropdown");
@@ -823,6 +966,8 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyBlockOpacity = 0.5;
     window.SYNIMA_STATE.syntenyBgColor = "#0f1b30";
     window.SYNIMA_STATE.syntenyLabelColor = "#ffffff";
+    window.SYNIMA_STATE.selectedContigKey = null;
+    window.SYNIMA_STATE.syntenyContigNameOverrides = {};
 
     // tree width
     const tw = document.getElementById("synteny-tree-width-select");
@@ -888,6 +1033,8 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockOpacity);
 
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor);
+
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigNames);
     } catch (e) {}
 
     // redraw
@@ -1273,7 +1420,13 @@ function renderSyntenySvg(blocks, config, maps, layout) {
 
             // optional clamp (keeps it sane)
             const fontSize = Math.max(6, Math.min(30, userFontSize));
-            const label = trimLabelToWidth(contig, w - 6, fontSize);
+
+            // contig label
+            //const label = trimLabelToWidth(contig, w - 6, fontSize);
+            const key = `${g.name}|${contig}`;
+            const nameOverrides = window.SYNIMA_STATE.syntenyContigNameOverrides || {};
+            const displayName = nameOverrides[key] || contig;
+            const label = trimLabelToWidth(displayName, w - 6, fontSize);
 
             // Center text in the rectangle
             const textX = x + w / 2;
@@ -1281,7 +1434,7 @@ function renderSyntenySvg(blocks, config, maps, layout) {
 
             // colour and select
             const overrides = window.SYNIMA_STATE.syntenyContigOverrides || {};
-            const key = `${g.name}|${contig}`;
+            //const key = `${g.name}|${contig}`;
 
             const mode = window.SYNIMA_STATE.syntenyContigColorMode || "single";
             let fill = window.SYNIMA_STATE.syntenyContigBaseColor || "#6699cc";
@@ -1293,23 +1446,33 @@ function renderSyntenySvg(blocks, config, maps, layout) {
             if (overrides[key]) { fill = overrides[key]; }
 
             const isSelected = (window.SYNIMA_STATE.selectedContigKey === key);
+            const gClass = isSelected ? "synteny-ctg is-selected" : "synteny-ctg";
+
+
+            // outline only when selected
             const stroke = isSelected ? "#facc15" : "#ffffff";
             const strokeW = isSelected ? 2.5 : 1;
 
+             if(isSelected) {
+                console.warn("found something that is selected. stroke = ", stroke);
+            }
+
+            // style="stroke:${stroke};stroke-width:${strokeW};" 
+            // stroke="${stroke}" 
+            // stroke-width="${strokeW}"
+
             tracks += `
-                <g class="synteny-ctg"
+                <g class="${gClass}"
                     data-genome="${g.name}"
                     data-contig="${contig}"
                     data-orientation="+">
-
                 <rect
                     x="${x}"
                     y="${yRect}"
                     width="${w}"
                     height="${trackHeight}"
-                    fill="${fill}"
-                    stroke="${stroke}"
-                    stroke-width="${strokeW}">
+                    fill="${fill}" 
+                    >
                 </rect>
                 ${
                 (label && w >= 25)

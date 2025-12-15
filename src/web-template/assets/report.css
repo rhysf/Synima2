@@ -547,3 +547,56 @@ body {
   gap: 6px;
   color: white;
 }
+
+/* contig select */
+.synteny-ctg rect {
+  stroke: #ffffff;
+  stroke-width: 1px;
+}
+
+.synteny-ctg.is-selected rect {
+  stroke: #facc15;      /* yellow highlight */
+  stroke-width: 3px;
+}
+
+/* synteny contig editor */
+.synima-contig-editor {
+  position: absolute;
+  z-index: 100000;
+}
+
+.synima-contig-editor .card {
+  min-width: 260px;
+  background: #0f1b30;
+  color: #ffffff;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+
+.synima-contig-editor input,
+.synima-contig-editor select {
+  background: #111827;
+  color: #ffffff;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 6px;
+  width: 100%;
+}
+
+.synima-contig-editor button {
+  background: #111827;
+  color: #ffffff;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.synima-contig-editor .close {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 18px;
+}
