@@ -601,10 +601,16 @@ SYNIMA.renameSelectedTaxon = function () {
 
   // Position dropdown just under the Annotate button
   const btn = document.getElementById("annotate-btn");
-  const rect = btn.getBoundingClientRect();
-  dd.style.position = "absolute";
-  dd.style.left = rect.left + "px";
-  dd.style.top = rect.bottom + window.scrollY + "px";
+  //const rect = btn.getBoundingClientRect();
+  //dd.style.position = "absolute";
+  //dd.style.left = rect.left + "px";
+  //dd.style.top = rect.bottom + window.scrollY + "px";
+
+  // Do NOT position using page coordinates.
+  // Let .annotate-wrap/.annotate-dropdown CSS handle it.
+  dd.style.position = "";
+  dd.style.left = "";
+  dd.style.top = "";
 
   // Populate input with old name
   input.value = oldName;
@@ -848,130 +854,176 @@ SYNIMA.showTree = function () {
     return;
   }
 
-  // --- PAGE HTML ---
-  let html = `
-    <h1>Phylogenetic Tree</h1>
+    // ----------------------------
+    // Header / Download
+    // ----------------------------
+    let html = `
+      <h1>Phylogenetic Tree</h1>
 
+      <div class="section">
+        <h2>Tree Inference Parameters</h2>
+        <table class="param-table">
+          <tr><th>Sequence type</th><td>${seqType}</td></tr>
+          <tr><th>Orthology tool</th><td>${orthoTool}</td></tr>
+          <tr><th>Multiple alignment</th><td>MUSCLE v5</td></tr>
+          <tr><th>Tree builder</th><td>FastTree</td></tr>
+          <tr><th>Tree file</th><td>${treeItem.file_name}</td></tr>
+        </table>
+      </div>
+
+      <div class="section">
+        <h2>Newick Tree</h2>
+        <pre id="newick-text" class="newick-block"></pre>
+        <button id="copy-newick-btn" class="copy-btn">Copy Newick</button>
+      </div>
+
+      <div class="section">
+
+        <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:6px;">
+          <h2 style="margin:0;">Tree Visualisation</h2>
+
+          <div style="position:relative; display:inline-block;">
+            <button id="download-btn" style="padding:2px 6px; margin:0;">
+              Download ▾
+            </button>
+
+            <div id="download-dropdown"
+                 class="hidden"
+                 style="
+                   position:absolute;
+                   right:0;
+                   top:100%;
+                   margin-top:2px;
+                   background:white;
+                   color:black;
+                   border:1px solid #ccc;
+                   border-radius:4px;
+                   box-shadow:0 2px 4px rgba(0,0,0,0.2);
+                   z-index:1000;
+                   width:120px;
+                 ">
+              <button id="download-svg"
+                style="display:block; width:100%; text-align:left; padding:4px 8px;
+                       border:none; background:none; cursor:pointer;"
+                onmouseover="this.style.background='#e5e5e5'"
+                onmouseout="this.style.background='none'">
+                SVG
+              </button>
+
+              <button id="download-png"
+                style="display:block; width:100%; text-align:left; padding:4px 8px;
+                       border:none; background:none; cursor:pointer;"
+                onmouseover="this.style.background='#e5e5e5'"
+                onmouseout="this.style.background='none'">
+                PNG
+              </button>
+            </div>
+          </div>
+        </div>`;
+
+    // ----------------------------
+    // Tree 
+    // ----------------------------
+    html += `
+    <div id="tree-view-0" class="tree-view"></div>
+    </div>`;
+
+    // ----------------------------
+    // Tree Graphical Options
+    // ----------------------------
+
+    html += `
     <div class="section">
-      <h2>Tree Inference Parameters</h2>
-      <table class="param-table">
-        <tr><th>Sequence type</th><td>${seqType}</td></tr>
-        <tr><th>Orthology tool</th><td>${orthoTool}</td></tr>
-        <tr><th>Multiple alignment</th><td>MUSCLE v5</td></tr>
-        <tr><th>Tree builder</th><td>FastTree</td></tr>
-        <tr><th>Tree file</th><td>${treeItem.file_name}</td></tr>
-      </table>
-    </div>
+    <h2>Graphical Options</h2>
 
-    <div class="section">
-      <h2>Newick Tree</h2>
-      <pre id="newick-text" class="newick-block"></pre>
-      <button id="copy-newick-btn" class="copy-btn">Copy Newick</button>
-    </div>
+      <div class="tree-controls">
+        <!--<button disabled title="Midpoint rooting coming soon">Midpoint root (coming soon)</button>-->
+        <!--<button disabled title="Tip rooting coming soon">Root by tip (coming soon)</button>-->
+        
+        <!-- Row 0: actions -->
+        <!--<div class="control-group">-->
+        <div class="tree-controls-row">
+          <button onclick="SYNIMA.resetRoot()" style="margin-left:10px;">Reset tree</button>
+        </div>
 
-    <div class="section">
+        <!-- Row 1: Layout -->
+        <fieldset class="tree-controls-group">
+          <legend>Layout</legend>
 
-  <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:6px;">
-    <h2 style="margin:0;">Tree Visualisation</h2>
+          <label>
+            <input type="checkbox" id="align-labels-checkbox" />
+              Align tip labels
+          </label>
+        </fieldset>
+        
+        <!-- Appearance -->
+        <fieldset class="tree-controls-group">
+          <legend>Appearance</legend>
 
-    <div style="position:relative; display:inline-block;">
-      <button id="download-btn" style="padding:2px 6px; margin:0;">
-        Download ▾
-      </button>
+          <label style="margin-left: 10px;">
+            Line width:
+            <select id="line-width-select">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+        </fieldset>
 
-      <div id="download-dropdown"
-           class="hidden"
-           style="
-             position:absolute;
-             right:0;
-             top:100%;
-             margin-top:2px;
-             background:white;
-             color:black;
-             border:1px solid #ccc;
-             border-radius:4px;
-             box-shadow:0 2px 4px rgba(0,0,0,0.2);
-             z-index:1000;
-             width:120px;
-           ">
-        <button id="download-svg"
-          style="display:block; width:100%; text-align:left; padding:4px 8px;
-                 border:none; background:none; cursor:pointer;"
-          onmouseover="this.style.background='#e5e5e5'"
-          onmouseout="this.style.background='none'">
-          SVG
-        </button>
+        <!-- Trees -->
+        <fieldset class="tree-controls-group">
+          <legend>Trees</legend>
 
-        <button id="download-png"
-          style="display:block; width:100%; text-align:left; padding:4px 8px;
-                 border:none; background:none; cursor:pointer;"
-          onmouseover="this.style.background='#e5e5e5'"
-          onmouseout="this.style.background='none'">
-          PNG
-        </button>
+          <label>
+            Root by tip:
+            <select id="tip-root-select">
+              <option value="">Select…</option>
+            </select>
+          </label>
+
+          <button id="apply-tip-root" type="button">Apply</button>
+
+          <div id="tip-root-dialog" class="tip-dialog hidden"></div>
+        </fieldset>
+
+        <!-- Tip labels -->
+        <fieldset class="tree-controls-group">
+          <legend>Tip labels</legend>
+
+          <label style="margin-left: 10px;">
+            Font size:
+            <select id="font-size-select">
+              <option value="6">6</option>
+              <option value="8">8</option>
+              <option value="10">10</option>
+              <option value="12">12</option>
+              <option value="14">14</option>
+              <option value="16">16</option>
+              <option value="18">18</option>
+              <option value="20">20</option>
+              <option value="22">22</option>
+              <option value="24">24</option>
+            </select>
+          </label>
+
+          <div class="annotate-wrap">
+            <button id="annotate-btn">Annotate</button>
+
+            <div id="annotate-dropdown" class="annotate-dropdown hidden">
+              <input id="rename-input" type="text" class="border p-1 w-full mb-2" placeholder="New name…">
+              <div class="flex justify-end gap-2">
+                <button id="rename-cancel">Cancel</button>
+                <button id="rename-apply" class="font-bold">Apply</button>
+              </div>
+            </div>
+          </div>
+        </fieldset>
+
       </div>
     </div>
-  </div>
 
-  <div id="tree-view-0" class="tree-view"></div>
-</div>
-
-    <div class="tree-controls">
-      <!--<button disabled title="Midpoint rooting coming soon">Midpoint root (coming soon)</button>-->
-      <!--<button disabled title="Tip rooting coming soon">Root by tip (coming soon)</button>-->
-      
-      <button onclick="SYNIMA.resetRoot()">Reset tree</button>
-
-      <label>
-          <input type="checkbox" id="align-labels-checkbox" />
-          Align tip labels
-      </label>
-
-      
-    <label style="margin-left: 10px;">
-      Line width:
-      <select id="line-width-select">
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3">3</option>
-        <option value="4">4</option>
-        <option value="5">5</option>
-      </select>
-    </label>
-
-    <label style="margin-left: 10px;">
-      Font size:
-      <select id="font-size-select">
-        <option value="6">6</option>
-        <option value="8">8</option>
-        <option value="10">10</option>
-        <option value="12">12</option>
-        <option value="14">14</option>
-        <option value="16">16</option>
-        <option value="18">18</option>
-        <option value="20">20</option>
-        <option value="22">22</option>
-        <option value="24">24</option>
-      </select>
-    </label>
-
-
-      <button id="annotate-btn">Annotate</button>
-      <div id="annotate-dropdown" 
-         class="hidden absolute bg-white text-black border rounded shadow p-2 z-50"
-         style="margin-top: 4px; width: 180px;">
-      <input id="rename-input" type="text" 
-             class="border p-1 w-full mb-2" placeholder="New name…">
-      <div class="flex justify-end gap-2">
-        <button id="rename-cancel">Cancel</button>
-        <button id="rename-apply" class="font-bold">Apply</button>
-      </div>
-    </div>
-
-
-    </div>
-
-    <div id="tip-root-dialog" class="tip-dialog hidden"></div>
   `;
 
   app.innerHTML = html;
@@ -1038,7 +1090,7 @@ SYNIMA.showTree = function () {
     renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
   });
 
-  // === Restore persisted settings ===
+  // Restore persisted settings
   const savedLW = localStorage.getItem(SYNIMA_PERSIST_KEYS.lineWidth);
   if (savedLW !== null) {
     SYNIMA_LINE_WIDTH = parseInt(savedLW, 10);
@@ -1081,27 +1133,24 @@ SYNIMA.showTree = function () {
     applyRenamedTaxa(SYNIMA_TREES.current);
     renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
 
-    // new code for rooting:
-    // Insert "root by tip" dropdown once tree is rendered
-    const tips = SYNIMA.getTipNames(SYNIMA_TREES.current);
+    // Populate "Root by tip" select now that the tree exists
+    const tipSelect = document.getElementById("tip-root-select");
+    const applyTipBtn = document.getElementById("apply-tip-root");
 
-    let dropdownHtml = `
-      <label style="margin-left: 10px;">
-        Root by tip:
-        <select id="tip-root-select">
-          <option value="">Select…</option>
-          ${tips.map(t => `<option value="${t}">${t}</option>`).join("")}
-        </select>
-      </label>
-      <button id="apply-tip-root">Apply</button>
-    `;
+    if (tipSelect) {
+      const tips = SYNIMA.getTipNames(SYNIMA_TREES.current);
 
-    document.querySelector(".tree-controls").insertAdjacentHTML("beforeend", dropdownHtml);
+      tipSelect.innerHTML =
+        `<option value="">Select…</option>` +
+        tips.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+    }
 
-    document.getElementById("apply-tip-root").addEventListener("click", () => {
-      const chosen = document.getElementById("tip-root-select").value;
-      if (chosen) SYNIMA.rootByTip(chosen);
-    });
+    if (applyTipBtn) {
+      applyTipBtn.addEventListener("click", () => {
+        const chosen = tipSelect ? tipSelect.value : "";
+        if (chosen) SYNIMA.rootByTip(chosen);
+      });
+    }
   
   } catch (e) {
     console.error("Failed to parse or render tree", e);
