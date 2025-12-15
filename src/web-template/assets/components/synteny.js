@@ -140,11 +140,12 @@ function openContigEditor(ev, genome, contig) {
   editorEl.innerHTML = `
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div style="font-weight:700;">${genome}: ${contig}</div>
+        <div style="font-weight:700;">${contig}</div>
         <button class="close" id="ctg-close" type="button">×</button>
       </div>
 
       <div style="margin-top:6px; font-size:12px; opacity:0.9;">
+        Genome: ${genome}<br>
         Length: ${len} bp<br>
         Orientation: ${orientation}
       </div>
@@ -639,6 +640,10 @@ SYNIMA.showSynteny = function () {
 
     const maps = buildGenomeMaps(config);
 
+    // make maps available to helpers like openContigEditor
+    window.SYNIMA_STATE = window.SYNIMA_STATE || {};
+    window.SYNIMA_STATE._lastMaps = maps;
+
     // background colour
     applySyntenyBackground();
     const bgSel = document.getElementById("synteny-bg-select");
@@ -840,7 +845,10 @@ SYNIMA.showSynteny = function () {
 
         //plotEl.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
         const svgHost = document.getElementById("synteny-plot-svg");
-        if (svgHost) svgHost.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
+        if (svgHost) {
+            svgHost.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
+            //console.log("rerendered with new tracks etc.", svgHost.innerHTML);
+        }
     }
 
     rerender();
@@ -1453,15 +1461,15 @@ function renderSyntenySvg(blocks, config, maps, layout) {
             const stroke = isSelected ? "#facc15" : "#ffffff";
             const strokeW = isSelected ? 2.5 : 1;
 
-             if(isSelected) {
-                console.warn("found something that is selected. stroke = ", stroke);
-            }
+            //if(isSelected) {
+            //    console.warn("found something that is selected. stroke = ", stroke);
+            //}
 
             // style="stroke:${stroke};stroke-width:${strokeW};" 
             // stroke="${stroke}" 
             // stroke-width="${strokeW}"
 
-            tracks += `
+           tracks += `
                 <g class="${gClass}"
                     data-genome="${g.name}"
                     data-contig="${contig}"
@@ -1871,16 +1879,32 @@ SYNIMA.exportSyntenyFigureSvg = function () {
 };
 
 // selecting contigs
+function eventPathHasId(e, id) {
+  if (typeof e.composedPath === "function") {
+    return e.composedPath().some(n => n && n.id === id);
+  }
+  // fallback
+  return !!(e.target && e.target.closest && e.target.closest(`#${id}`));
+}
+
 if (!SYNIMA._syntenyOutsideClickBound) {
-    SYNIMA._syntenyOutsideClickBound = true;
+  SYNIMA._syntenyOutsideClickBound = true;
 
-    document.addEventListener("click", (e) => {
-        if (e.target.closest("#synteny-plot")) return;
-        if (!window.SYNIMA_STATE.selectedContigKey) return;
+  document.addEventListener("click", (e) => {
+    if (!window.SYNIMA_STATE?.selectedContigKey) return;
 
-        window.SYNIMA_STATE.selectedContigKey = null;
-        if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
-    });
+    // IMPORTANT: treat clicks in the plot OR in the editor as "inside"
+    const inPlot = eventPathHasId(e, "synteny-plot");
+    const inEditor = eventPathHasId(e, "synteny-contig-editor");
+    if (inPlot || inEditor) return;
+
+    window.SYNIMA_STATE.selectedContigKey = null;
+
+    const editorEl = document.getElementById("synteny-contig-editor");
+    if (editorEl) editorEl.classList.add("hidden");
+
+    if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+  });
 }
 
 window.addEventListener("resize", () => {
