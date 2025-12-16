@@ -82,6 +82,15 @@ function syncSyntenyModeFromStorage() {
       if (raw) window.SYNIMA_STATE.syntenyContigFlips = JSON.parse(raw) || {};
     } catch (e) {}
 
+    // scale bar width
+    try {
+      const v = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth);
+      if (v !== null) {
+        const n = parseFloat(v);
+        if (Number.isFinite(n) && n > 0) window.SYNIMA_STATE.syntenyScaleLineWidth = n;
+      }
+    } catch (e) {}
+
     // contig border colours
     try {
       const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor);
@@ -615,6 +624,93 @@ SYNIMA.showSynteny = function () {
 
         </fieldset>
 
+        <!-- Row 4: scale bar -->
+        <fieldset class="synteny-controls-group">
+          <legend>Scale Bar</legend>
+
+          <label>
+            <input type="checkbox" id="synteny-scale-show">
+            Show
+          </label>
+
+          <label style="margin-left: 10px;">
+            Units:
+            <select id="synteny-scale-units">
+              <option value="auto">Auto</option>
+              <option value="bp">bp</option>
+              <option value="kb">Kb</option>
+              <option value="mb">Mb</option>
+              <option value="gb">Gb</option>
+            </select>
+          </label>
+
+          <label style="margin-left: 10px;">
+            Max:
+            <input id="synteny-scale-max" type="number" min="0" step="any" placeholder="auto" style="width:90px;">
+          </label>
+
+          <label style="margin-left: 10px;">
+            Intervals:
+            <select id="synteny-scale-intervals">
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+            </select>
+          </label>
+
+          <label style="margin-left: 10px;">
+            Axis font:
+            <select id="synteny-scale-axis-font">
+                <option value="8">8</option>
+                <option value="10">10</option>
+                <option value="12">12</option>
+                <option value="14">14</option>
+                <option value="16">16</option>
+                <option value="18">18</option>
+                <option value="20">20</option>
+                <option value="22">22</option>
+                <option value="24">24</option>
+                <option value="28">28</option>
+                <option value="32">32</option>
+            </select>
+          </label>
+
+          <label style="margin-left: 10px;">
+            Label font:
+            <select id="synteny-scale-label-font">
+                <option value="8">8</option>
+                <option value="10">10</option>
+                <option value="12">12</option>
+                <option value="14">14</option>
+                <option value="16">16</option>
+                <option value="18">18</option>
+                <option value="20">20</option>
+                <option value="22">22</option>
+                <option value="24">24</option>
+                <option value="28">28</option>
+                <option value="32">32</option>
+            </select>
+          </label>
+
+        <label style="margin-left:10px;">
+          Line width:
+          <select id="synteny-scale-linewidth-select">
+            <option value="0.5">0.5</option>
+            <option value="1">1</option>
+            <option value="1.5">1.5</option>
+            <option value="2">2</option>
+            <option value="2.5">2.5</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </label>
+
+          <label style="margin-left: 10px;">
+            Label:
+            <input id="synteny-scale-label-text" type="text" style="width:180px;">
+          </label>
+        </fieldset>
+
       </div>
     </div>
     `;
@@ -950,6 +1046,64 @@ SYNIMA.showSynteny = function () {
       });
     }
 
+    // Scale bar settings
+    function bindScaleBarControls() {
+        const show = document.getElementById("synteny-scale-show");
+        const units = document.getElementById("synteny-scale-units");
+        const maxI  = document.getElementById("synteny-scale-max");
+        const ints  = document.getElementById("synteny-scale-intervals");
+        const axF   = document.getElementById("synteny-scale-axis-font");
+        const lbF   = document.getElementById("synteny-scale-label-font");
+        const text  = document.getElementById("synteny-scale-label-text");
+
+        if (show) show.checked = (window.SYNIMA_STATE.syntenyScaleShow !== false);
+        if (units) units.value = window.SYNIMA_STATE.syntenyScaleUnits || "auto";
+        if (maxI) maxI.value = String(window.SYNIMA_STATE.syntenyScaleMax ?? "");
+        if (ints) ints.value = String(window.SYNIMA_STATE.syntenyScaleIntervals ?? 10);
+        if (axF) axF.value = String(window.SYNIMA_STATE.syntenyScaleAxisFont ?? 12);
+        if (lbF) lbF.value = String(window.SYNIMA_STATE.syntenyScaleLabelFont ?? 12);
+        if (text) text.value = String(window.SYNIMA_STATE.syntenyScaleLabelText ?? "Position in genome");
+
+        function saveAndRerender() {
+            try {
+                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleShow, String(window.SYNIMA_STATE.syntenyScaleShow));
+                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleUnits, String(window.SYNIMA_STATE.syntenyScaleUnits));
+                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleMax, String(window.SYNIMA_STATE.syntenyScaleMax ?? ""));
+                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleIntervals, String(window.SYNIMA_STATE.syntenyScaleIntervals));
+                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleAxisFont, String(window.SYNIMA_STATE.syntenyScaleAxisFont));
+                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLabelFont, String(window.SYNIMA_STATE.syntenyScaleLabelFont));
+                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLabelText, String(window.SYNIMA_STATE.syntenyScaleLabelText ?? ""));
+            } catch (e) {}
+            rerender();
+        }
+
+        show?.addEventListener("change", () => { window.SYNIMA_STATE.syntenyScaleShow = !!show.checked; saveAndRerender(); });
+        units?.addEventListener("change", () => { window.SYNIMA_STATE.syntenyScaleUnits = units.value; saveAndRerender(); });
+        maxI?.addEventListener("input", () => { window.SYNIMA_STATE.syntenyScaleMax = maxI.value; saveAndRerender(); });
+        ints?.addEventListener("change", () => { window.SYNIMA_STATE.syntenyScaleIntervals = parseInt(ints.value, 10) || 10; saveAndRerender(); });
+        axF?.addEventListener("change", () => { window.SYNIMA_STATE.syntenyScaleAxisFont = parseInt(axF.value, 10) || 12; saveAndRerender(); });
+        lbF?.addEventListener("change", () => { window.SYNIMA_STATE.syntenyScaleLabelFont = parseInt(lbF.value, 10) || 12; saveAndRerender(); });
+        text?.addEventListener("input", () => { window.SYNIMA_STATE.syntenyScaleLabelText = text.value; saveAndRerender(); });
+    }
+
+    bindScaleBarControls();
+
+    // scale bar width
+    const lw = document.getElementById("synteny-scale-linewidth-select");
+    if (lw) {
+      lw.value = String(window.SYNIMA_STATE.syntenyScaleLineWidth ?? 1);
+
+      lw.addEventListener("change", () => {
+        const n = parseFloat(lw.value);
+        if (!Number.isFinite(n) || n <= 0) return;
+        window.SYNIMA_STATE.syntenyScaleLineWidth = n;
+        try {
+          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth, String(n));
+        } catch (e) {}
+        if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+      });
+    }
+
     function rerender() {
         const mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || "spans";
 
@@ -1071,6 +1225,47 @@ function applySyntenyBackground() {
     if (fig) fig.style.setProperty("--synima-synteny-bg", bg);
 }
 
+function scaleUnitSpec(maxBp, units) {
+  if (units === "bp") return { factor: 1, label: "bp" };
+  if (units === "kb") return { factor: 1e3, label: "Kb" };
+  if (units === "mb") return { factor: 1e6, label: "Mb" };
+  if (units === "gb") return { factor: 1e9, label: "Gb" };
+
+  // auto
+  if (maxBp >= 1e9) return { factor: 1e9, label: "Gb" };
+  if (maxBp >= 1e6) return { factor: 1e6, label: "Mb" };
+  if (maxBp >= 1e3) return { factor: 1e3, label: "Kb" };
+  return { factor: 1, label: "bp" };
+}
+
+function niceStep(v, targetIntervals) {
+  if (!isFinite(v) || v <= 0 || !isFinite(targetIntervals) || targetIntervals <= 0) return 1;
+  const raw = v / targetIntervals;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const mant = raw / pow;
+  let niceMant = 1;
+  if (mant <= 1) niceMant = 1;
+  else if (mant <= 2) niceMant = 2;
+  else if (mant <= 5) niceMant = 5;
+  else niceMant = 10;
+  return niceMant * pow;
+}
+
+// ensure maxNice <= maxRaw by shrinking step if needed
+function computeNiceMax(maxRawUnits, intervals) {
+  if (!isFinite(maxRawUnits) || maxRawUnits <= 0) return { maxNice: 0, step: 0 };
+  let step = niceStep(maxRawUnits, intervals);
+
+  // try to reduce step until it fits
+  for (let tries = 0; tries < 20; tries++) {
+    const maxNice = step * intervals;
+    if (maxNice <= maxRawUnits) return { maxNice, step };
+    step = step / 2;
+  }
+  const fallbackStep = maxRawUnits / intervals;
+  return { maxNice: fallbackStep * intervals, step: fallbackStep };
+}
+
 SYNIMA.resetSynteny = function () {
 
     // defaults
@@ -1081,6 +1276,17 @@ SYNIMA.resetSynteny = function () {
         contigColorMode: "single",        // or "palette_by_genome"
         contigBaseColor: "#6699cc",
         contigPalette: "palette1"
+    };
+
+    // scale bar defaults
+    const SYNIMA_SYNTENY_SCALE_DEFAULTS = {
+      show: true,
+      units: "auto",          // auto|bp|kb|mb|gb
+      max: "",                // "" => auto
+      intervals: 10,
+      axisFont: 12,
+      labelFont: 12,
+      labelText: "Position in genome"
     };
 
     // reset state
@@ -1101,6 +1307,16 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyContigFlips = {};
     window.SYNIMA_STATE.syntenyContigOverrides = {};
     window.SYNIMA_STATE.syntenyContigStrokeColor = "#ffffff";
+    window.SYNIMA_STATE.syntenyScaleLineWidth = 1.0;
+
+    // scale bar
+    window.SYNIMA_STATE.syntenyScaleShow      = SYNIMA_SYNTENY_SCALE_DEFAULTS.show;
+    window.SYNIMA_STATE.syntenyScaleUnits     = SYNIMA_SYNTENY_SCALE_DEFAULTS.units;
+    window.SYNIMA_STATE.syntenyScaleMax       = SYNIMA_SYNTENY_SCALE_DEFAULTS.max;
+    window.SYNIMA_STATE.syntenyScaleIntervals = SYNIMA_SYNTENY_SCALE_DEFAULTS.intervals;
+    window.SYNIMA_STATE.syntenyScaleAxisFont  = SYNIMA_SYNTENY_SCALE_DEFAULTS.axisFont;
+    window.SYNIMA_STATE.syntenyScaleLabelFont = SYNIMA_SYNTENY_SCALE_DEFAULTS.labelFont;
+    window.SYNIMA_STATE.syntenyScaleLabelText = SYNIMA_SYNTENY_SCALE_DEFAULTS.labelText;
 
     // tree width
     const tw = document.getElementById("synteny-tree-width-select");
@@ -1151,6 +1367,31 @@ SYNIMA.resetSynteny = function () {
     const lc = document.getElementById("synteny-label-colour-select");
     if (lc) lc.value = "#ffffff";
 
+    // scale bar
+    const scShow = document.getElementById("synteny-scale-show");
+    if (scShow) scShow.checked = !!SYNIMA_SYNTENY_SCALE_DEFAULTS.show;
+
+    const scUnits = document.getElementById("synteny-scale-units");
+    if (scUnits) scUnits.value = SYNIMA_SYNTENY_SCALE_DEFAULTS.units;
+
+    const scMax = document.getElementById("synteny-scale-max");
+    if (scMax) scMax.value = SYNIMA_SYNTENY_SCALE_DEFAULTS.max;
+
+    const scInts = document.getElementById("synteny-scale-intervals");
+    if (scInts) scInts.value = String(SYNIMA_SYNTENY_SCALE_DEFAULTS.intervals);
+
+    const scAxisF = document.getElementById("synteny-scale-axis-font");
+    if (scAxisF) scAxisF.value = String(SYNIMA_SYNTENY_SCALE_DEFAULTS.axisFont);
+
+    const scLabelF = document.getElementById("synteny-scale-label-font");
+    if (scLabelF) scLabelF.value = String(SYNIMA_SYNTENY_SCALE_DEFAULTS.labelFont);
+
+    const scText = document.getElementById("synteny-scale-label-text");
+    if (scText) scText.value = SYNIMA_SYNTENY_SCALE_DEFAULTS.labelText;
+
+    const lw = document.getElementById("synteny-scale-linewidth-select");
+    if (lw) lw.value = "1";
+
     // clear saved state
     try {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
@@ -1169,6 +1410,16 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigFlips);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor);
+
+        //scale bar
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleShow);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleUnits);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleMax);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleIntervals);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleAxisFont);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLabelFont);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLabelText);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth);
     } catch (e) {}
 
     // redraw
@@ -1511,7 +1762,7 @@ function prepareBlocksForPlot(blocks, config, maps, layout) {
 // Render a simple SVG: genome tracks + polygons
 function renderSyntenySvg(blocks, config, maps, layout) {
     const svgW = layout.plotWidthPx;
-    const svgH = Math.max(layout.treeHeightPx, 200);
+    let svgH = Math.max(layout.treeHeightPx, 200);
 
     const trackHeight = layout.trackHeight;
 
@@ -1528,7 +1779,7 @@ function renderSyntenySvg(blocks, config, maps, layout) {
     // colour and opacity
     const polyColor = (window.SYNIMA_STATE && window.SYNIMA_STATE.syntenyBlockColor) ? window.SYNIMA_STATE.syntenyBlockColor : "#ffffff";
     const polyFillOpacity = (window.SYNIMA_STATE && Number.isFinite(window.SYNIMA_STATE.syntenyBlockOpacity)) ? window.SYNIMA_STATE.syntenyBlockOpacity : 0.5;
-    const labelFill = (window.SYNIMA_STATE && window.SYNIMA_STATE.syntenyLabelColor) ? window.SYNIMA_STATE.syntenyLabelColor : "#ffffff";
+    const labelColor = (window.SYNIMA_STATE && window.SYNIMA_STATE.syntenyLabelColor) ? window.SYNIMA_STATE.syntenyLabelColor : "#ffffff";
 
     // keep stroke a bit lighter than fill
     const polyStrokeOpacity = Math.max(0, Math.min(1, polyFillOpacity * 0.5));
@@ -1658,7 +1909,7 @@ function renderSyntenySvg(blocks, config, maps, layout) {
                 ${
                 (label && w >= 25)
                   ? `<text x="${textX}" y="${textY}"
-                           fill="${labelFill}"
+                           fill="${labelColor}"
                            font-size="${fontSize}"
                            text-anchor="middle"
                            style="pointer-events:none; user-select:none;">
@@ -1672,10 +1923,97 @@ function renderSyntenySvg(blocks, config, maps, layout) {
         }
     }
 
+    // ----------------------------
+    // Scale bar (optional)
+    // ----------------------------
+    const showScale = (window.SYNIMA_STATE.syntenyScaleShow !== false);
+    let scaleBarSvg = "";
+    let extraBottom = 0;
+
+    if (showScale) {
+        const maxBpRaw = config.max_length || 0;
+        const units = window.SYNIMA_STATE.syntenyScaleUnits || "auto";
+        const intervals = parseInt(window.SYNIMA_STATE.syntenyScaleIntervals, 10) || 10;
+
+        const { factor, label } = scaleUnitSpec(maxBpRaw, units);
+
+        // if user provided a max, interpret it in chosen units (or auto-chosen units)
+        let maxUnitsRaw = maxBpRaw / factor;
+        const userMaxStr = String(window.SYNIMA_STATE.syntenyScaleMax ?? "").trim();
+        const userMax = userMaxStr === "" ? NaN : Number(userMaxStr);
+        if (isFinite(userMax) && userMax > 0) {
+          maxUnitsRaw = userMax;
+        }
+
+        //const { maxNice, step } = computeNiceMax(maxUnitsRaw, intervals);
+        let maxNice, step;
+
+        if (Number.isFinite(userMax) && userMax > 0) {
+          // obey user max exactly
+          maxNice = userMax;
+          step = maxNice / intervals; // exact steps
+        } else {
+          // auto “nice” max
+          ({ maxNice, step } = computeNiceMax(maxUnitsRaw, intervals));
+        }
+        const maxBpNice = maxNice * factor;
+
+        const xStart = layout.xStart;
+        const pxLen = maxBpNice * layout.scaleX;
+
+        // find bottom of plotted contigs so the bar sits underneath
+        let maxY = 0;
+        for (let i = 0; i < config.genomes.length; i++) {
+          const y = yFor(config.genomes[i].name, i);
+          if (y > maxY) maxY = y;
+        }
+        const plotBottom = maxY + trackHeight + 10;
+
+        const axisY = plotBottom + 25;
+        const tickH = 6;
+        const axisFont = parseInt(window.SYNIMA_STATE.syntenyScaleAxisFont, 10) || 12;
+        const labelFont = parseInt(window.SYNIMA_STATE.syntenyScaleLabelFont, 10) || axisFont;
+        const labelText = (window.SYNIMA_STATE.syntenyScaleLabelText || "Position in genome").trim();
+
+        const strokeCol = labelColor;
+        //const strokeW = (typeof window.SYNIMA_LINE_WIDTH === "number") ? window.SYNIMA_LINE_WIDTH : 2;
+        const axisLW = Number(window.SYNIMA_STATE.syntenyScaleLineWidth);
+        const axisLineW = (Number.isFinite(axisLW) && axisLW > 0) ? axisLW : 1;
+
+        let ticks = "";
+        for (let i = 0; i <= intervals; i++) {
+          const x = xStart + (pxLen * (i / intervals));
+          const val = (step * i);
+          ticks += `
+            <line x1="${x}" y1="${axisY}" x2="${x}" y2="${axisY + tickH}" stroke="${strokeCol}" stroke-width="${axisLineW}" />
+            <text x="${x}" y="${axisY + tickH + axisFont + 2}" fill="${strokeCol}" font-size="${axisFont}" text-anchor="middle">${Number(val.toFixed(3))}</text>
+          `;
+        }
+
+        const axisX2 = xStart + pxLen;
+        const labelY = axisY + tickH + axisFont + 2 + labelFont + 8;
+        const axisLabel = `${labelText} (${label})`;
+
+        scaleBarSvg = `
+          <g class="synteny-scale">
+            <line x1="${xStart}" y1="${axisY}" x2="${axisX2}" y2="${axisY}" stroke="${strokeCol}" stroke-width="${axisLineW}" />
+            ${ticks}
+            <text x="${(xStart + axisX2) / 2}" y="${labelY}" fill="${strokeCol}" font-size="${labelFont}" text-anchor="middle">${escapeHtml(axisLabel)}</text>
+          </g>
+        `;
+
+        extraBottom = (labelY + 12) - svgH; // svgH is your existing height; we will fix it next
+        if (!isFinite(extraBottom) || extraBottom < 0) extraBottom = 0;
+    }
+
+    // bump svgH so the scale bar is visible
+    svgH = Math.max(svgH, svgH + extraBottom);
+
     return `
         <svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
         ${polys}
         ${tracks}
+        ${scaleBarSvg}
         </svg>
     `;
 }
@@ -1765,7 +2103,75 @@ function buildSyntenyLayout(config, maps) {
     };
 }
 
-function cloneSyntenySvgForExport(svgEl) {
+function svgRenderedPx(svgEl) {
+  const r = svgEl.getBoundingClientRect();
+  return { w: r.width || 0, h: r.height || 0 };
+}
+
+function parseViewBox(svgEl) {
+  const vb = (svgEl.getAttribute("viewBox") || "").trim().split(/\s+/).map(Number);
+  if (vb.length !== 4 || vb.some(n => Number.isNaN(n))) return { x: 0, y: 0, w: 1200, h: 600 };
+  return { x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
+}
+
+function addGenomeLabelsToSyntenyExport(svgEl) {
+  const { x: vbX, y: vbY, w: vbW, h: vbH } = parseViewBox(svgEl);
+
+  const groups = Array.from(svgEl.querySelectorAll("g.synteny-ctg"));
+  if (!groups.length) return;
+
+  // pick a y position per genome (use first rect we see per genome)
+  const byGenome = new Map();
+  for (const g of groups) {
+    const genome = g.getAttribute("data-genome");
+    const r = g.querySelector("rect");
+    if (!genome || !r) continue;
+
+    const y = parseFloat(r.getAttribute("y"));
+    const hh = parseFloat(r.getAttribute("height"));
+    if (!Number.isFinite(y) || !Number.isFinite(hh)) continue;
+
+    const yMid = y + hh / 2;
+    if (!byGenome.has(genome)) byGenome.set(genome, yMid);
+  }
+
+  const entries = Array.from(byGenome.entries()).sort((a, b) => a[1] - b[1]);
+  const maxLen = Math.max(...entries.map(([name]) => name.length), 10);
+
+  const fontSize = 14;
+  const fill = window.SYNIMA_STATE?.syntenyLabelColor || "#ffffff";
+
+  // estimate label gutter
+  const gutter = Math.max(120, Math.min(320, Math.round(maxLen * fontSize * 0.6 + 20)));
+
+  // expand viewBox to the left
+  const newX = vbX - gutter;
+  const newW = vbW + gutter;
+  svgEl.setAttribute("viewBox", `${newX} ${vbY} ${newW} ${vbH}`);
+
+  const labelX = newX + 6;
+
+  const ns = "http://www.w3.org/2000/svg";
+  const layer = document.createElementNS(ns, "g");
+  layer.setAttribute("class", "synteny-export-genome-labels");
+
+  for (const [name, yMid] of entries) {
+    const t = document.createElementNS(ns, "text");
+    t.setAttribute("x", String(labelX));
+    t.setAttribute("y", String(yMid + fontSize * 0.35));
+    t.setAttribute("fill", fill);
+    t.setAttribute("font-size", String(fontSize));
+    t.setAttribute("font-family", "sans-serif");
+    t.setAttribute("text-anchor", "start");
+    t.textContent = name;
+    layer.appendChild(t);
+  }
+
+  // insert labels above background, below ribbons/rects is fine
+  svgEl.insertBefore(layer, svgEl.firstChild);
+}
+
+function cloneSyntenySvgForExport(svgEl, opts = {}) {
     const clone = svgEl.cloneNode(true);
 
     // if your styling is CSS-driven, do this:
@@ -1774,6 +2180,12 @@ function cloneSyntenySvgForExport(svgEl) {
     // Background colour you use on-screen:
     const BG = window.SYNIMA_STATE?.syntenyBgColor || "#0f1b30";
     addSvgBackgroundRect(clone, BG);
+
+    if (opts.includeGenomeLabels) {
+        addGenomeLabelsToSyntenyExport(clone);
+        // background rect needs to cover new viewBox (see fix to addSvgBackgroundRect below)
+        addSvgBackgroundRect(clone, BG);
+      }
 
     // Make exports print-friendly (optional).
     // Remove if you want “exactly as seen”.
@@ -1799,11 +2211,16 @@ function svgViewBoxWH(svgEl) {
 function addSvgBackgroundRect(svgEl, fill) {
   const vb = (svgEl.getAttribute("viewBox") || "").split(/\s+/).map(Number);
   if (vb.length !== 4 || vb.some(n => Number.isNaN(n))) return;
-  const [, , vbW, vbH] = vb;
+  const [minX, minY, vbW, vbH] = vb;
+
+  // remove existing bg rect if you re-call this
+  const old = svgEl.querySelector("rect.__synima_bg");
+  if (old) old.remove();
 
   const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-  r.setAttribute("x", "0");
-  r.setAttribute("y", "0");
+  r.setAttribute("class", "__synima_bg");
+  r.setAttribute("x", String(minX));
+  r.setAttribute("y", String(minY));
   r.setAttribute("width", String(vbW));
   r.setAttribute("height", String(vbH));
   r.setAttribute("fill", fill);
@@ -1833,7 +2250,8 @@ SYNIMA.exportSyntenySvg = function () {
   const svgEl = document.querySelector("#synteny-plot svg");
   if (!svgEl) return;
 
-  const clone = cloneSyntenySvgForExport(svgEl);
+  //const clone = cloneSyntenySvgForExport(svgEl);
+  const clone = cloneSyntenySvgForExport(svgEl, { includeGenomeLabels: true });
   const svgData = new XMLSerializer().serializeToString(clone);
 
   const blob = new Blob([svgData], { type: "image/svg+xml" });
@@ -1851,7 +2269,8 @@ SYNIMA.exportSyntenyPng = function () {
   const svgEl = document.querySelector("#synteny-plot svg");
   if (!svgEl) return;
 
-  const clone = cloneSyntenySvgForExport(svgEl);
+  //const clone = cloneSyntenySvgForExport(svgEl);
+  const clone = cloneSyntenySvgForExport(svgEl, { includeGenomeLabels: true });
 
   // Critical: set explicit width/height from viewBox
   const { w, h } = svgViewBoxWH(clone);
@@ -1898,10 +2317,28 @@ SYNIMA.exportSyntenyFigurePng = function () {
     if (!treeSvg || !synSvg) return;
 
     const treeClone = treeSvg.cloneNode(true);
-    const synClone  = cloneSyntenySvgForExport(synSvg);
+    //const synClone  = cloneSyntenySvgForExport(synSvg);
+    const synClone  = cloneSyntenySvgForExport(synSvg, { includeGenomeLabels: false });
 
     const tWH = svgViewBoxWH(treeClone);
     const sWH = svgViewBoxWH(synClone);
+
+    const tPx = svgRenderedPx(treeSvg);
+
+    // Scale tree so its exported height matches what the layout used
+    const targetTreeH = tPx.h || sWH.h || tWH.h;
+    const treeScale = (tWH.h > 0) ? (targetTreeH / tWH.h) : 1;
+
+    const treeDrawW = tWH.w * treeScale;
+    const treeDrawH = targetTreeH;
+
+    // Keep synteny at native size (includes scale bar)
+    const synDrawW = sWH.w;
+    const synDrawH = sWH.h;
+
+    const GAP = 10;
+    const outW = treeDrawW + GAP + synDrawW;
+    const outH = Math.max(treeDrawH, synDrawH);
 
     treeClone.setAttribute("width", tWH.w);
     treeClone.setAttribute("height", tWH.h);
@@ -1920,27 +2357,6 @@ SYNIMA.exportSyntenyFigurePng = function () {
         if (loaded !== 2) return;
 
         const SCALE = 3;
-
-        // Shrink-only target height (prevents tree from getting bigger)
-        const targetH = Math.min(tWH.h, sWH.h);
-
-        // Scale tree to match target height
-        const treeScale = (tWH.h > 0) ? (targetH / tWH.h) : 1;
-        const synScale  = (sWH.h > 0) ? (targetH / sWH.h) : 1;
-
-        const treeDrawW = tWH.w * treeScale;
-        const treeDrawH = targetH;
-
-        // If synteny height differs, scale synteny too (normally this will be 1)
-        const synDrawW = sWH.w * synScale;
-        const synDrawH = targetH;
-
-        const GAP = 10; // in SVG units, tweak (0, 5, 10, 20)
-
-        //const outW = (tWH.w + sWH.w);
-        //const outH = Math.max(tWH.h, sWH.h);
-        const outW = treeDrawW + GAP + synDrawW;
-        const outH = targetH;
 
         const canvas = document.createElement("canvas");
         canvas.width = outW * SCALE;
@@ -1986,27 +2402,22 @@ SYNIMA.exportSyntenyFigureSvg = function () {
 
   // Clone originals
   const treeClone = treeSvg.cloneNode(true);
-  const synClone  = cloneSyntenySvgForExport(synSvg);
+  //const synClone  = cloneSyntenySvgForExport(synSvg);
+  const synClone  = cloneSyntenySvgForExport(synSvg, { includeGenomeLabels: false });
 
   // Ensure viewBox exists and get dimensions
   const tWH = svgViewBoxWH(treeClone);
   const sWH = svgViewBoxWH(synClone);
 
-  // Target height = synteny height (so they align)
-  const targetH = sWH.h || tWH.h || 300;
+    const tPx = svgRenderedPx(treeSvg);
+    const targetTreeH = tPx.h || sWH.h || tWH.h;
 
-  // Scale tree to match target height
-  const treeScale = (tWH.h > 0) ? (targetH / tWH.h) : 1;
-  const treeDrawW = tWH.w * treeScale;
-  const treeDrawH = targetH;
+    const treeScale = (tWH.h > 0) ? (targetTreeH / tWH.h) : 1;
+    const treeDrawW = tWH.w * treeScale;
+    const treeDrawH = targetTreeH;
 
-  // Synteny scale (normally 1 because targetH = sWH.h)
-  const synScale = (sWH.h > 0) ? (targetH / sWH.h) : 1;
-  const synDrawW = sWH.w * synScale;
-  const synDrawH = targetH;
-
-  const outW = treeDrawW + GAP + synDrawW;
-  const outH = targetH;
+    const outW = treeDrawW + GAP + sWH.w;
+    const outH = Math.max(treeDrawH, sWH.h);
 
   // Wrapper SVG
   const ns = "http://www.w3.org/2000/svg";
@@ -2027,6 +2438,7 @@ SYNIMA.exportSyntenyFigureSvg = function () {
 
   // Put tree inside a <g> and scale it
   const gTree = document.createElementNS(ns, "g");
+  //gTree.setAttribute("transform", `translate(0 0)`);
   gTree.setAttribute("transform", `translate(0 0) scale(${treeScale})`);
   // move children (not the outer <svg>) into the group
   while (treeClone.childNodes.length) gTree.appendChild(treeClone.childNodes[0]);
@@ -2034,7 +2446,8 @@ SYNIMA.exportSyntenyFigureSvg = function () {
 
   // Put synteny inside a <g> and translate + scale it
   const gSyn = document.createElementNS(ns, "g");
-  gSyn.setAttribute("transform", `translate(${treeDrawW + GAP} 0) scale(${synScale})`);
+  gSyn.setAttribute("transform", `translate(${treeDrawW + GAP} 0)`);
+  //gSyn.setAttribute("transform", `translate(${tWH.w + GAP} 0)`);
   while (synClone.childNodes.length) gSyn.appendChild(synClone.childNodes[0]);
   wrapper.appendChild(gSyn);
 

@@ -87,3 +87,26 @@ window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor = window.SYNIMA_PERSIST_KEYS
 
 // default
 window.SYNIMA_STATE.syntenyContigStrokeColor = window.SYNIMA_STATE.syntenyContigStrokeColor ?? "#ffffff";
+
+// scale bar
+window.SYNIMA_PERSIST_KEYS.syntenyScaleShow      = "synima_synteny_scale_show";
+window.SYNIMA_PERSIST_KEYS.syntenyScaleUnits     = "synima_synteny_scale_units";     // auto|bp|kb|mb|gb
+window.SYNIMA_PERSIST_KEYS.syntenyScaleMax       = "synima_synteny_scale_max";       // "" => auto, otherwise number in chosen units
+window.SYNIMA_PERSIST_KEYS.syntenyScaleIntervals = "synima_synteny_scale_intervals"; // e.g. 10
+window.SYNIMA_PERSIST_KEYS.syntenyScaleAxisFont  = "synima_synteny_scale_axis_font";
+window.SYNIMA_PERSIST_KEYS.syntenyScaleLabelFont = "synima_synteny_scale_label_font";
+window.SYNIMA_PERSIST_KEYS.syntenyScaleLabelText = "synima_synteny_scale_label_text";
+
+// defaults
+window.SYNIMA_STATE.syntenyScaleShow      = window.SYNIMA_STATE.syntenyScaleShow ?? true;
+window.SYNIMA_STATE.syntenyScaleUnits     = window.SYNIMA_STATE.syntenyScaleUnits ?? "auto";
+window.SYNIMA_STATE.syntenyScaleMax       = window.SYNIMA_STATE.syntenyScaleMax ?? "";     // auto
+window.SYNIMA_STATE.syntenyScaleIntervals = window.SYNIMA_STATE.syntenyScaleIntervals ?? 10;
+window.SYNIMA_STATE.syntenyScaleAxisFont  = window.SYNIMA_STATE.syntenyScaleAxisFont ?? 12;
+window.SYNIMA_STATE.syntenyScaleLabelFont = window.SYNIMA_STATE.syntenyScaleLabelFont ?? 12;
+window.SYNIMA_STATE.syntenyScaleLabelText = window.SYNIMA_STATE.syntenyScaleLabelText ?? "Position in genome";
+
+window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth = window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth || "synima_synteny_scale_line_width";
+
+// default state
+window.SYNIMA_STATE.syntenyScaleLineWidth = window.SYNIMA_STATE.syntenyScaleLineWidth ?? 1.0;
