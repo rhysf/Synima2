@@ -1059,6 +1059,7 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.selectedContigKey = null;
     window.SYNIMA_STATE.syntenyContigNameOverrides = {};
     window.SYNIMA_STATE.syntenyContigFlips = {};
+    window.SYNIMA_STATE.syntenyContigOverrides = {};
 
     // tree width
     const tw = document.getElementById("synteny-tree-width-select");
@@ -1129,6 +1130,8 @@ SYNIMA.resetSynteny = function () {
 
         // reverse compliment
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigFlips);
+
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides);
     } catch (e) {}
 
     // redraw
@@ -1558,6 +1561,7 @@ function renderSyntenySvg(blocks, config, maps, layout) {
 
             const baseName = nameOverrides[key] || contig;
             const isFlipped = !!flips[key];
+            const orient = isFlipped ? "-" : "+";
 
             // Render-only suffix (not editable by user)
             const renderName = isFlipped ? (baseName + "-") : baseName;
@@ -1602,7 +1606,7 @@ function renderSyntenySvg(blocks, config, maps, layout) {
                 <g class="${gClass}"
                     data-genome="${g.name}"
                     data-contig="${contig}"
-                    data-orientation="+">
+                    data-orientation="${orient}">
                 <rect
                     x="${x}"
                     y="${yRect}"
