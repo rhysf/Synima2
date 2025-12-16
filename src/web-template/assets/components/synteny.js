@@ -82,6 +82,14 @@ function syncSyntenyModeFromStorage() {
       if (raw) window.SYNIMA_STATE.syntenyContigFlips = JSON.parse(raw) || {};
     } catch (e) {}
 
+    // contig border colours
+    try {
+      const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor);
+      if (saved) window.SYNIMA_STATE.syntenyContigStrokeColor = saved;
+    } catch (e) {
+        console.warn("Could not read contig border colour from localStorage", e);
+    }
+
     // contig colours
     try {
         const saved1 = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode);
@@ -530,6 +538,23 @@ SYNIMA.showSynteny = function () {
               </select>
             </label>
 
+            <!-- contig border colours -->
+            <label style="margin-left: 10px;">
+              Contig outline:
+              <select id="synteny-contig-stroke-select">
+                <option value="#ffffff">White</option>
+                <option value="#000000">Black</option>
+                <option value="#0f1b30">Navy</option>
+                <option value="#d1d5db">Light grey</option>
+                <option value="#fbbf24">Amber</option>
+                <option value="#93c5fd">Light blue</option>
+                <option value="#66cc99">Green cyan</option>
+                <option value="#cc6699">Pink</option>
+                <option value="#cc9966">Light orange</option>
+                <option value="#ff0000">Red</option>
+              </select>
+            </label>
+
             <!-- synteny colours -->
             <label style="margin-left: 10px;">
               Synteny block colour:
@@ -862,6 +887,21 @@ SYNIMA.showSynteny = function () {
       });
     }
 
+    // contig border colour
+    const strokeSel = document.getElementById("synteny-contig-stroke-select");
+    if (strokeSel) {
+      strokeSel.value = window.SYNIMA_STATE.syntenyContigStrokeColor || "#ffffff";
+
+      strokeSel.addEventListener("change", () => {
+        const v = strokeSel.value || "#ffffff";
+        window.SYNIMA_STATE.syntenyContigStrokeColor = v;
+        try {
+          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor, v);
+        } catch (e) {}
+        rerender();
+      });
+    }
+
     // synteny block colour
     const blockColorSel = document.getElementById("synteny-block-colour-select");
     if (blockColorSel) {
@@ -1060,6 +1100,7 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyContigNameOverrides = {};
     window.SYNIMA_STATE.syntenyContigFlips = {};
     window.SYNIMA_STATE.syntenyContigOverrides = {};
+    window.SYNIMA_STATE.syntenyContigStrokeColor = "#ffffff";
 
     // tree width
     const tw = document.getElementById("synteny-tree-width-select");
@@ -1084,9 +1125,13 @@ SYNIMA.resetSynteny = function () {
     const gapSelect = document.getElementById("synteny-gap-select");
     if (gapSelect) gapSelect.value = "0";
 
-    // reset contig colour dropdown
+    // contig colour dropdown
     const colorSelect = document.getElementById("contig-colour-select");
     if (colorSelect) colorSelect.value = SYNIMA_SYNTENY_DEFAULTS.contigBaseColor; // "#6699cc"
+
+    // contig border colour dropdown
+    const stSel = document.getElementById("synteny-contig-stroke-select");
+    if (stSel) stSel.value = "#ffffff";
 
     // contig block colour
     const bc = document.getElementById("synteny-block-colour-select");
@@ -1113,25 +1158,17 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTrackScale);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyGap);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTreeWidth);
-
-        // colour keys
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigBaseColor);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigPalette);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides);
-
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockColor);
-
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockOpacity);
-
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor);
-
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigNames);
-
-        // reverse compliment
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigFlips);
-
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor);
     } catch (e) {}
 
     // redraw
@@ -1591,7 +1628,8 @@ function renderSyntenySvg(blocks, config, maps, layout) {
 
 
             // outline only when selected
-            const stroke = isSelected ? "#facc15" : "#ffffff";
+            const baseStroke = window.SYNIMA_STATE.syntenyContigStrokeColor || "#ffffff";
+            const stroke  = isSelected ? "#facc15" : baseStroke;
             const strokeW = isSelected ? 2.5 : 1;
 
             //if(isSelected) {
@@ -1613,6 +1651,8 @@ function renderSyntenySvg(blocks, config, maps, layout) {
                     width="${w}"
                     height="${trackHeight}"
                     fill="${fill}" 
+                    stroke="${stroke}" 
+                    stroke-width="${strokeW}"
                     >
                 </rect>
                 ${

@@ -548,11 +548,11 @@ body {
   color: white;
 }
 
-/* contig select */
+/* contig select 
 .synteny-ctg rect {
   stroke: #ffffff;
   stroke-width: 1px;
-}
+}*/
 
 .synteny-ctg.is-selected rect {
   stroke: #facc15;      /* yellow highlight */

@@ -80,3 +80,10 @@ window.SYNIMA_STATE.syntenyContigNameOverrides = window.SYNIMA_STATE.syntenyCont
 // reverse complimenting
 window.SYNIMA_PERSIST_KEYS.syntenyContigFlips = window.SYNIMA_PERSIST_KEYS.syntenyContigFlips || "synima_synteny_contig_flips";
 window.SYNIMA_STATE.syntenyContigFlips = window.SYNIMA_STATE.syntenyContigFlips || {}; // {"genome|contig": true}
+
+// contig border colour
+// add key
+window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor = window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor || "synima_synteny_contig_stroke_color";
+
+// default
+window.SYNIMA_STATE.syntenyContigStrokeColor = window.SYNIMA_STATE.syntenyContigStrokeColor ?? "#ffffff";

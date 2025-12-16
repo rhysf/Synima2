@@ -24,12 +24,12 @@ SYNIMA.showOrthologs = function () {
     return code;
   }
 
-function formatOrthoTool(method) {
-  if (method === "orthomcl") return "OrthoMCL";
-  if (method === "rbh") return "Reciprocal Best Hits (RBH)";
-  if (method === "orthofinder") return "OrthoFinder";
-  return method;
-}
+  function formatOrthoTool(method) {
+    if (method === "orthomcl") return "OrthoMCL";
+    if (method === "rbh") return "Reciprocal Best Hits (RBH)";
+    if (method === "orthofinder") return "OrthoFinder";
+    return method;
+  }
 
   // Determine sequence type + orthology tool run
   let seqType = "Unknown";
@@ -66,15 +66,13 @@ function formatOrthoTool(method) {
   // Always relevant for translation of coding sequences
   paramRows += `<tr><th>Genetic code</th><td>${params.genetic_code}</td></tr>`;
 
-
-// Show global single-copy orthologs at the top (only once)
-html += `
-  <div class="section">
-    <h2>Single Copy Orthologs</h2>
-    <p>Total 1:1 ortholog groups: <strong>${data.single_copy_orthologs}</strong></p>
-  </div>
-`;
-
+  // Show global single-copy orthologs at the top (only once)
+  html += `
+    <div class="section">
+      <h2>Single Copy Orthologs</h2>
+      <p>Total 1:1 ortholog groups: <strong>${data.single_copy_orthologs}</strong></p>
+    </div>
+  `;
 
   data.summaries.forEach(summary => {
 
