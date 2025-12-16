@@ -76,3 +76,7 @@ window.SYNIMA_MIDPOINT_VALUE = window.SYNIMA_MIDPOINT_VALUE || "__SYNIMA_MIDPOIN
 window.SYNIMA_PERSIST_KEYS.syntenyContigNames = window.SYNIMA_PERSIST_KEYS.syntenyContigNames || "synima_synteny_contig_names";
 
 window.SYNIMA_STATE.syntenyContigNameOverrides = window.SYNIMA_STATE.syntenyContigNameOverrides || {};
+
+// reverse complimenting
+window.SYNIMA_PERSIST_KEYS.syntenyContigFlips = window.SYNIMA_PERSIST_KEYS.syntenyContigFlips || "synima_synteny_contig_flips";
+window.SYNIMA_STATE.syntenyContigFlips = window.SYNIMA_STATE.syntenyContigFlips || {}; // {"genome|contig": true}

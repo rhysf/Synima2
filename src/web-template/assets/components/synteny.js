@@ -76,6 +76,12 @@ function syncSyntenyModeFromStorage() {
       console.warn("Could not read contig name overrides from localStorage", e);
     }
 
+    // contig reverse compliment
+    try {
+      const raw = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigFlips);
+      if (raw) window.SYNIMA_STATE.syntenyContigFlips = JSON.parse(raw) || {};
+    } catch (e) {}
+
     // contig colours
     try {
         const saved1 = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode);
@@ -113,35 +119,37 @@ function syncSyntenyModeFromStorage() {
 }
 
 function openContigEditor(ev, genome, contig) {
-  const editorEl = document.getElementById("synteny-contig-editor");
-  if (!editorEl) return;
+    const editorEl = document.getElementById("synteny-contig-editor");
+    if (!editorEl) return;
 
-  const maps = window.SYNIMA_STATE._lastMaps; // optional, or pass maps in; see note below
-  const len = maps?.contigLen?.[genome]?.[contig] ?? "unknown";
+    const key = `${genome}|${contig}`;
 
-  // We know you currently write data-orientation="+"
-  // so this will show "+" for now, but it's ready for later when you implement flipping
-  const orientation = "+";
+    const maps = window.SYNIMA_STATE._lastMaps; // optional, or pass maps in; see note below
+    const len = maps?.contigLen?.[genome]?.[contig] ?? "unknown";
 
-  const key = `${genome}|${contig}`;
+    // We know you currently write data-orientation="+"
+    // so this will show "+" for now, but it's ready for later when you implement flipping
+    const flips = window.SYNIMA_STATE.syntenyContigFlips || {};
+    const isFlipped = !!flips[key];
+    const orientation = isFlipped ? "-" : "+";
 
-  const nameOverrides = window.SYNIMA_STATE.syntenyContigNameOverrides || {};
-  const curName = nameOverrides[key] || contig;
+    const nameOverrides = window.SYNIMA_STATE.syntenyContigNameOverrides || {};
+    const curName = nameOverrides[key] || contig;
 
-  const overrides = window.SYNIMA_STATE.syntenyContigOverrides || {};
-  const curColor = overrides[key] || "";
+    const overrides = window.SYNIMA_STATE.syntenyContigOverrides || {};
+    const curColor = overrides[key] || "";
 
-  // position relative to plot
-  const plotRect = document.getElementById("synteny-plot").getBoundingClientRect();
-  const x = Math.max(10, ev.clientX - plotRect.left + 10);
-  const y = Math.max(10, ev.clientY - plotRect.top + 10);
+    // position relative to plot
+    const plotRect = document.getElementById("synteny-plot").getBoundingClientRect();
+    const x = Math.max(10, ev.clientX - plotRect.left + 10);
+    const y = Math.max(10, ev.clientY - plotRect.top + 10);
 
-  editorEl.style.position = "absolute";
-  editorEl.style.left = `${x}px`;
-  editorEl.style.top = `${y}px`;
-  editorEl.style.zIndex = "100000";
+    editorEl.style.position = "absolute";
+    editorEl.style.left = `${x}px`;
+    editorEl.style.top = `${y}px`;
+    editorEl.style.zIndex = "100000";
 
-  editorEl.innerHTML = `
+    editorEl.innerHTML = `
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <div style="font-weight:700;">${contig}</div>
@@ -151,7 +159,7 @@ function openContigEditor(ev, genome, contig) {
       <div style="margin-top:6px; font-size:12px; opacity:0.9;">
         Genome: ${genome}<br>
         Length: ${len} bp<br>
-        Orientation: ${orientation}
+        Orientation: <span id="ctg-orientation-val">${orientation}</span>
       </div>
 
       <div style="margin-top:10px;">
@@ -173,6 +181,14 @@ function openContigEditor(ev, genome, contig) {
         </select>
       </div>
 
+        <!-- Reverse compliment -->
+        <div style="margin-top:10px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-size:12px;">Reverse complement</span>
+            <input id="ctg-flip-checkbox" type="checkbox" ${isFlipped ? "checked" : ""}>
+          </div>
+        </div>
+
 
         <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
           <button id="ctg-rename-cancel" type="button">Cancel</button>
@@ -180,11 +196,11 @@ function openContigEditor(ev, genome, contig) {
         </div>
       </div>
     </div>
-  `;
+    `;
 
-  // initial colour
-  const colSel = document.getElementById("ctg-colour-select");
-  if (colSel) colSel.value = curColor;
+    // initial colour
+    const colSel = document.getElementById("ctg-colour-select");
+    if (colSel) colSel.value = curColor;
 
   editorEl.classList.remove("hidden");
 
@@ -252,6 +268,28 @@ function openContigEditor(ev, genome, contig) {
 
     if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
   });
+
+    // reverse compliment
+    document.getElementById("ctg-flip-checkbox")?.addEventListener("change", (e) => {
+      const v = !!e.target.checked;
+      window.SYNIMA_STATE.syntenyContigFlips ||= {};
+      if (!v) delete window.SYNIMA_STATE.syntenyContigFlips[key];
+      else window.SYNIMA_STATE.syntenyContigFlips[key] = true;
+
+      // update Orientation in the open editor immediately
+      const orientEl = document.getElementById("ctg-orientation-val");
+      if (orientEl) orientEl.textContent = v ? "-" : "+";
+
+      try {
+        localStorage.setItem(
+          window.SYNIMA_PERSIST_KEYS.syntenyContigFlips,
+          JSON.stringify(window.SYNIMA_STATE.syntenyContigFlips)
+        );
+      } catch (err) {}
+
+      if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+    });
+
 }
 
 SYNIMA.showSynteny = function () {
@@ -1020,6 +1058,7 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyLabelColor = "#ffffff";
     window.SYNIMA_STATE.selectedContigKey = null;
     window.SYNIMA_STATE.syntenyContigNameOverrides = {};
+    window.SYNIMA_STATE.syntenyContigFlips = {};
 
     // tree width
     const tw = document.getElementById("synteny-tree-width-select");
@@ -1087,6 +1126,9 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor);
 
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigNames);
+
+        // reverse compliment
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigFlips);
     } catch (e) {}
 
     // redraw
@@ -1291,8 +1333,19 @@ function parseAligncoordsText(text) {
   return blocks;
 }
 
+function flipInterval(lo, hi, L) {
+  // lo/hi are local contig coords in ascending order
+  // map [lo,hi] -> [L-hi, L-lo]
+  // 1-based inclusive [lo,hi] -> [L-hi+1, L-lo+1]
+  return { lo: (L - hi + 1), hi: (L - lo + 1) };
+}
+
 // Convert spans blocks into absolute coords + scaled x coords
 function prepareBlocksForPlot(blocks, config, maps, layout) {
+    //const idx = maps.genomeIndex;
+    const offset = maps.contigOffset;
+    const lenMap = maps.contigLen;
+    const flips = window.SYNIMA_STATE.syntenyContigFlips || {};
 
     const order = getGenomeOrderForAdjacency(config);
     const adjacent = buildAdjacencySet(order);
@@ -1301,11 +1354,18 @@ function prepareBlocksForPlot(blocks, config, maps, layout) {
     const genomeIndex = Object.create(null);
     order.forEach((name, i) => { genomeIndex[name] = i; });
 
-    const idx = maps.genomeIndex;
-    const offset = maps.contigOffset;
-
     const scale = layout.scaleX;
     const x0 = layout.xStart;
+
+    // Build contig ranks ONCE (for gaps)
+    const contigRank = {};
+    for (const g of config.genomes) {
+        const order = maps.contigOrder[g.name] || [];
+        const r = {};
+        order.forEach((ctg, i) => { r[ctg] = i; });
+        contigRank[g.name] = r;
+    }
+    const gapPx = layout.gapPx ?? 0;
 
     let skippedUnknownGenome = 0;
     let skippedUnknownContig = 0;
@@ -1313,81 +1373,99 @@ function prepareBlocksForPlot(blocks, config, maps, layout) {
 
     const out = [];
 
-  for (const b of blocks) {
+    for (const b of blocks) {
 
-    // adjacency should be based on the tree order (order[]), not config.genomes
-    if (genomeIndex[b.g1] === undefined || genomeIndex[b.g2] === undefined) {
-      skippedUnknownGenome++;
-      continue;
+        const i1 = genomeIndex[b.g1];
+        const i2 = genomeIndex[b.g2];
+        if (i1 === undefined || i2 === undefined) {
+          skippedUnknownGenome++;
+          continue;
+        }
+
+        const pairKey = (i1 <= i2) ? `${b.g1}|${b.g2}` : `${b.g2}|${b.g1}`;
+        if (!adjacent.has(pairKey)) { 
+            skippedNonAdjacent++; 
+            continue; 
+        }
+
+        // Make "top" always the smaller index so y layout is stable
+        let top, bot;
+        if (i1 <= i2) {
+          top = { genome: b.g1, contig: b.c1, s: b.s1, e: b.e1 };
+          bot = { genome: b.g2, contig: b.c2, s: b.s2, e: b.e2 };
+        } else {
+          top = { genome: b.g2, contig: b.c2, s: b.s2, e: b.e2 };
+          bot = { genome: b.g1, contig: b.c1, s: b.s1, e: b.e1 };
+        }
+
+        const topOff = offset[top.genome]?.[top.contig];
+        const botOff = offset[bot.genome]?.[bot.contig];
+        if (topOff == null || botOff == null) {
+          skippedUnknownContig++;
+          continue;
+        }
+
+        // new for r.c.,
+        let topLo = Math.min(top.s, top.e);
+        let topHi = Math.max(top.s, top.e);
+        let botLo = Math.min(bot.s, bot.e);
+        let botHi = Math.max(bot.s, bot.e);
+
+        const topKey = `${top.genome}|${top.contig}`;
+        const botKey = `${bot.genome}|${bot.contig}`;
+
+        const topFlip = !!flips[topKey];
+        const botFlip = !!flips[botKey];
+
+        if (topFlip) {
+          const L = lenMap?.[top.genome]?.[top.contig];
+          if (typeof L === "number") ({ lo: topLo, hi: topHi } = flipInterval(topLo, topHi, L));
+        }
+        if (botFlip) {
+          const L = lenMap?.[bot.genome]?.[bot.contig];
+          if (typeof L === "number") ({ lo: botLo, hi: botHi } = flipInterval(botLo, botHi, L));
+        }
+
+        // strand should flip if exactly one side is flipped
+        let strand = b.strand;
+        if (topFlip !== botFlip) {
+          strand = (strand === "+") ? "-" : "+";
+        }
+
+        const topAbsStart = topOff + topLo;
+        const topAbsEnd   = topOff + topHi;
+        const botAbsStart = botOff + botLo;
+        const botAbsEnd   = botOff + botHi;
+
+        //const topAbsStart = topOff + Math.min(top.s, top.e);
+        //const topAbsEnd   = topOff + Math.max(top.s, top.e);
+        //const botAbsStart = botOff + Math.min(bot.s, bot.e);
+        //const botAbsEnd   = botOff + Math.max(bot.s, bot.e);
+
+        const rTop = contigRank[top.genome]?.[top.contig] ?? 0;
+        const rBot = contigRank[bot.genome]?.[bot.contig] ?? 0;
+
+        const x1lo = x0 + topAbsStart * scale + rTop * gapPx;
+        const x1hi = x0 + topAbsEnd   * scale + rTop * gapPx;
+        const x2lo = x0 + botAbsStart * scale + rBot * gapPx;
+        const x2hi = x0 + botAbsEnd   * scale + rBot * gapPx;
+
+        out.push({
+          topGenome: top.genome,
+          topContig: top.contig,
+          botGenome: bot.genome,
+          botContig: bot.contig,
+
+          topAbsStart, topAbsEnd,
+          botAbsStart, botAbsEnd,
+
+          x1lo, x1hi, x2lo, x2hi,
+
+          strand
+        });
     }
-    if (!adjacent.has(`${b.g1}|${b.g2}`)) {
-      skippedNonAdjacent++;
-      continue;
-    }
 
-    const i1 = genomeIndex[b.g1];
-    const i2 = genomeIndex[b.g2];
-    // (we already checked undefined above, but keeping safe is fine)
-    if (i1 === undefined || i2 === undefined) {
-      skippedUnknownGenome++;
-      continue;
-    }
-
-    // Make "top" always the smaller index so y layout is stable
-    let top, bot;
-    if (i1 <= i2) {
-      top = { genome: b.g1, contig: b.c1, s: b.s1, e: b.e1 };
-      bot = { genome: b.g2, contig: b.c2, s: b.s2, e: b.e2 };
-    } else {
-      top = { genome: b.g2, contig: b.c2, s: b.s2, e: b.e2 };
-      bot = { genome: b.g1, contig: b.c1, s: b.s1, e: b.e1 };
-    }
-
-    const topOff = offset[top.genome]?.[top.contig];
-    const botOff = offset[bot.genome]?.[bot.contig];
-    if (topOff == null || botOff == null) {
-      skippedUnknownContig++;
-      continue;
-    }
-
-    const topAbsStart = topOff + Math.min(top.s, top.e);
-    const topAbsEnd   = topOff + Math.max(top.s, top.e);
-    const botAbsStart = botOff + Math.min(bot.s, bot.e);
-    const botAbsEnd   = botOff + Math.max(bot.s, bot.e);
-
-    // new for contig gaps
-    const contigRank = {};
-    for (const g of config.genomes) {
-      const order = maps.contigOrder[g.name] || [];
-      const r = {};
-      order.forEach((ctg, i) => { r[ctg] = i; });
-      contigRank[g.name] = r;
-    }
-    const gapPx = layout.gapPx ?? 0;
-    const rTop = contigRank[top.genome]?.[top.contig] ?? 0;
-    const rBot = contigRank[bot.genome]?.[bot.contig] ?? 0;
-
-    const x1lo = x0 + topAbsStart * scale + rTop * gapPx;
-    const x1hi = x0 + topAbsEnd   * scale + rTop * gapPx;
-    const x2lo = x0 + botAbsStart * scale + rBot * gapPx;
-    const x2hi = x0 + botAbsEnd   * scale + rBot * gapPx;
-
-    out.push({
-      topGenome: top.genome,
-      topContig: top.contig,
-      botGenome: bot.genome,
-      botContig: bot.contig,
-
-      topAbsStart, topAbsEnd,
-      botAbsStart, botAbsEnd,
-
-      x1lo, x1hi, x2lo, x2hi,
-
-      strand: b.strand
-    });
-  }
-
-  return { blocks: out, skippedUnknownGenome, skippedUnknownContig, skippedNonAdjacent };
+    return { blocks: out, skippedUnknownGenome, skippedUnknownContig, skippedNonAdjacent };
 }
 
 // Render a simple SVG: genome tracks + polygons
@@ -1474,11 +1552,18 @@ function renderSyntenySvg(blocks, config, maps, layout) {
             const fontSize = Math.max(6, Math.min(30, userFontSize));
 
             // contig label
-            //const label = trimLabelToWidth(contig, w - 6, fontSize);
             const key = `${g.name}|${contig}`;
             const nameOverrides = window.SYNIMA_STATE.syntenyContigNameOverrides || {};
-            const displayName = nameOverrides[key] || contig;
-            const label = trimLabelToWidth(displayName, w - 6, fontSize);
+            const flips = window.SYNIMA_STATE.syntenyContigFlips || {};
+
+            const baseName = nameOverrides[key] || contig;
+            const isFlipped = !!flips[key];
+
+            // Render-only suffix (not editable by user)
+            const renderName = isFlipped ? (baseName + "-") : baseName;
+
+            // Trim AFTER suffix is added so the suffix participates in width logic
+            const label = trimLabelToWidth(renderName, w - 6, fontSize);
 
             // Center text in the rectangle
             const textX = x + w / 2;
