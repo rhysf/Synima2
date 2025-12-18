@@ -4,6 +4,10 @@ if (typeof window !== "undefined") {
     window.SYNIMA_PERSIST_KEYS = window.SYNIMA_PERSIST_KEYS || {};
     if (!window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle) window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle = "synima_syntenyLinkStyle";
     if (!window.SYNIMA_STATE.syntenyLinkStyle) window.SYNIMA_STATE.syntenyLinkStyle = "polygons";
+
+    // Contig order overrides
+    if (!window.SYNIMA_PERSIST_KEYS.syntenyContigOrder) window.SYNIMA_PERSIST_KEYS.syntenyContigOrder = "synima_syntenyContigOrder";
+    if (!window.SYNIMA_STATE.syntenyContigOrderOverrides) window.SYNIMA_STATE.syntenyContigOrderOverrides = {};
 }
 
 // Useful function to start with - finding default values that might have been preselected
@@ -107,6 +111,25 @@ function syncSyntenyModeFromStorage() {
       if (raw) window.SYNIMA_STATE.syntenyContigFlips = JSON.parse(raw) || {};
     } catch (e) {}
 
+    // contig order overrides
+    try {
+      // Ensure a default key exists even if SYNIMA_PERSIST_KEYS is defined elsewhere
+      if (window.SYNIMA_PERSIST_KEYS && !window.SYNIMA_PERSIST_KEYS.syntenyContigOrder) {
+        window.SYNIMA_PERSIST_KEYS.syntenyContigOrder = "synima_syntenyContigOrder";
+      }
+      const k = (window.SYNIMA_PERSIST_KEYS && window.SYNIMA_PERSIST_KEYS.syntenyContigOrder)
+        ? window.SYNIMA_PERSIST_KEYS.syntenyContigOrder
+        : "synima_syntenyContigOrder";
+
+      const raw = localStorage.getItem(k);
+      if (raw) {
+        const obj = JSON.parse(raw);
+        if (obj && typeof obj === "object") window.SYNIMA_STATE.syntenyContigOrderOverrides = obj;
+      }
+    } catch (e) {
+      console.warn("Could not read contig order overrides from localStorage", e);
+    }
+
     // scale bar width
     try {
       const v = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth);
@@ -166,7 +189,8 @@ function openContigEditor(ev, genome, contig) {
 
     const key = `${genome}|${contig}`;
 
-    const maps = window.SYNIMA_STATE._lastMaps; // optional, or pass maps in; see note below
+    //const maps = window.SYNIMA_STATE._lastMaps; // optional, or pass maps in; see note below
+    const maps = window.SYNIMA_STATE._syntenyLastMaps || window.SYNIMA_STATE._lastMaps;
     const len = maps?.contigLen?.[genome]?.[contig] ?? "unknown";
 
     // We know you currently write data-orientation="+"
@@ -180,6 +204,13 @@ function openContigEditor(ev, genome, contig) {
 
     const overrides = window.SYNIMA_STATE.syntenyContigOverrides || {};
     const curColor = overrides[key] || "";
+
+    // contig order
+    const orderArr = maps?.contigOrder?.[genome] || [];
+    const idx = orderArr.indexOf(contig);
+    const total = orderArr.length;
+    const canUp = idx > 0;
+    const canDown = (idx >= 0 && idx < total - 1);
 
     // position relative to plot
     const plotRect = document.getElementById("synteny-plot").getBoundingClientRect();
@@ -203,6 +234,15 @@ function openContigEditor(ev, genome, contig) {
         Length: ${len} bp<br>
         Orientation: <span id="ctg-orientation-val">${orientation}</span>
       </div>
+
+        <div style="margin-top:10px;">
+          <label style="display:block; font-size:12px; margin-bottom:4px;">Adjust contig order</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="ctg-order-up" type="button" ${canUp ? "" : "disabled"}>-</button>
+            <button id="ctg-order-down" type="button" ${canDown ? "" : "disabled"}>+</button>
+            <span style="font-size:12px; opacity:0.9;">${idx >= 0 ? `${idx + 1} / ${total}` : ""}</span>
+          </div>
+        </div>  
 
       <div style="margin-top:10px;">
         <label style="display:block; font-size:12px; margin-bottom:4px;">Rename contig</label>
@@ -309,28 +349,86 @@ function openContigEditor(ev, genome, contig) {
     } catch (err) {}
 
     if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
-  });
+    });
 
     // reverse compliment
     document.getElementById("ctg-flip-checkbox")?.addEventListener("change", (e) => {
-      const v = !!e.target.checked;
-      window.SYNIMA_STATE.syntenyContigFlips ||= {};
-      if (!v) delete window.SYNIMA_STATE.syntenyContigFlips[key];
-      else window.SYNIMA_STATE.syntenyContigFlips[key] = true;
+          const v = !!e.target.checked;
+          window.SYNIMA_STATE.syntenyContigFlips ||= {};
+          if (!v) delete window.SYNIMA_STATE.syntenyContigFlips[key];
+          else window.SYNIMA_STATE.syntenyContigFlips[key] = true;
 
-      // update Orientation in the open editor immediately
-      const orientEl = document.getElementById("ctg-orientation-val");
-      if (orientEl) orientEl.textContent = v ? "-" : "+";
+          // update Orientation in the open editor immediately
+          const orientEl = document.getElementById("ctg-orientation-val");
+          if (orientEl) orientEl.textContent = v ? "-" : "+";
 
-      try {
-        localStorage.setItem(
-          window.SYNIMA_PERSIST_KEYS.syntenyContigFlips,
-          JSON.stringify(window.SYNIMA_STATE.syntenyContigFlips)
-        );
-      } catch (err) {}
+          try {
+            localStorage.setItem(
+              window.SYNIMA_PERSIST_KEYS.syntenyContigFlips,
+              JSON.stringify(window.SYNIMA_STATE.syntenyContigFlips)
+            );
+          } catch (err) {}
+
+          if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
+    });
+
+    // contig reorder
+    function persistContigOrderOverrides() {
+    try {
+        if (window.SYNIMA_PERSIST_KEYS && !window.SYNIMA_PERSIST_KEYS.syntenyContigOrder) {
+          window.SYNIMA_PERSIST_KEYS.syntenyContigOrder = "synima_syntenyContigOrder";
+        }
+        const k = window.SYNIMA_PERSIST_KEYS?.syntenyContigOrder || "synima_syntenyContigOrder";
+        localStorage.setItem(k, JSON.stringify(window.SYNIMA_STATE.syntenyContigOrderOverrides || {}));
+      } catch (e) {}
+    }
+
+    function moveContigBy(delta) {
+      const base = maps?.contigOrder?.[genome] || [];
+      if (!Array.isArray(base) || base.length === 0) return;
+
+      window.SYNIMA_STATE.syntenyContigOrderOverrides ||= {};
+      let cur = window.SYNIMA_STATE.syntenyContigOrderOverrides[genome];
+      if (!Array.isArray(cur) || cur.length === 0) cur = base.slice();
+
+      // sanitize to real contigs only, keep uniqueness, append any missing
+      const baseSet = new Set(base);
+      const seen = new Set();
+      const clean = [];
+      for (const ctg of cur) {
+        if (baseSet.has(ctg) && !seen.has(ctg)) {
+          clean.push(ctg);
+          seen.add(ctg);
+        }
+      }
+      for (const ctg of base) {
+        if (!seen.has(ctg)) {
+          clean.push(ctg);
+          seen.add(ctg);
+        }
+      }
+      cur = clean;
+
+      const i = cur.indexOf(contig);
+      const j = i + delta;
+      if (i < 0 || j < 0 || j >= cur.length) return;
+
+      const tmp = cur[i];
+      cur[i] = cur[j];
+      cur[j] = tmp;
+
+      window.SYNIMA_STATE.syntenyContigOrderOverrides[genome] = cur;
+      persistContigOrderOverrides();
 
       if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
-    });
+
+      // refresh editor so +/- disabled state and “x / n” updates
+      const rect = editorEl.getBoundingClientRect();
+      openContigEditor({ clientX: rect.left, clientY: rect.top }, genome, contig);
+    }
+
+    document.getElementById("ctg-order-up")?.addEventListener("click", () => moveContigBy(-1));
+    document.getElementById("ctg-order-down")?.addEventListener("click", () => moveContigBy(+1));
 
 }
 
@@ -1484,6 +1582,7 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyContigOverrides = {};
     window.SYNIMA_STATE.syntenyContigStrokeColor = "#ffffff";
     window.SYNIMA_STATE.syntenyScaleLineWidth = 1.0;
+    window.SYNIMA_STATE.syntenyContigOrderOverrides = {};
 
     // scale bar
     window.SYNIMA_STATE.syntenyScaleShow      = SYNIMA_SYNTENY_SCALE_DEFAULTS.show;
@@ -1591,6 +1690,7 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigFlips);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS?.syntenyContigOrder || "synima_syntenyContigOrder");
 
         //scale bar
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleShow);
@@ -1704,9 +1804,37 @@ function buildGenomeMaps(config) {
     (g.contigs || []).forEach(c => { lenMap[c.contig] = c.length; });
     contigLen[g.name] = lenMap;
 
-    const order = (g.inferred_order && g.inferred_order.length)
-      ? g.inferred_order
-      : (g.fasta_order || []);
+    //const order = (g.inferred_order && g.inferred_order.length) ? g.inferred_order : (g.fasta_order || []);
+    //contigOrder[g.name] = order;
+
+    const baseOrder = (g.inferred_order && g.inferred_order.length) ? g.inferred_order : (g.fasta_order || []);
+
+    let order = Array.isArray(baseOrder) ? baseOrder.slice() : [];
+
+    // Apply user contig order override for this genome (stored by real contig IDs)
+    const all = window.SYNIMA_STATE.syntenyContigOrderOverrides || {};
+    const ov = all[g.name];
+
+    if (Array.isArray(ov) && ov.length) {
+      const baseSet = new Set(order);
+      const seen = new Set();
+      const newOrder = [];
+
+      for (const ctg of ov) {
+        if (baseSet.has(ctg) && !seen.has(ctg)) {
+          newOrder.push(ctg);
+          seen.add(ctg);
+        }
+      }
+      for (const ctg of order) {
+        if (!seen.has(ctg)) {
+          newOrder.push(ctg);
+          seen.add(ctg);
+        }
+      }
+      order = newOrder;
+    }
+
     contigOrder[g.name] = order;
 
     const offMap = {};
