@@ -102,8 +102,8 @@ window.SYNIMA_STATE.syntenyScaleShow      = window.SYNIMA_STATE.syntenyScaleShow
 window.SYNIMA_STATE.syntenyScaleUnits     = window.SYNIMA_STATE.syntenyScaleUnits ?? "auto";
 window.SYNIMA_STATE.syntenyScaleMax       = window.SYNIMA_STATE.syntenyScaleMax ?? "";     // auto
 window.SYNIMA_STATE.syntenyScaleIntervals = window.SYNIMA_STATE.syntenyScaleIntervals ?? 10;
-window.SYNIMA_STATE.syntenyScaleAxisFont  = window.SYNIMA_STATE.syntenyScaleAxisFont ?? 12;
-window.SYNIMA_STATE.syntenyScaleLabelFont = window.SYNIMA_STATE.syntenyScaleLabelFont ?? 12;
+window.SYNIMA_STATE.syntenyScaleAxisFont  = window.SYNIMA_STATE.syntenyScaleAxisFont ?? 20;
+window.SYNIMA_STATE.syntenyScaleLabelFont = window.SYNIMA_STATE.syntenyScaleLabelFont ?? 24;
 window.SYNIMA_STATE.syntenyScaleLabelText = window.SYNIMA_STATE.syntenyScaleLabelText ?? "Position in genome";
 
 window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth = window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth || "synima_synteny_scale_line_width";

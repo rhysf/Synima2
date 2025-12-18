@@ -502,6 +502,15 @@ SYNIMA.showSynteny = function () {
               </select>
             </label>
 
+            <!-- synteny link style -->
+            <label style="margin-left: 10px;">
+              Link style:
+              <select id="synteny-link-style-select">
+                <option value="polygons">Polygons</option>
+                <option value="ribbons">Ribbons</option>
+              </select>
+            </label>
+
             <!-- label size -->
             <label style="margin-left: 10px;">
               Contig font size:
@@ -546,14 +555,6 @@ SYNIMA.showSynteny = function () {
               </select>
             </label>
 
-            <!-- synteny link style -->
-            <label style="margin-left: 10px;">
-              Link style:
-              <select id="synteny-link-style-select">
-                <option value="polygons">Polygons</option>
-                <option value="ribbons">Ribbons</option>
-              </select>
-            </label>
         </fieldset>
 
         <!-- Row 3: colours -->
@@ -680,7 +681,7 @@ SYNIMA.showSynteny = function () {
 
           <label style="margin-left: 10px;">
             Max:
-            <input id="synteny-scale-max" type="number" min="0" step="any" placeholder="auto" style="width:90px;">
+            <input id="synteny-scale-max" type="number" min="0" step="1" placeholder="auto" style="width:90px;">
           </label>
 
           <label style="margin-left: 10px;">
@@ -1088,77 +1089,194 @@ SYNIMA.showSynteny = function () {
       });
     }
 
-    // contig label colour
-    const labelColorSel = document.getElementById("synteny-label-colour-select");
-    if (labelColorSel) {
-      labelColorSel.value = window.SYNIMA_STATE.syntenyLabelColor || "#ffffff";
-
-      labelColorSel.addEventListener("change", () => {
-        const v = labelColorSel.value;
-        window.SYNIMA_STATE.syntenyLabelColor = v;
-        try {
-          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor, v);
-        } catch (e) {}
-        rerender();
-      });
+    // Small helpers (keeps the bindings consistent)
+    function persist(key, val) {
+      try { localStorage.setItem(key, String(val)); } catch (e) {}
     }
 
+    // Prefer the canonical synteny rerender if it exists, fallback to local rerender()
+    function rerenderSynteny() {
+      if (typeof SYNIMA?._syntenyRerender === "function") SYNIMA._syntenyRerender();
+      else if (typeof rerender === "function") rerender();
+    }
+
+    // Simple debounce for text/number inputs
+    function debounce(fn, ms = 150) {
+      let t = null;
+      return (...args) => {
+        if (t) clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+      };
+    }
+
+    // --------------------
+    // Contig label colour
+    // --------------------
+    {
+      const el = document.getElementById("synteny-label-colour-select");
+      if (el) {
+        const init = window.SYNIMA_STATE.syntenyLabelColor || "#ffffff";
+        el.value = init;
+
+        el.addEventListener("change", () => {
+          const v = el.value || "#ffffff";
+          window.SYNIMA_STATE.syntenyLabelColor = v;
+          persist(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor, v);
+          rerenderSynteny();
+        });
+      }
+    }
+
+    // --------------------
     // Scale bar settings
+    // --------------------
     function bindScaleBarControls() {
-        const show = document.getElementById("synteny-scale-show");
-        const units = document.getElementById("synteny-scale-units");
-        const maxI  = document.getElementById("synteny-scale-max");
-        const ints  = document.getElementById("synteny-scale-intervals");
-        const axF   = document.getElementById("synteny-scale-axis-font");
-        const lbF   = document.getElementById("synteny-scale-label-font");
-        const text  = document.getElementById("synteny-scale-label-text");
+      const show = document.getElementById("synteny-scale-show");
+      const units = document.getElementById("synteny-scale-units");
+      const maxI  = document.getElementById("synteny-scale-max");
+      const ints  = document.getElementById("synteny-scale-intervals");
+      const axF   = document.getElementById("synteny-scale-axis-font");
+      const lbF   = document.getElementById("synteny-scale-label-font");
+      const text  = document.getElementById("synteny-scale-label-text");
 
-        if (show) show.checked = (window.SYNIMA_STATE.syntenyScaleShow !== false);
-        if (units) units.value = window.SYNIMA_STATE.syntenyScaleUnits || "auto";
-        if (maxI) maxI.value = String(window.SYNIMA_STATE.syntenyScaleMax ?? "");
-        if (ints) ints.value = String(window.SYNIMA_STATE.syntenyScaleIntervals ?? 10);
-        if (axF) axF.value = String(window.SYNIMA_STATE.syntenyScaleAxisFont ?? 12);
-        if (lbF) lbF.value = String(window.SYNIMA_STATE.syntenyScaleLabelFont ?? 12);
-        if (text) text.value = String(window.SYNIMA_STATE.syntenyScaleLabelText ?? "Position in genome");
+      // initialise UI from state
+      if (show) show.checked = (window.SYNIMA_STATE.syntenyScaleShow !== false);
+      if (units) units.value = window.SYNIMA_STATE.syntenyScaleUnits || "auto";
+      if (maxI) maxI.value = String(window.SYNIMA_STATE.syntenyScaleMax ?? "");
+      if (ints) ints.value = String(window.SYNIMA_STATE.syntenyScaleIntervals ?? 10);
+      if (axF) axF.value = String(window.SYNIMA_STATE.syntenyScaleAxisFont ?? 12);
+      if (lbF) lbF.value = String(window.SYNIMA_STATE.syntenyScaleLabelFont ?? 12);
+      if (text) text.value = String(window.SYNIMA_STATE.syntenyScaleLabelText ?? "Position in genome");
 
-        function saveAndRerender() {
-            try {
-                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleShow, String(window.SYNIMA_STATE.syntenyScaleShow));
-                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleUnits, String(window.SYNIMA_STATE.syntenyScaleUnits));
-                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleMax, String(window.SYNIMA_STATE.syntenyScaleMax ?? ""));
-                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleIntervals, String(window.SYNIMA_STATE.syntenyScaleIntervals));
-                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleAxisFont, String(window.SYNIMA_STATE.syntenyScaleAxisFont));
-                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLabelFont, String(window.SYNIMA_STATE.syntenyScaleLabelFont));
-                localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLabelText, String(window.SYNIMA_STATE.syntenyScaleLabelText ?? ""));
-            } catch (e) {}
-            rerender();
+      // per-control save helpers
+      function saveBool(kPersist, kState, v) {
+        window.SYNIMA_STATE[kState] = !!v;
+        persist(kPersist, window.SYNIMA_STATE[kState]);
+        rerenderSynteny();
+      }
+
+      function saveStr(kPersist, kState, v) {
+        window.SYNIMA_STATE[kState] = String(v ?? "");
+        persist(kPersist, window.SYNIMA_STATE[kState]);
+        rerenderSynteny();
+      }
+
+      function saveInt(kPersist, kState, v, fallback) {
+        const n = parseInt(String(v), 10);
+        window.SYNIMA_STATE[kState] = Number.isFinite(n) ? n : fallback;
+        persist(kPersist, window.SYNIMA_STATE[kState]);
+        rerenderSynteny();
+      }
+
+      // Events
+      show?.addEventListener("change", () => {
+        saveBool(window.SYNIMA_PERSIST_KEYS.syntenyScaleShow, "syntenyScaleShow", show.checked);
+      });
+
+      units?.addEventListener("change", () => {
+        saveStr(window.SYNIMA_PERSIST_KEYS.syntenyScaleUnits, "syntenyScaleUnits", units.value || "auto");
+      });
+
+      // new additional code to try and get auto -> change to start from auto value
+      function currentAutoNiceMax() {
+        const maxBp = Number(config?.max_length ?? 0);
+        const intervals = parseInt(String(ints?.value ?? window.SYNIMA_STATE.syntenyScaleIntervals ?? 10), 10) || 10;
+        const u = String(units?.value ?? window.SYNIMA_STATE.syntenyScaleUnits ?? "auto");
+        const { factor } = scaleUnitSpec(maxBp, u);
+        const maxRawUnits = factor > 0 ? (maxBp / factor) : 0;
+        const { maxNice } = computeNiceMax(maxRawUnits, intervals);
+        return (Number.isFinite(maxNice) && maxNice > 0) ? maxNice : 1;
+      }
+
+      function seedMaxIfAutoEmpty() {
+        const raw = String(maxI?.value ?? "").trim();
+        if (raw !== "") return false;
+        const seeded = currentAutoNiceMax();
+        maxI.value = String(seeded);
+        // do not persist yet; we will persist via the normal input handler after stepping
+        return true;
+      }
+
+      // Keyboard arrows in the field
+      maxI?.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+        if (!seedMaxIfAutoEmpty()) return;
+        // allow the browser to apply the step from the seeded value
+      });
+
+      // Mouse click on the spinner buttons (right side of number input)
+      maxI?.addEventListener("mousedown", (e) => {
+        if (!maxI) return;
+        const raw = String(maxI.value ?? "").trim();
+        if (raw !== "") return;
+
+        const r = maxI.getBoundingClientRect();
+        const onSpinner = (e.clientX - r.left) > (r.width - 24);
+        if (!onSpinner) return;
+
+        e.preventDefault(); // we will step manually
+        seedMaxIfAutoEmpty();
+
+        const clickedUp = (e.clientY - r.top) < (r.height / 2);
+        if (clickedUp) maxI.stepUp();
+        else maxI.stepDown();
+
+        maxI.dispatchEvent(new Event("input", { bubbles: true }));
+      }, true);
+
+
+      // max: only accept "" (auto) or a finite > 0 number, and debounce typing
+      maxI?.addEventListener("input", debounce(() => {
+        const raw = String(maxI.value ?? "").trim();
+        if (raw === "") {
+          window.SYNIMA_STATE.syntenyScaleMax = "";
+          persist(window.SYNIMA_PERSIST_KEYS.syntenyScaleMax, "");
+          rerenderSynteny();
+          return;
         }
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n <= 0) return; // ignore invalid partial typing
+        window.SYNIMA_STATE.syntenyScaleMax = raw; // keep as string, your renderer expects string-ish
+        persist(window.SYNIMA_PERSIST_KEYS.syntenyScaleMax, raw);
+        rerenderSynteny();
+      }, 200));
 
-        show?.addEventListener("change", () => { window.SYNIMA_STATE.syntenyScaleShow = !!show.checked; saveAndRerender(); });
-        units?.addEventListener("change", () => { window.SYNIMA_STATE.syntenyScaleUnits = units.value; saveAndRerender(); });
-        maxI?.addEventListener("input", () => { window.SYNIMA_STATE.syntenyScaleMax = maxI.value; saveAndRerender(); });
-        ints?.addEventListener("change", () => { window.SYNIMA_STATE.syntenyScaleIntervals = parseInt(ints.value, 10) || 10; saveAndRerender(); });
-        axF?.addEventListener("change", () => { window.SYNIMA_STATE.syntenyScaleAxisFont = parseInt(axF.value, 10) || 12; saveAndRerender(); });
-        lbF?.addEventListener("change", () => { window.SYNIMA_STATE.syntenyScaleLabelFont = parseInt(lbF.value, 10) || 12; saveAndRerender(); });
-        text?.addEventListener("input", () => { window.SYNIMA_STATE.syntenyScaleLabelText = text.value; saveAndRerender(); });
+      ints?.addEventListener("change", () => {
+        saveInt(window.SYNIMA_PERSIST_KEYS.syntenyScaleIntervals, "syntenyScaleIntervals", ints.value, 10);
+      });
+
+      axF?.addEventListener("change", () => {
+        saveInt(window.SYNIMA_PERSIST_KEYS.syntenyScaleAxisFont, "syntenyScaleAxisFont", axF.value, 12);
+      });
+
+      lbF?.addEventListener("change", () => {
+        saveInt(window.SYNIMA_PERSIST_KEYS.syntenyScaleLabelFont, "syntenyScaleLabelFont", lbF.value, 12);
+      });
+
+      // label text: debounce typing
+      text?.addEventListener("input", debounce(() => {
+        saveStr(window.SYNIMA_PERSIST_KEYS.syntenyScaleLabelText, "syntenyScaleLabelText", text.value);
+      }, 200));
     }
 
     bindScaleBarControls();
 
-    // scale bar width
-    const lw = document.getElementById("synteny-scale-linewidth-select");
-    if (lw) {
-      lw.value = String(window.SYNIMA_STATE.syntenyScaleLineWidth ?? 1);
+    // --------------------
+    // Scale bar line width
+    // --------------------
+    {
+      const lw = document.getElementById("synteny-scale-linewidth-select");
+      if (lw) {
+        lw.value = String(window.SYNIMA_STATE.syntenyScaleLineWidth ?? 1);
 
-      lw.addEventListener("change", () => {
-        const n = parseFloat(lw.value);
-        if (!Number.isFinite(n) || n <= 0) return;
-        window.SYNIMA_STATE.syntenyScaleLineWidth = n;
-        try {
-          localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth, String(n));
-        } catch (e) {}
-        if (typeof SYNIMA._syntenyRerender === "function") SYNIMA._syntenyRerender();
-      });
+        lw.addEventListener("change", () => {
+          const n = Number(lw.value);
+          if (!Number.isFinite(n) || n <= 0) return;
+          window.SYNIMA_STATE.syntenyScaleLineWidth = n;
+          persist(window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth, n);
+          rerenderSynteny();
+        });
+      }
     }
 
     function rerender() {
@@ -1341,8 +1459,8 @@ SYNIMA.resetSynteny = function () {
       units: "auto",          // auto|bp|kb|mb|gb
       max: "",                // "" => auto
       intervals: 10,
-      axisFont: 12,
-      labelFont: 12,
+      axisFont: 20,
+      labelFont: 24,
       labelText: "Position in genome"
     };
 
