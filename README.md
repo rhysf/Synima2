@@ -10,6 +10,7 @@ Synima (Synteny Imager) is an orthology prediction pipeline and synteny viewer. 
 * Synteny is determined using DAGchainer and plotted using Javascript.
 * All prerequisite programs are bundled with Synima
 * Synima 2 is a complete re-write in rust, which has a range of improvements, including:
+
 	- All steps are now taken by default in a single command
 	- New command (-w) to download and run on genbank accessions (separated by comma) of annotated genome assemblies
 	- Output files are ordered in a more intuitive way
@@ -135,10 +136,10 @@ Example Repo_spec.txt:
 
 Each genome is given a short code (first column) and one or more entries that define:
 
-	•	dir - directory containing that genome
-	•	genome - genomic FASTA
-	•	gff - annotation in GFF3 format
-	•	optional pep or cds FASTA files if you already have them
+* dir - directory containing that genome
+* genome - genomic FASTA
+* gff - annotation in GFF3 format
+* optional pep or cds FASTA files if you already have them
 
 To run only the repository preparation step:
 
@@ -147,9 +148,10 @@ Synima -r Repo_spec.txt -s create-repo
 ```
 
 This will:
-	•	read and validate the repo spec
-	•	match features in the GFF to the genome FASTA
-	•	extract and write parsed .pep and/or .cds FASTA files in a standard layout
+
+* Read and validate the repo spec
+* Match features in the GFF to the genome FASTA
+* Extract and write parsed .pep and/or .cds FASTA files in a standard layout
 
 ## Orthology inference and summary
 
@@ -160,33 +162,35 @@ Synima -r Repo_spec.txt -s align-all
 ```
 
 This step:
-	•	chooses the appropriate aligner based on --aligner (BLAST+, legacy BLAST, or DIAMOND) and --alignment-type (pep or cds)
-	•	builds per species databases
-	•	runs all vs all searches and writes tabular output (.out) for each genome pair
+
+* Choose the appropriate aligner based on --aligner (BLAST+, legacy BLAST, or DIAMOND) and --alignment-type (pep or cds)
+* Build per species databases
+* Run all vs all searches and writes tabular output (.out) for each genome pair
 
 For peptide data DIAMOND or BLASTP are recommended. For nucleotide data BLASTN is used.
 
 Next, choose an orthology method:
 
-# OrthoFinder (default and recommended for many genomes)
-```
-Synima -r Repo_spec.txt -s orthofinder
-```
-
-# OrthoMCL
+* OrthoMCL (Default)
 ```
 Synima -r Repo_spec.txt -s orthomcl
 ```
 
-# Reciprocal best hits
+* OrthoFinder (requires local install)
+```
+Synima -r Repo_spec.txt -s orthofinder
+```
+
+* Reciprocal best hits
 ```
 Synima -r Repo_spec.txt -s rbh
 ```
 
 These steps:
-	•	reformat the all vs all search output as needed for the chosen method
-	•	run OrthoFinder, OrthoMCL, or the RBH pipeline
-	•	write orthology results into method specific output folders
+
+* Reformat the all vs all search output as needed for the chosen method
+* Run OrthoFinder, OrthoMCL, or the RBH pipeline
+* Write orthology results into method specific output folders
 
 Next, summarise orthologs into a common format used by the downstream synteny and plotting steps:
 
@@ -195,9 +199,10 @@ Synima -r Repo_spec.txt -s ortholog-summary
 ```
 
 The ortholog-summary step will:
-	•	detect which orthology output is present (OrthoFinder first, then OrthoMCL, then RBH)
-	•	parse the corresponding orthogroup or cluster files
-	•	produce a set of summary tables and basic plots in a GENE_CLUSTERS_SUMMARIES.* output directory, suitable for phylogenetic and synteny analysis
+
+* detect which orthology output is present (OrthoFinder first, then OrthoMCL, then RBH)
+* parse the corresponding orthogroup or cluster files
+* produce a set of summary tables and basic plots in a GENE_CLUSTERS_SUMMARIES.* output directory, suitable for phylogenetic and synteny analysis
 
 Next, identify chains of orthologs using dagchainer
 
