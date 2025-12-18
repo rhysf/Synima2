@@ -1,3 +1,10 @@
+// Ensure new settings have safe defaults even if other scripts define these objects.
+if (typeof window !== "undefined") {
+    window.SYNIMA_STATE = window.SYNIMA_STATE || {};
+    window.SYNIMA_PERSIST_KEYS = window.SYNIMA_PERSIST_KEYS || {};
+    if (!window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle) window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle = "synima_syntenyLinkStyle";
+    if (!window.SYNIMA_STATE.syntenyLinkStyle) window.SYNIMA_STATE.syntenyLinkStyle = "polygons";
+}
 
 // Useful function to start with - finding default values that might have been preselected
 function syncSyntenyModeFromStorage() {
@@ -20,6 +27,24 @@ function syncSyntenyModeFromStorage() {
         }
     } catch (e) {
         console.warn("Could not read synteny contig gap from localStorage", e);
+    }
+
+    // synteny link style (polygons vs ribbons)
+    try {
+        // Ensure a default key exists even if SYNIMA_PERSIST_KEYS is defined elsewhere
+        if (window.SYNIMA_PERSIST_KEYS && !window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle) {
+            window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle = "synima_syntenyLinkStyle";
+        }
+        const k = (window.SYNIMA_PERSIST_KEYS && window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle)
+            ? window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle
+            : "synima_syntenyLinkStyle";
+
+        const saved = localStorage.getItem(k);
+        if (saved === "polygons" || saved === "ribbons") {
+            window.SYNIMA_STATE.syntenyLinkStyle = saved;
+        }
+    } catch (e) {
+        console.warn("Could not read synteny link style from localStorage", e);
     }
 
     // track scale
@@ -520,6 +545,15 @@ SYNIMA.showSynteny = function () {
                 <option value="20">20</option>
               </select>
             </label>
+
+            <!-- synteny link style -->
+            <label style="margin-left: 10px;">
+              Link style:
+              <select id="synteny-link-style-select">
+                <option value="polygons">Polygons</option>
+                <option value="ribbons">Ribbons</option>
+              </select>
+            </label>
         </fieldset>
 
         <!-- Row 3: colours -->
@@ -950,6 +984,29 @@ SYNIMA.showSynteny = function () {
         });
     }
 
+    // synteny link style (polygons vs ribbons)
+    const linkStyleSel = document.getElementById("synteny-link-style-select");
+    if (linkStyleSel) {
+        linkStyleSel.value = String(window.SYNIMA_STATE.syntenyLinkStyle ?? "polygons");
+
+        linkStyleSel.addEventListener("change", () => {
+            const v = linkStyleSel.value;
+            if (v === "polygons" || v === "ribbons") {
+                window.SYNIMA_STATE.syntenyLinkStyle = v;
+                try {
+                    if (window.SYNIMA_PERSIST_KEYS && !window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle) {
+                        window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle = "synima_syntenyLinkStyle";
+                    }
+                    const k = (window.SYNIMA_PERSIST_KEYS && window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle)
+                        ? window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle
+                        : "synima_syntenyLinkStyle";
+                    localStorage.setItem(k, v);
+                } catch (e) {}
+                rerender();
+            }
+        });
+    }
+
     // colour contig
     const colorContig = document.getElementById("contig-colour-select");
     if (colorContig) {
@@ -1295,6 +1352,7 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyGapPx = 0;
     window.SYNIMA_STATE.syntenyTrackScale = 1.0;
     window.SYNIMA_STATE.syntenyTreeWidthPct = 20;
+    window.SYNIMA_STATE.syntenyLinkStyle = "polygons";
     window.SYNIMA_STATE.syntenyContigColorMode = SYNIMA_SYNTENY_DEFAULTS.contigColorMode;
     window.SYNIMA_STATE.syntenyContigBaseColor = SYNIMA_SYNTENY_DEFAULTS.contigBaseColor;
     window.SYNIMA_STATE.syntenyContigPalette   = SYNIMA_SYNTENY_DEFAULTS.contigPalette;
@@ -1340,6 +1398,10 @@ SYNIMA.resetSynteny = function () {
     // reset contig gap
     const gapSelect = document.getElementById("synteny-gap-select");
     if (gapSelect) gapSelect.value = "0";
+
+    // reset link style
+    const linkStyleSel = document.getElementById("synteny-link-style-select");
+    if (linkStyleSel) linkStyleSel.value = "polygons";
 
     // contig colour dropdown
     const colorSelect = document.getElementById("contig-colour-select");
@@ -1399,6 +1461,7 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTrackScale);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyGap);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTreeWidth);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigBaseColor);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigPalette);
@@ -1795,27 +1858,57 @@ function renderSyntenySvg(blocks, config, maps, layout) {
         const yTopEdge = yTop + trackHeight / 2;  // bottom of top rectangle
         const yBotEdge = yBot - trackHeight / 2;  // top of bottom rectangle
 
-        // For now: ignore strand twisting, just draw the ribbon.
-        const points = [
-          `${b.x1lo},${yTopEdge}`,
-          `${b.x1hi},${yTopEdge}`,
-          `${b.x2hi},${yBotEdge}`,
-          `${b.x2lo},${yBotEdge}`
-        ].join(" ");
+        // Strand twisting is ignored for now (non-twisting ribbons).
+        const linkStyle = (window.SYNIMA_STATE && window.SYNIMA_STATE.syntenyLinkStyle)
+            ? window.SYNIMA_STATE.syntenyLinkStyle
+            : "polygons";
 
-        polys += `
-          <polygon
-            points="${points}"
-            fill="${polyColor}"
-            fill-opacity="${polyFillOpacity}"
-            stroke="${polyColor}"
-            stroke-opacity="${polyStrokeOpacity}"
-            stroke-width="0.5">
-            <title>${escapeHtml(b.topGenome)}:${escapeHtml(b.topContig)} ${b.topAbsStart}-${b.topAbsEnd}
-            ↔ ${escapeHtml(b.botGenome)}:${escapeHtml(b.botContig)} ${b.botAbsStart}-${b.botAbsEnd}
-            strand=${escapeHtml(b.strand)}</title>
-          </polygon>
-        `;
+        if (linkStyle === "ribbons") {
+            const yMid = (yTopEdge + yBotEdge) / 2;
+            const d = [
+              `M ${b.x1lo} ${yTopEdge}`,
+              `L ${b.x1hi} ${yTopEdge}`,
+              `C ${b.x1hi} ${yMid} ${b.x2hi} ${yMid} ${b.x2hi} ${yBotEdge}`,
+              `L ${b.x2lo} ${yBotEdge}`,
+              `C ${b.x2lo} ${yMid} ${b.x1lo} ${yMid} ${b.x1lo} ${yTopEdge}`,
+              `Z`
+            ].join(" ");
+
+            polys += `
+              <path
+                d="${d}"
+                fill="${polyColor}"
+                fill-opacity="${polyFillOpacity}"
+                stroke="${polyColor}"
+                stroke-opacity="${polyStrokeOpacity}"
+                stroke-width="0.5">
+                <title>${escapeHtml(b.topGenome)}:${escapeHtml(b.topContig)} ${b.topAbsStart}-${b.topAbsEnd}
+                ↔ ${escapeHtml(b.botGenome)}:${escapeHtml(b.botContig)} ${b.botAbsStart}-${b.botAbsEnd}
+                strand=${escapeHtml(b.strand)}</title>
+              </path>
+            `;
+        } else {
+            const points = [
+              `${b.x1lo},${yTopEdge}`,
+              `${b.x1hi},${yTopEdge}`,
+              `${b.x2hi},${yBotEdge}`,
+              `${b.x2lo},${yBotEdge}`
+            ].join(" ");
+
+            polys += `
+              <polygon
+                points="${points}"
+                fill="${polyColor}"
+                fill-opacity="${polyFillOpacity}"
+                stroke="${polyColor}"
+                stroke-opacity="${polyStrokeOpacity}"
+                stroke-width="0.5">
+                <title>${escapeHtml(b.topGenome)}:${escapeHtml(b.topContig)} ${b.topAbsStart}-${b.topAbsEnd}
+                ↔ ${escapeHtml(b.botGenome)}:${escapeHtml(b.botContig)} ${b.botAbsStart}-${b.botAbsEnd}
+                strand=${escapeHtml(b.strand)}</title>
+              </polygon>
+            `;
+        }
     }
 
     let tracks = "";

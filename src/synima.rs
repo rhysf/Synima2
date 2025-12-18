@@ -136,20 +136,33 @@ pub struct Span {
     pub length2: u64,
 }
 
-
-pub fn copy_web_template(output_dir: &Path) -> Result<()> {
+pub fn copy_web_template(output_dir: &Path, logger: &Logger) {
     for file in WebTemplate::iter() {
-        let data = WebTemplate::get(&file).unwrap().data;
+        //let data = WebTemplate::get(&file).unwrap().data;
+        let asset = match WebTemplate::get(&file) {
+            Some(a) => a,
+            None => {
+                logger.error(&format!("copy_web_template: Missing embedded asset {}", file.as_ref()));
+                std::process::exit(1);
+            }
+        };
+        let data = asset.data;
 
         let dest = output_dir.join(&file.to_string());
         if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent)?;
+            //std::fs::create_dir_all(parent)?;
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                logger.error(&format!("copy_web_template: Failed to create dir {}: {}", parent.display(), e));
+                std::process::exit(1);
+            }
         }
 
-        std::fs::write(dest, &*data)?;
+        //std::fs::write(dest, &*data)?;
+        if let Err(e) = std::fs::write(&dest, &*data) {
+            logger.error(&format!("copy_web_template: Failed to write {}: {}", dest.display(), e));
+            std::process::exit(1);
+        }
     }
-
-    Ok(())
 }
 
 pub fn inject_json_into_html(path: &Path, id: &str, json: &str) -> Result<()> {

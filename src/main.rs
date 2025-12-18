@@ -453,7 +453,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // make output directory and web template
         mkdir(&synima_out_dir, &logger, "synima");
-        synima::copy_web_template(&synima_out_dir)?;
+        synima::copy_web_template(&synima_out_dir, &logger);
         let index_path = synima_out_dir.join("Synima.html");
 
         // update orthologs
