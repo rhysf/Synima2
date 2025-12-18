@@ -897,6 +897,22 @@ SYNIMA.showSynteny = function () {
             return;
         }
 
+        // Synteny block tooltip
+        const blk = e.target.closest(".synteny-block");
+        if (blk) {
+            const tip = blk.getAttribute("data-tip") || "";
+            if (!tip) { tooltip.style.display = "none"; return; }
+
+            // show multi-line nicely
+            tooltip.innerHTML = escapeHtml(tip).replace(/\n/g, "<br>");
+
+            tooltip.style.left = (e.pageX + 12) + "px";
+            tooltip.style.top = (e.pageY + 12) + "px";
+            tooltip.style.display = "block";
+            return;
+        }
+
+        // existing contig tooltip
         const ctg = e.target.closest(".synteny-ctg");
         if (!ctg) {
             tooltip.style.display = "none";
@@ -1720,6 +1736,16 @@ function escapeHtml(str) {
   }[ch] || ch));
 }
 
+function escapeAttr(str) {
+  return (str || "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  }[ch] || ch));
+}
+
 function splitGenomeContig(s) {
   const parts = (s || "").split(";");
   if (parts.length < 2) return [null, null];
@@ -2109,6 +2135,10 @@ function renderSyntenySvg(blocks, config, maps, layout) {
             ? window.SYNIMA_STATE.syntenyLinkStyle
             : "polygons";
 
+        const tip = `${b.topGenome}:${b.topContig} ${b.topAbsStart}-${b.topAbsEnd}\n` +
+            `↔ ${b.botGenome}:${b.botContig} ${b.botAbsStart}-${b.botAbsEnd}\n` +
+            `strand=${b.strand}`;
+
         if (linkStyle === "ribbons") {
             const yMid = (yTopEdge + yBotEdge) / 2;
             const d = [
@@ -2120,17 +2150,21 @@ function renderSyntenySvg(blocks, config, maps, layout) {
               `Z`
             ].join(" ");
 
+            //                 <title>${escapeHtml(b.topGenome)}:${escapeHtml(b.topContig)} ${b.topAbsStart}-${b.topAbsEnd}
+            //    ↔ ${escapeHtml(b.botGenome)}:${escapeHtml(b.botContig)} ${b.botAbsStart}-${b.botAbsEnd}
+            //    strand=${escapeHtml(b.strand)}</title>
+
             polys += `
-              <path
+              <path 
+                class="synteny-block" 
+                data-tip="${escapeAttr(tip)}" 
                 d="${d}"
                 fill="${polyColor}"
                 fill-opacity="${polyFillOpacity}"
                 stroke="${polyColor}"
                 stroke-opacity="${polyStrokeOpacity}"
                 stroke-width="0.5">
-                <title>${escapeHtml(b.topGenome)}:${escapeHtml(b.topContig)} ${b.topAbsStart}-${b.topAbsEnd}
-                ↔ ${escapeHtml(b.botGenome)}:${escapeHtml(b.botContig)} ${b.botAbsStart}-${b.botAbsEnd}
-                strand=${escapeHtml(b.strand)}</title>
+
               </path>
             `;
         } else {
@@ -2141,17 +2175,20 @@ function renderSyntenySvg(blocks, config, maps, layout) {
               `${b.x2lo},${yBotEdge}`
             ].join(" ");
 
+            //                 <title>${escapeHtml(b.topGenome)}:${escapeHtml(b.topContig)} ${b.topAbsStart}-${b.topAbsEnd}
+            //    ↔ ${escapeHtml(b.botGenome)}:${escapeHtml(b.botContig)} ${b.botAbsStart}-${b.botAbsEnd}
+            //    strand=${escapeHtml(b.strand)}</title>
+
             polys += `
-              <polygon
+              <polygon 
+                class="synteny-block"
+                data-tip="${escapeAttr(tip)}" 
                 points="${points}"
                 fill="${polyColor}"
                 fill-opacity="${polyFillOpacity}"
                 stroke="${polyColor}"
                 stroke-opacity="${polyStrokeOpacity}"
                 stroke-width="0.5">
-                <title>${escapeHtml(b.topGenome)}:${escapeHtml(b.topContig)} ${b.topAbsStart}-${b.topAbsEnd}
-                ↔ ${escapeHtml(b.botGenome)}:${escapeHtml(b.botContig)} ${b.botAbsStart}-${b.botAbsEnd}
-                strand=${escapeHtml(b.strand)}</title>
               </polygon>
             `;
         }
