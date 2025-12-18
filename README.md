@@ -14,7 +14,8 @@ Synima (Synteny Imager) is an orthology prediction pipeline and synteny viewer. 
   - New command (-w) to download and run on genbank accessions (separated by comma) of annotated genome assemblies
 	- Output files are ordered in a more intuitive way
 	- CDS/PEP files are optional in the repo spec and the repo spec is a simpler layout. 
-	- If CDS/PEP are included and ID's do not match the GFF, Synima will extract the genes from the GFF. Updated logic for automatically identifying the IDs that match the CDS/PEP and GFF
+	- If CDS/PEP are included and ID's do not match the GFF, Synima will extract the genes from the GFF. 
+  - Updated logic for automatically identifying the IDs that match the CDS/PEP and GFF
 
 ## Documentation
 
@@ -26,6 +27,7 @@ For issues, questions, comments or feature requests, please check or post to the
 
 ## Version / History
 
+* 18th Dec 2025 - First complete version
 * 20th Nov 2025 - Initial, albeit incomplete version
 
 ## Prerequisites
