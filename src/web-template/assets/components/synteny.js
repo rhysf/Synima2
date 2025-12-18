@@ -2136,8 +2136,9 @@ function renderSyntenySvg(blocks, config, maps, layout) {
             : "polygons";
 
         const tip = `${b.topGenome}:${b.topContig} ${b.topAbsStart}-${b.topAbsEnd}\n` +
-            `↔ ${b.botGenome}:${b.botContig} ${b.botAbsStart}-${b.botAbsEnd}\n` +
-            `strand=${b.strand}`;
+            `↔ ${b.botGenome}:${b.botContig} ${b.botAbsStart}-${b.botAbsEnd}\n`;
+
+            // + `strand=${b.strand}`
 
         if (linkStyle === "ribbons") {
             const yMid = (yTopEdge + yBotEdge) / 2;
