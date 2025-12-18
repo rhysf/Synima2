@@ -100,10 +100,11 @@ cp target/release/phylorust ~/.local/bin/
 Synima2 takes annotated genomes, calls orthologous genes, and then visualises synteny blocks between genomes.
 
 The high level stages are:
-	1.	Prepare a repository of genomes and parsed feature FASTA files.
-	2.	Run an all vs all sequence search (BLAST or DIAMOND).
-	3.	Infer orthologous groups with OrthoFinder, OrthoMCL, or an RBH pipeline, and summarise them.
-	4.	Run DAGChainer on the orthologs to call synteny blocks and generate Synima plots.
+
+1.	Prepare a repository of genomes and parsed feature FASTA files.
+2.	Run an all vs all sequence search (BLAST or DIAMOND).
+3.	Infer orthologous groups with OrthoFinder, OrthoMCL, or an RBH pipeline, and summarise them.
+4.	Run DAGChainer on the orthologs to call synteny blocks and generate Synima plots.
 
 All of these stages can be run using: Synima -r Repo_spec.txt -s <step-name> or Synima -r Repo_spec.txt -s <step-name1>,<step-name2>,...
 
