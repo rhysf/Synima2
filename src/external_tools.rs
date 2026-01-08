@@ -10,39 +10,6 @@ use std::process::Stdio;
 use std::process::Command;
 use std::fs;
 
-/// Locates "<outdir>/<OS>.<ARCH>" and returns the folder name and full path.
-pub fn locate_bin_folder(outdir: impl AsRef<Path>, logger: &Logger) -> (String, PathBuf) {
-    let os = match std::env::consts::OS {
-        "macos" => "Darwin",
-        "linux" => "Linux",
-        "windows" => "Windows",
-        other => {
-            logger.error(&format!("locate_bin_folder: unsupported OS {other}"));
-            std::process::exit(1);
-        }
-    };
-
-    let arch = match std::env::consts::ARCH {
-        "x86_64" => "x86_64",
-        // Rust uses "aarch64" for ARM64.
-        "aarch64" => "arm64",
-        other => {
-            logger.error(&format!("locate_bin_folder: unsupported ARCH {other}"));
-            std::process::exit(1);
-        }
-    };
-
-    let folder_name = format!("{os}.{arch}");
-    let full_path = outdir.as_ref().join(&folder_name);
-
-    if !full_path.exists() {
-        logger.error(&format!("locate_bin_folder: Path not found {}", full_path.display()));
-        std::process::exit(1);
-    }
-
-    (folder_name, full_path)
-}
-
 pub fn find_executable(program: &str, bin_dir: &Path, logger: &Logger) -> PathBuf {
 
     logger.information(&format!("find_executable: {}", program));

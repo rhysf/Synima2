@@ -29,7 +29,7 @@ mod dagchainer;
 mod synima;
 mod write_repo_from_ncbi;
 
-use args::{Args, SynimaStep}; //
+use args::{Args, SynimaStep};
 use logger::Logger;
 use read_repo::{RepoEntry};
 use crate::ortholog_summary::OrthologySource;
@@ -51,13 +51,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set input subdirs
     let exe = std::env::current_exe()?;
     let exe_dir = exe.parent().unwrap();
-    let bin_dir = exe_dir.join("bin");
+    let bin_dir = exe_dir.join("synima_dependencies");
 
     // Ensure bin/ exists and is populated
     util::extract_embedded_bin(&bin_dir, &logger);
-    
-    let (bin_name, bin_dir) = external_tools::locate_bin_folder(bin_dir, &logger);
-    logger.information(&format!("Bin name and path: {} and {}", bin_name, bin_dir.display()));
 
     // Step0: Download from NCBI if -w was provided
     if let Some(accession_str) = &args.genbank_accessions {
@@ -93,7 +90,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Output dirs
     let main_output_dir = repo_base_dir.join(&args.output_dir);
-    let repo_out_dir = main_output_dir.join("synima_step1_create-repo");
+    let repo_out_dir = main_output_dir.join("synima_step1-create-repo");
     let blast_out_dir = main_output_dir.join("synima_step2-align-all");
     let rbh_out_dir = main_output_dir.join("synima_step3-rbh");
     let omcl_out_dir = main_output_dir.join("synima_step3-orthomcl");
@@ -193,7 +190,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (bpo_path, gg_path) = omcl::convert_m8_to_orthomcl_format(&blast_m8_output_path, &omcl_prefix, &genome_to_code, &logger)?;
 
         // run OrthoMCL
-        let orthomcl_script = bin_dir.join("../OrthoMCL.pl");
+        let orthomcl_script = bin_dir.join("OrthoMCL.pl");
         omcl::run_orthomcl_clustering(&orthomcl_script, &bpo_path, &gg_path, &omcl_log_path, &logger)?;
     }
  

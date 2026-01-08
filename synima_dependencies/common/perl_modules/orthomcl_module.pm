@@ -80,14 +80,14 @@ our $FORMATDB                            = "formatdb";
 
 # RF add MCL path for Synima2
 #my $uname = $ENV{HOSTTYPE};
-my $os = `uname`;
-my $arch = `uname -m`;
-chomp $os;
-chomp $arch;
-our $MCL = "$Bin/$os.$arch/mcl";
+#my $os = `uname`;
+#my $arch = `uname -m`;
+#chomp $os;
+#chomp $arch;
+#our $MCL = "$Bin/$os.$arch/mcl";
+our $MCL = "$Bin/mcl";
 die "Error: $0 cannot locate mcl" if(! -e $MCL);
 warn "Using $MCL\n";
-
 
 # path
 our $PATH_TO_ORTHOMCL                    = "./";   # must end with "/" 
@@ -104,7 +104,6 @@ our $MAX_WEIGHT_DEFAULT                  = 316;     # You need to see what's the
                                                     # of your blast software. For example, if 9e-99 is 
                                                     # the case you should use -log(9e-99)=100.
 our $MCL_INFLATION_DEFAULT               = 1.5;
-
 
 # files
 our $all_fa_file                         = "all.fa";

@@ -12,47 +12,79 @@ use rust_embed::RustEmbed;
 use regex::Regex;
 
 #[derive(RustEmbed)]
-#[folder = "bin/"]  // folder in source
+#[folder = "synima_dependencies/common/"]
+struct CommonAssets;
+
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+#[derive(RustEmbed)]
+#[folder = "synima_dependencies/Windows.x86_64/"]
 struct BinAssets;
 
-pub fn extract_embedded_bin(bin_dir: &Path, logger: &Logger) {
+#[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+#[derive(RustEmbed)]
+#[folder = "synima_dependencies/Windows.arm64/"]
+struct BinAssets;
 
-    if let Err(e) = fs::create_dir_all(bin_dir) {
-        logger.error(&format!("extract_embedded_bin: error creating {}: {e}", bin_dir.display()));
-        std::process::exit(1);
-    }
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[derive(RustEmbed)]
+#[folder = "synima_dependencies/Darwin.arm64/"]
+struct BinAssets;
 
-    for file in BinAssets::iter() {
+// IMPORTANT: on macOS x86_64, embed the same real files (arm64 folder) rather than a symlink tree.
+#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+#[derive(RustEmbed)]
+//#[folder = "synima_dependencies/Darwin.x86_64/"]
+#[folder = "synima_dependencies/Darwin.arm64/"]
+struct BinAssets;
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[derive(RustEmbed)]
+#[folder = "synima_dependencies/Linux.x86_64/"]
+struct BinAssets;
+
+fn extract_assets<T: RustEmbed>(dest_dir: &Path, logger: &Logger) {
+    for file in T::iter() {
         let relative = file.as_ref();
-        let out_path = bin_dir.join(relative);
+        let out_path = dest_dir.join(relative);
 
         if let Some(parent) = out_path.parent() {
-            if let Err(e) = fs::create_dir_all(parent) {
-                logger.error(&format!("extract_embedded_bin: error creating {}: {e}", parent.display()));
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                logger.error(&format!("extract_assets: error creating {}: {e}", parent.display()));
                 std::process::exit(1);
             }
         }
 
-        //let data = BinAssets::get(relative).unwrap();
-        let data = match BinAssets::get(relative) {
+        let data = match T::get(relative) {
             Some(d) => d,
             None => {
-                logger.error(&format!("extract_embedded_bin: missing embedded asset {relative}"));
+                logger.error(&format!("extract_assets: missing embedded asset {relative}"));
                 std::process::exit(1);
             }
         };
 
-        //fs::write(&out_path, data.data)?;
-        if let Err(e) = fs::write(&out_path, data.data) {
-            logger.error(&format!("extract_embedded_bin: error writing {}: {e}", out_path.display()));
+        if let Err(e) = std::fs::write(&out_path, data.data) {
+            logger.error(&format!("extract_assets: error writing {}: {e}", out_path.display()));
             std::process::exit(1);
         }
 
         if let Err(e) = set_executable_if_supported(&out_path) {
-            logger.error(&format!("extract_embedded_bin: error setting permissions {}: {e}", out_path.display()));
+            logger.error(&format!("extract_assets: error setting permissions {}: {e}", out_path.display()));
             std::process::exit(1);
         }
     }
+}
+
+pub fn extract_embedded_bin(bin_dir: &Path, logger: &Logger) {
+    if let Err(e) = std::fs::create_dir_all(bin_dir) {
+        logger.error(&format!("extract_embedded_bin: error creating {}: {e}", bin_dir.display()));
+        std::process::exit(1);
+    }
+
+    // Extract system-agnostic scripts/tools
+    extract_assets::<CommonAssets>(bin_dir, logger);
+
+    // Extract platform-specific binaries
+    extract_assets::<BinAssets>(bin_dir, logger);
 }
 
 fn set_executable_if_supported(path: &Path) -> io::Result<()> {
