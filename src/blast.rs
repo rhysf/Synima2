@@ -44,8 +44,7 @@ pub fn resolve_aligner_tools(
     aligner: &str,
     alignment_type: &str,
     bin_dir: &Path,
-    logger: &Logger,
-) -> AlignerTools {
+    logger: &Logger) -> AlignerTools {
     let (db_prog, search_prog) = match aligner {
         "blastplus" => {
             let search = match alignment_type {

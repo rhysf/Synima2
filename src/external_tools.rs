@@ -14,33 +14,68 @@ pub fn find_executable(program: &str, bin_dir: &Path, logger: &Logger) -> PathBu
 
     logger.information(&format!("find_executable: {}", program));
 
-    // 1. Try bundled binary first
-    let bundled_path = bin_dir.join(program);
+    // Build candidate program names.
+    // On Windows, prefer "prog.exe" if no extension is given.
+    let mut candidates: Vec<String> = Vec::new();
 
-    if bundled_path.exists() && bundled_path.is_file() {
-        let result = Command::new(&bundled_path).arg("--help").stdout(Stdio::null()).stderr(Stdio::null()).status();
-
-        match result {
-            Ok(_status) => {
-                // We were able to spawn the program, so accept it
-                logger.information(&format!("find_executable: using bundled {} at {}", program, bundled_path.display()));
-                return bundled_path;
-            }
-            Err(e) => {
-                logger.warning(&format!("find_executable: failed to run bundled {} at {}: {}, will try PATH", program, bundled_path.display(), e));
-            }
-        }
+    let has_dot = program.contains('.');
+    if has_dot {
+        candidates.push(program.to_string());
     } else {
-        logger.information(&format!("find_executable: no bundled {} at {}", program, bundled_path.display()));
+        #[cfg(windows)]
+        {
+            candidates.push(format!("{program}.exe"));
+            // Optionally also try without extension (in case user has a wrapper script)
+            candidates.push(program.to_string());
+        }
+        #[cfg(not(windows))]
+        {
+            candidates.push(program.to_string());
+        }
+    }
+
+    // 1. Try bundled binary first
+    for cand in &candidates {
+        let bundled_path = bin_dir.join(cand);
+
+        if bundled_path.exists() && bundled_path.is_file() {
+            let result = Command::new(&bundled_path).arg("--help").stdout(Stdio::null()).stderr(Stdio::null()).status();
+
+            match result {
+                Ok(_status) => {
+                    // We were able to spawn the program, so accept it
+                    logger.information(&format!("find_executable: using bundled {} at {}", program, bundled_path.display()));
+                    return bundled_path;
+                }
+                Err(e) => {
+                    logger.warning(&format!("find_executable: failed to run bundled {} at {}: {}, will try PATH", program, bundled_path.display(), e));
+                }
+            }
+        } else {
+            logger.information(&format!("find_executable: no bundled {} at {}", program, bundled_path.display()));
+        }
     }
 
     // 2. Fallback to PATH
-    if let Ok(output) = Command::new("which").arg(program).output() {
-        if output.status.success() {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if fs::metadata(&path).is_ok() {
-                logger.information(&format!("find_executable: using {} from PATH: {}", program, path));
-                return PathBuf::from(path);
+    // Use `where` on Windows, `which` elsewhere.
+    #[cfg(windows)]
+    let locator = "where";
+    #[cfg(not(windows))]
+    let locator = "which";
+
+    for cand in &candidates {
+        let output = Command::new(locator).arg(cand).output();
+        if let Ok(out) = output {
+            if out.status.success() {
+                // `where` can return multiple lines; take the first existing file.
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                for line in stdout.lines() {
+                    let p = line.trim();
+                    if !p.is_empty() && fs::metadata(p).is_ok() {
+                        logger.information(&format!("find_executable: using {} from PATH: {}", cand, p));
+                        return PathBuf::from(p);
+                    }
+                }
             }
         }
     }
