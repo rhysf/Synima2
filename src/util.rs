@@ -315,3 +315,24 @@ pub fn clean_diamond_version(raw: &str) -> String {
     // Fallback: return cleaned string
     s.to_string()
 }
+
+
+pub fn recreate_dir(path: &Path, logger: &Logger, context: &str) {
+    if path.exists() {
+        if let Err(e) = fs::remove_dir_all(path) {
+            logger.error(&format!(
+                "{context}: failed to remove existing directory {}: {e}",
+                path.display()
+            ));
+            std::process::exit(1);
+        }
+    }
+
+    if let Err(e) = fs::create_dir_all(path) {
+        logger.error(&format!(
+            "{context}: failed to create directory {}: {e}",
+            path.display()
+        ));
+        std::process::exit(1);
+    }
+}

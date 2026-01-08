@@ -171,7 +171,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         logger.information("─────────────────────────────────");
 
         // make output directory
-        mkdir(&omcl_out_dir, &logger, "main (blast-to-orthomcl)");
+        //mkdir(&omcl_out_dir, &logger, "main (blast-to-orthomcl)");
+
+        // Clear any previous Step 3 outputs to avoid stale/corrupted OMCL inputs
+        util::recreate_dir(&omcl_out_dir, &logger, "main (blast-to-orthomcl)");
 
         // output files
         let all_vs_all_path = omcl_out_dir.join("all_vs_all.out");
@@ -343,7 +346,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         //let cluster_dist_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.{}.cluster_dist_per_genome.txt", &args.alignment_type, method_label));
         let clusters_and_unique_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.{}.clusters_and_uniques", args.alignment_type, method_label));
         if !clusters_and_unique_path.is_file() {
-            logger.error(&format!("Tree step requires {}. Run --synima_step ortholog-summary first.", clusters_and_unique_path.display()));
+            logger.error(&format!("Step 5: requires {}. Run --synima_step ortholog-summary first.", clusters_and_unique_path.display()));
             std::process::exit(1);
         }
         let (cluster_to_genes, genomes_parsed) = dagchainer::save_gene_ids_from_ortholog_file(&clusters_and_unique_path, &logger);
@@ -353,6 +356,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let malign_outdir = tree_out_dir.join(malign);
         mkdir(&malign_outdir, &logger, "main (tree)");
 
+        // max number of orthologs for speed
+        let max_orthologs: Option<usize> = if args.tree_full { None } else { Some(args.tree_max_orthologs) };
+        match max_orthologs {
+            Some(n) => logger.information(&format!("Step 5: Tree step running on {n} orthologs.")),
+            None => logger.information("Step 5: Tree step running on all orthologs."),
+        }
+
         // Load genes
         let all_fasta = read_fasta::read_fasta(&combined_fasta_path, &logger);
         let mut pep_by_id: HashMap<String, String> = HashMap::new();
@@ -361,7 +371,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Write MALIGN cds/pep files
-        tree::write_malign_files(&cluster_to_genes, &args.alignment_type, &pep_by_id, &malign_outdir, &genomes_parsed, &logger);
+        let written = tree::write_malign_files(&cluster_to_genes, &args.alignment_type, &pep_by_id, &malign_outdir, &genomes_parsed, max_orthologs, &logger);
+        logger.information(&format!("Step 5: Wrote {written} 1:1 ortholog FASTAs."));
 
         // Run MUSCLE on all cluster pep files, in parallel
         let muscle_path = external_tools::find_executable("muscle", &bin_dir, &logger);
@@ -375,7 +386,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let fasttree_path = external_tools::find_executable("fasttree", &bin_dir, &logger);
         let is_nt = args.alignment_type == "cds";
         tree::run_fasttree_on_alignment(&fasttree_path, &concat_out_path, is_nt, &logger);
-
     }
 
     if args.synima_step.contains(&SynimaStep::Dagchainer) {
@@ -411,8 +421,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let genome_paths = dagchainer::save_genome_paths_for_dagchainer(&repo, &logger);
 
         // DAGchainer wrapper scripts
-        let dagchainer_wrapper = bin_dir.join("../run_DAG_chainer.pl");
-        let dagchainer_wrapper2 = bin_dir.join("../dagchainer_to_chain_spans.pl");
+        let dagchainer_wrapper = bin_dir.join("run_DAG_chainer.pl");
+        let dagchainer_wrapper2 = bin_dir.join("dagchainer_to_chain_spans.pl");
 
         let dagchainer_cmds = dagchainer::write_dagchainer_conf_file(
             &dagchainer_out_subdir,

@@ -26,11 +26,12 @@ warn "Running $0 -c $opt_c -z $opt_z -v $opt_v\n";
 my $DEBUG = 0;
 
 # DAGChainer
-my $os = `uname`;
-my $arch = `uname -m`;
-chomp $os;
-chomp $arch;
-my $dagchainer_program = "$Bin/$os.$arch/dagchainer";
+#my $os = `uname`;
+#my $arch = `uname -m`;
+#chomp $os;
+#chomp $arch;
+#my $dagchainer_program = "$Bin/$os.$arch/dagchainer";
+my $dagchainer_program = "$Bin/dagchainer";
 warn "progpath = $dagchainer_program\n" if($opt_v eq 'y');
 die "Error: cannot find dagchainer_program : $!" if(! -e $dagchainer_program);
 

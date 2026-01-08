@@ -557,9 +557,6 @@ sub blast_parse {
 	close(PARSEOUT);
 } ## blast_parse
 
-
-
-
 # This module is used to open BPO (Blast Parse Out) file, 
 # to provide an filehandle for later use in blast query process.
 # One Argument:
@@ -567,12 +564,10 @@ sub blast_parse {
 # Last modified: 07/21/04
 sub open_bpofile {
 	my $bpo_file = $_[0];
+	warn "open_bpofile: $bpo_file\n";
 	open (BPOFILE,$bpo_file) || dieWithUnexpectedError("can't open $bpo_file file"); # getline_from_bpofile subroutine 
 																					 # will use this file handle
-} # open_bpofile
-
-
-
+}
 
 # Make pvalue numeric, used by subroutine blast_parse
 # One Arguments:
@@ -582,10 +577,7 @@ sub numeric_pvalue {
 	my $p=$_[0];
 	if ($p=~/^e-(\d+)/) {return "1e-".$1;}
 	else {return $p}
-} # numeric_pvalue
-
-
-
+}
 
 # This subroutine is used to facilitate reading blast information
 # from blastparseout file, instead of reading all blast result into
@@ -658,9 +650,6 @@ sub retrieve_from_file {
 	%blastquery=%{$blastquery_ref};
 } ## retrieve_from_file
 
-
-
-
 # This subroutine is used to retrieve blast information from bpo file
 # (blast parse out file), given the line_id.
 # One Argument:
@@ -675,15 +664,13 @@ sub getline_from_bpofile {
 	chop $line;
 	my @bpout=split (";",$line);
 	my ($pm,$pe);
+	die "getline_from_bpofile: Error: no bpout from line $line (try deleting synima_step3-orthomcl and re-running)" if(!defined $bpout[5]);
 	if ($bpout[5]==0) {$pm=0;$pe=0;}
 #	elsif ($bpout[5]=~/(\d+)e(\-\d+)/) {$pm=$1;$pe=$2;}
 	elsif ($bpout[5]=~/(\S+)e(\-\S+)/) {$pm=$1;$pe=$2;}  #For WU-BLAST their p-value has the pattern \d\.\de\-\d+  OR 0.
 	else {$pm=$bpout[5];$pe=0;}
 	return ($bpout[0],$bpout[1],$bpout[2],$bpout[3],,$bpout[4],$pm,$pe,$bpout[6],$bpout[7]);
-} ## getline_from_bpofile
-
-
-
+} 
 
 # This subroutine is used to retrieve blast information from bpo file
 # (blast parse out file), given the query gene id and the subject gene
@@ -705,10 +692,6 @@ sub blastqueryab {
 	}
 	return 0;
 } ## blastqueryab
-
-
-
-
 
 # This subroutine is used to make a nonredundant list.
 # One Argument:

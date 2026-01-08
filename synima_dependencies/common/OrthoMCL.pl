@@ -259,7 +259,6 @@ foreach my $taxon (@taxa) {
 }
 %ortho=();
 
-
 foreach my $p (keys %connect) {
 	my %e = %{$connect{$p}->[0]};
 	my %w =  %{$connect{$p}->[1]};
@@ -291,7 +290,6 @@ my $endtime = `date`;
 write_log("\nStart Time: $starttime\nEnd Time:   $endtime\n");
 &write_endtime_in_parameter_log($endtime);
 
-
 #######################################SUBROUTINES###########################################
 # This subroutine is an important part of OrthoMCL, used to
 # look for inparalog (recent paralog) which is defined as 
@@ -306,9 +304,12 @@ sub makeInparalog {
 	foreach (@{$gindex{$taxon}}) {$seqs{$_} = 1;}
 	foreach my $qid (keys %seqs) {
 		my ($sStart,$sEnd);
-		if (defined $blastquery{$qid}) {
-			($sStart,$sEnd)=split (";",$blastquery{$qid});
-		} else {next;}
+		## RF
+		next if(!defined $blastquery{$qid});
+		#if (defined $blastquery{$qid}) {
+		($sStart,$sEnd)=split (";",$blastquery{$qid});
+		#} else {next;}
+
 		my @sorted_simid=pvtie_sort($sStart,$sEnd,$taxon);
 		LINE:foreach (0..$#sorted_simid) {
 			my ($s,$sid,$pm,$pe,$pi)=(&getline_from_bpofile($sorted_simid[$_]))[0,3,5,6,7];

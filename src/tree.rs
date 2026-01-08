@@ -26,7 +26,8 @@ pub fn write_malign_files(
     pep_by_id: &HashMap<String, String>,
     malign_outdir: &Path,
     genomes_parsed: &HashSet<String>,
-    logger: &Logger) {
+    max_orthologs: Option<usize>,
+    logger: &Logger) -> usize {
 
     // Ensure directory exists
     mkdir(malign_outdir, logger, "write_cluster_pep_files");
@@ -36,18 +37,33 @@ pub fn write_malign_files(
     genomes.sort();
     let n_genomes = genomes.len();
 
+    let target = match max_orthologs {
+        Some(n) => n,
+        None => usize::MAX,
+    };
+
+    if target == usize::MAX {
+        logger.information(&format!("write_cluster_pep_files: considering {} genomes for 1:1 ortholog clusters (no max)", n_genomes));
+    } else {
+        logger.information(&format!("write_cluster_pep_files: considering {} genomes for 1:1 ortholog clusters (target {})", n_genomes, target));
+    }
+
     logger.information(&format!("write_cluster_pep_files: considering {} genomes for 1:1 ortholog clusters", n_genomes));
 
     let mut cluster_ids: Vec<String> = cluster_to_genes.keys().cloned().collect();
     cluster_ids.sort();
 
-    let mut total = 0usize;
+    let mut total_examined = 0usize;
     let mut skipped_uniq = 0usize;
     let mut skipped_not_1to1 = 0usize;
     let mut written = 0usize;
 
     for cluster_id in cluster_ids {
-        total += 1;
+        if written >= target {
+            break;
+        }
+
+        total_examined += 1;
 
         // 1) Skip uniq_ clusters
         if cluster_id.starts_with("uniq_") {
@@ -127,7 +143,8 @@ pub fn write_malign_files(
         }
         written += 1;
     }
-    logger.information(&format!("write_cluster_pep_files: clusters examined: {}, 1:1 orthologs: {}, unique clusters skipped: {}, skipped non-1:1: {}", total, written, skipped_uniq, skipped_not_1to1));
+    logger.information(&format!("write_cluster_pep_files: clusters examined: {}, 1:1 orthologs: {}, unique clusters skipped: {}, skipped non-1:1: {}", total_examined, written, skipped_uniq, skipped_not_1to1));
+    written
 }
 
 fn cluster_is_too_large(path: &Path, is_pep: bool, logger: &Logger) -> bool {

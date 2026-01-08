@@ -96,6 +96,15 @@ pub struct Args {
     #[arg(short = 'e', long, default_value = "1e-10")]
     pub evalue: String,
 
+    /// Maximum number of ortholog groups to include for Step 5 tree (default: 500).
+    /// Ignored if --tree-full is set.
+    #[arg(long = "tree-max-orthologs", default_value_t = 500)]
+    pub tree_max_orthologs: usize,
+
+    /// Include all ortholog groups in the tree step (overrides --tree-max-orthologs).
+    #[arg(long = "tree-full", default_value_t = false)]
+    pub tree_full: bool,
+
     /// Number of DAGchainer chains
     #[arg(long = "dagchainer_chains", default_value_t = 4)]
     pub dagchainer_chains: usize,
