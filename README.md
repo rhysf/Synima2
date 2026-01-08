@@ -90,7 +90,7 @@ Alternative (manual install): If you prefer to place the binary in ~/.local/bin
 
 ```bash
 cargo build --release
-cp target/release/phylorust ~/.local/bin/
+cp ./target/release/Synima ~/.local/bin/
 ```
 
 ## Pipeline overview

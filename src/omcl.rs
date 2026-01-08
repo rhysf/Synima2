@@ -79,8 +79,7 @@ pub fn write_gcoded_m8_and_sort<P: AsRef<Path>>(
     genome_to_code: &HashMap<String, String>,
     m8_input_path: P,
     m8_output_path: P,
-    logger: &Logger,
-) {
+    logger: &Logger) {
 
     // input/output
     let input_path = m8_input_path.as_ref();
