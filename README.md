@@ -28,6 +28,7 @@ For issues, questions, comments or feature requests, please check or post to the
 
 ## Version / History
 
+* 7th Jan 2026 - Included Bio::SearchIO within package to avoid installation requirement 
 * 18th Dec 2025 - First complete version
 * 20th Nov 2025 - Initial, albeit incomplete version
 
@@ -43,9 +44,6 @@ To build and run Synima2, you’ll only need Rust installed:
     ```
 
 - Optional dependencies
-
-  - Perl with modules `File::Basename` and `Bio::SearchIO`  
-    Only needed if you want to run the OrthoMCL pipeline.
 
   - Python3 (Only if OrthoFinder used)
 

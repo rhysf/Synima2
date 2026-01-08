@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bin_dir = exe_dir.join("bin");
 
     // Ensure bin/ exists and is populated
-    util::extract_embedded_bin(&bin_dir)?;
+    util::extract_embedded_bin(&bin_dir, &logger);
     
     let (bin_name, bin_dir) = external_tools::locate_bin_folder(bin_dir, &logger);
     logger.information(&format!("Bin name and path: {} and {}", bin_name, bin_dir.display()));

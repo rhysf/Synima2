@@ -1,47 +1,105 @@
 use crate::logger::Logger;
 use crate::Path;
 use crate::fs;
-//use crate::external_tools;
 
 use std::fmt;
 use std::process;
 use std::fs::File;
+use std::io;
 use std::io::{BufReader, BufWriter};
 use std::process::Command;
-use std::os::unix::fs::PermissionsExt;
 use rust_embed::RustEmbed;
 use regex::Regex;
 
 #[derive(RustEmbed)]
-#[folder = "bin/"]  // folder in your source
+#[folder = "bin/"]  // folder in source
 struct BinAssets;
 
-pub fn extract_embedded_bin(bin_dir: &Path) -> std::io::Result<()> {
-    fs::create_dir_all(bin_dir)?;
+pub fn extract_embedded_bin(bin_dir: &Path, logger: &Logger) {
+
+    if let Err(e) = fs::create_dir_all(bin_dir) {
+        logger.error(&format!("extract_embedded_bin: error creating {}: {e}", bin_dir.display()));
+        std::process::exit(1);
+    }
+
     for file in BinAssets::iter() {
         let relative = file.as_ref();
         let out_path = bin_dir.join(relative);
 
         if let Some(parent) = out_path.parent() {
-            fs::create_dir_all(parent)?;
+            if let Err(e) = fs::create_dir_all(parent) {
+                logger.error(&format!("extract_embedded_bin: error creating {}: {e}", parent.display()));
+                std::process::exit(1);
+            }
         }
 
-        let data = BinAssets::get(relative).unwrap();
-        fs::write(&out_path, data.data)?;
+        //let data = BinAssets::get(relative).unwrap();
+        let data = match BinAssets::get(relative) {
+            Some(d) => d,
+            None => {
+                logger.error(&format!("extract_embedded_bin: missing embedded asset {relative}"));
+                std::process::exit(1);
+            }
+        };
 
-        // Set permissions: 0o755 for directories and executables
-        // We assume everything in bin/ is executable
-        let mut perms = fs::metadata(&out_path)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&out_path, perms)?;
+        //fs::write(&out_path, data.data)?;
+        if let Err(e) = fs::write(&out_path, data.data) {
+            logger.error(&format!("extract_embedded_bin: error writing {}: {e}", out_path.display()));
+            std::process::exit(1);
+        }
+
+        if let Err(e) = set_executable_if_supported(&out_path) {
+            logger.error(&format!("extract_embedded_bin: error setting permissions {}: {e}", out_path.display()));
+            std::process::exit(1);
+        }
     }
-
-    Ok(())
 }
 
-//#[derive(RustEmbed)]
-//#[folder = "orthofinder_runtime/"]  // folder in your source
-//struct OrthoFinderAssets;
+fn set_executable_if_supported(path: &Path) -> io::Result<()> {
+    // Unix: mark as executable (755)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let metadata = match fs::metadata(path) {
+            Ok(m) => m,
+            Err(e) => return Err(e),
+        };
+
+        let mut perms = metadata.permissions();
+        perms.set_mode(0o755);
+
+        if let Err(e) = fs::set_permissions(path, perms) {
+            return Err(e);
+        }
+
+        return Ok(());
+    }
+
+    // Windows: no-op for executability, but you can clear readonly if desired
+    #[cfg(windows)]
+    {
+        let metadata = match fs::metadata(path) {
+            Ok(m) => m,
+            Err(e) => return Err(e),
+        };
+
+        let mut perms = metadata.permissions();
+        perms.set_readonly(false);
+
+        if let Err(e) = fs::set_permissions(path, perms) {
+            return Err(e);
+        }
+
+        return Ok(());
+    }
+
+    // Other targets: do nothing
+    #[cfg(not(any(unix, windows)))]
+    {
+        return Ok(());
+    }
+}
 
 pub fn mkdir(path: &Path, logger: &Logger, context: &str) {
     fs::create_dir_all(path).log_or_exit(logger, |e| {
@@ -83,9 +141,7 @@ pub fn run_shell_cmd(cmd: &str, logger: &Logger, context: &str) {
         });
 
     if !status.success() {
-        logger.error(&format!(
-            "{context}: command failed with status {status}: {cmd}"
-        ));
+        logger.error(&format!("{context}: command failed with status {status}: {cmd}"));
         std::process::exit(1);
     }
 }
