@@ -111,7 +111,8 @@ pub fn create_all_dbs(
     logger: &Logger) {
 
     // Decide which kind of builder this is from its filename
-    let builder_name = db_builder.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    let builder_name_raw = db_builder.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    let builder_name = builder_name_raw.strip_suffix(".exe").or_else(|| builder_name_raw.strip_suffix(".EXE")).unwrap_or(builder_name_raw);
 
     enum DbBuilderKind {
         Diamond,
