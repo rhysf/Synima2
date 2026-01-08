@@ -341,7 +341,7 @@ pub fn concatenate_alignments_and_write(
 
     // Process each alignment file
     for aln in &alignment_files {
-        logger.information(&format!("concatenate_alignments_and_write: concatenating {}", aln.display() ));
+        //logger.information(&format!("concatenate_alignments_and_write: concatenating {}", aln.display() ));
 
         let seqs = read_fasta::read_fasta(aln, logger);
 
