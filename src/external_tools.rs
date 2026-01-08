@@ -10,29 +10,27 @@ use std::process::Stdio;
 use std::process::Command;
 use std::fs;
 
-fn run_and_capture(cmd: &str, args: &[&str], logger: &Logger) -> String {
-    let output = Command::new(cmd).args(args).output();
-
-    let output = match output {
-        Ok(o) => o,
-        Err(_) => {
-            logger.error(&format!("run_and_capture: unable to run {}", cmd));
+/// Locates "<outdir>/<OS>.<ARCH>" and returns the folder name and full path.
+pub fn locate_bin_folder(outdir: impl AsRef<Path>, logger: &Logger) -> (String, PathBuf) {
+    let os = match std::env::consts::OS {
+        "macos" => "Darwin",
+        "linux" => "Linux",
+        "windows" => "Windows",
+        other => {
+            logger.error(&format!("locate_bin_folder: unsupported OS {other}"));
             std::process::exit(1);
         }
     };
 
-    if !output.status.success() {
-        logger.error(&format!("run_and_capture: command failed {}", cmd));
-        std::process::exit(1);
-    }
-
-    String::from_utf8_lossy(&output.stdout).trim().to_string()
-}
-
-/// Locates "<outdir>/<OS>.<ARCH>" and returns the folder name and full path.
-pub fn locate_bin_folder(outdir: impl AsRef<Path>, logger: &Logger) -> (String, PathBuf) {
-    let os = run_and_capture("uname", &[], &logger);       // Example: "Darwin"
-    let arch = run_and_capture("uname", &["-m"], &logger); // Example: "arm64"
+    let arch = match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
+        // Rust uses "aarch64" for ARM64.
+        "aarch64" => "arm64",
+        other => {
+            logger.error(&format!("locate_bin_folder: unsupported ARCH {other}"));
+            std::process::exit(1);
+        }
+    };
 
     let folder_name = format!("{os}.{arch}");
     let full_path = outdir.as_ref().join(&folder_name);
