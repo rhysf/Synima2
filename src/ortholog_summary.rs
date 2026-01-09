@@ -69,8 +69,7 @@ pub fn detect_orthology_source(
     orthofinder_out_dir: &Path,
     omcl_out_dir: &Path,
     rbh_out_dir: &Path,
-    logger: &Logger,
-) -> OrthologySource {
+    logger: &Logger) -> OrthologySource {
 
     // Marker files for auto-detection
     let of_marker = orthofinder_out_dir.join("Orthogroups.tsv");
@@ -735,8 +734,7 @@ pub fn from_rbh(
 pub fn write_cluster_dist_per_genome(
     combined_clusters_path: &Path,  // GENE_CLUSTERS_SUMMARIES.*.clusters_and_uniques
     output_path: &Path,             // *.cluster_dist_per_genome.txt
-    logger: &Logger,
-) {
+    logger: &Logger) {
     logger.information(&format!("cluster_dist_per_genome: reading {}", combined_clusters_path.display()));
     logger.information(&format!("cluster_dist_per_genome: writing {}", output_path.display()));
 

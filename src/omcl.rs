@@ -1,15 +1,91 @@
 use crate::Logger;
 use crate::util::{open_bufread, open_bufwrite}; //mkdir,open_file_read,open_file_write
 
+use std::cmp::Ordering;
 use std::path::Path;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::File;
-use std::io::{BufRead, Write};
+use std::io;
+use std::io::{BufRead, BufReader, BufWriter, Write};
 //use std::process::{Command, Stdio};
 use std::path::PathBuf;
 use regex::Regex;
 use std::process;
+
+#[derive(Debug)]
+struct M8Rec {
+    col1: String,
+    bitscore: f64,
+    line: String,
+}
+
+fn parse_bitscore_field(s: &str) -> f64 {
+    // Treat parse failures as -inf so they sink to the bottom in descending order.
+    s.parse::<f64>().unwrap_or(f64::NEG_INFINITY)
+}
+
+fn sort_m8_by_col1_then_bitscore_desc(tmp_path: &Path, out_path: &Path) -> io::Result<()> {
+    let infile = File::open(tmp_path)?;
+    let reader = BufReader::new(infile);
+
+    let mut recs: Vec<M8Rec> = Vec::new();
+
+    for line_res in reader.lines() {
+        let line = line_res?;
+        if line.is_empty() {
+            continue;
+        }
+        // BLAST m8 is typically tab-delimited. Split on '\t' only.
+        let mut fields = line.split('\t');
+
+        let col1 = match fields.next() {
+            Some(v) => v.to_string(),
+            None => continue,
+        };
+
+        // Need column 12 => index 11 (1-based 12th).
+        // We already consumed col1 (index 0), so advance to index 11.
+        // Remaining indices to step: 11 - 1 = 10 more steps, then take next.
+        let mut bitscore_str: Option<&str> = None;
+        for i in 1..12 {
+            match fields.next() {
+                Some(v) => {
+                    if i == 11 {
+                        bitscore_str = Some(v);
+                        break;
+                    }
+                }
+                None => break,
+            }
+        }
+
+        let bitscore = parse_bitscore_field(bitscore_str.unwrap_or(""));
+
+        recs.push(M8Rec { col1, bitscore, line });
+    }
+
+    recs.sort_unstable_by(|a, b| {
+        match a.col1.cmp(&b.col1) {
+            Ordering::Equal => {
+                // Descending bitscore
+                b.bitscore
+                    .partial_cmp(&a.bitscore)
+                    .unwrap_or(Ordering::Equal)
+            }
+            other => other,
+        }
+    });
+
+    let outfile = File::create(out_path)?;
+    let mut writer = BufWriter::new(outfile);
+    for r in recs {
+        writer.write_all(r.line.as_bytes())?;
+        writer.write_all(b"\n")?;
+    }
+    writer.flush()?;
+    Ok(())
+}
 
 // for OMCL
 pub fn parse_genome_map_from_gff(gff_path: &Path, logger: &Logger) -> Result<HashSet<String>, String> {
@@ -156,33 +232,20 @@ pub fn write_gcoded_m8_and_sort<P: AsRef<Path>>(
     // Sort: col1 (ID), col12 (bit score) descending
     logger.information("write_gcoded_m8_and_sort: sorting Gcoded m8 file...");
 
-    let tmp_path_str = tmp_path.to_string_lossy();
-    let out_path_str = m8_output_path.as_ref().to_string_lossy();
-    let sort_cmd = format!("sort -T . -S 2G -k1,1 -k12,12gr {} > {}", tmp_path_str, out_path_str);
-
-    let status = match std::process::Command::new("sh").arg("-c").arg(&sort_cmd).status() {
-        Ok(s) => s,
-        Err(e) => {
-            logger.error(&format!("write_gcoded_m8_and_sort: failed to run sort: {}", e));
-            std::process::exit(1);
-        }
-    };
-
-    if !status.success() {
-        logger.error("write_gcoded_m8_and_sort: sort command failed");
+    if let Err(e) = sort_m8_by_col1_then_bitscore_desc(&tmp_path, m8_output_path.as_ref()) {
+        logger.error(&format!("write_gcoded_m8_and_sort: sort failed: {}", e));
         std::process::exit(1);
     }
 
-    std::fs::remove_file(tmp_path).ok();
-    logger.information(&format!("write_gcoded_m8_and_sort: Finished with {}", out_path_str));
+    std::fs::remove_file(&tmp_path).ok();
+    logger.information(&format!("write_gcoded_m8_and_sort: Finished with {}", m8_output_path.as_ref().to_string_lossy()));
 }
 
 pub fn convert_m8_to_orthomcl_format(
     m8_path: &Path,
     out_prefix: &Path,
     _genome_to_code: &HashMap<String, String>, // kept only to match call-site
-    logger: &Logger,
-) -> Result<(PathBuf, PathBuf), String> {
+    logger: &Logger) -> Result<(PathBuf, PathBuf), String> {
 
     logger.information(&format!("convert_m8_to_orthomcl_format: reading {}", m8_path.display()));
 
@@ -278,8 +341,7 @@ pub fn run_orthomcl_clustering<P: AsRef<Path>>(
     bpo_path: &Path,
     gg_path: P,
     log_path: &Path,
-    logger: &Logger,
-) -> Result<(), String> {
+    logger: &Logger) -> Result<(), String> {
 
     // Convert full paths to filenames for in-place output
     let bpo_file = bpo_path.file_name().ok_or("Invalid BPO file path")?;
