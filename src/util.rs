@@ -30,11 +30,9 @@ struct BinAssets;
 #[folder = "synima_dependencies/Darwin.arm64/"]
 struct BinAssets;
 
-// IMPORTANT: on macOS x86_64, embed the same real files (arm64 folder) rather than a symlink tree.
 #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
 #[derive(RustEmbed)]
-//#[folder = "synima_dependencies/Darwin.x86_64/"]
-#[folder = "synima_dependencies/Darwin.arm64/"]
+#[folder = "synima_dependencies/Darwin.x86_64/"]
 struct BinAssets;
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
