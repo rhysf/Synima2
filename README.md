@@ -45,6 +45,8 @@ To build and run Synima2, you’ll only need Rust installed:
 
 - Optional dependencies
 
+  - Perl (if using OrthoMCL)
+
   - Python3 (Only if OrthoFinder used)
 
   - R (Required for the plotting files outside of main synima output page).

@@ -362,6 +362,19 @@ pub fn run_orthomcl_clustering(
 
     logger.information(&format!("run_orthomcl_clustering: {} and {}", bpo_file.to_string_lossy(), gg_file.to_string_lossy()));
 
+    // check perl is installed
+    let perl_ok = std::process::Command::new("perl")
+        .arg("-v")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok();
+
+    if !perl_ok {
+        logger.error("run_orthomcl_clustering: perl not found on PATH");
+        std::process::exit(1);
+    }
+
     // Build command
     let mut cmd = std::process::Command::new("perl");
     cmd.arg(orthomcl_script)
