@@ -18,20 +18,28 @@ struct AssemblyMapping {
 
 /// Download and parse the NCBI RefSeq assembly summary table.
 /// URL: https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_refseq.txt
-fn load_refseq_assembly_mappings(logger: &Logger) -> Result<AssemblyMapping> {
+fn load_refseq_assembly_mappings(logger: &Logger) -> AssemblyMapping {
 
     let url = "https://ftp.ncbi.nlm.nih.gov/genomes/refseq/assembly_summary_refseq.txt";
     //let url = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_refseq.txt";
 
-    logger.information("Downloading RefSeq assembly summary…");
+    logger.information("load_refseq_assembly_mappings: Downloading RefSeq assembly summary…");
 
-    let response = ureq::get(url).call().map_err(|e| anyhow!("Failed to fetch assembly summary: {e}"))?;
+    // download file describing reference assemblies
+    let response = match ureq::get(url).call() {
+        Ok(r) => r,
+        Err(e) => {
+            logger.error(&format!("load_refseq_assembly_mappings: Failed to fetch assembly summary from {url}: {e}"));
+            std::process::exit(1);
+        }
+    };
 
     if response.status() != 200 {
-        return Err(anyhow!("Failed to fetch assembly summary (HTTP {}).", response.status()));
+        logger.error(&format!("load_refseq_assembly_mappings: Failed to fetch assembly summary (HTTP {}).", response.status()));
+        std::process::exit(1);
     }
 
-    logger.information("Streaming and parsing RefSeq assembly summary…");
+    logger.information("load_refseq_assembly_mappings: Streaming and parsing RefSeq assembly summary…");
 
     let reader = BufReader::new(response.into_reader());
 
@@ -78,14 +86,11 @@ fn load_refseq_assembly_mappings(logger: &Logger) -> Result<AssemblyMapping> {
         }
     }
 
-    logger.information(&format!(
-        "Parsed {} GenBank→RefSeq mappings",
-        gb_to_rf.len()
-    ));
+    logger.information(&format!("load_refseq_assembly_mappings: Parsed {} GenBank→RefSeq mappings", gb_to_rf.len()));
 
-    Ok(AssemblyMapping {
+    AssemblyMapping {
         genbank_to_refseq: gb_to_rf,
-    })
+    }
 }
 
 const FASTA_URL: &str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id={ID}&rettype=fasta&retmode=text";
@@ -99,16 +104,26 @@ pub fn run_step0_download_genbank(accessions: &[String], logger: &Logger) -> Res
         return Ok(());
     }
 
-    let mappings = load_refseq_assembly_mappings(logger)?;
+    let mappings = load_refseq_assembly_mappings(&logger);
 
-    let cwd = std::env::current_dir()?;
+    let cwd = match std::env::current_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            logger.error(&format!("run_step0_download_genbank: Failed to get current working directory: {e}"));
+            std::process::exit(1);
+        }
+    };
 
     for acc in accessions {
         let acc_trim = acc.trim();
         if acc_trim.is_empty() { continue; }
 
         let out_dir = cwd.join(acc_trim);
-        fs::create_dir_all(&out_dir)?;
+
+        if let Err(e) = std::fs::create_dir_all(&out_dir) {
+            logger.error(&format!("run_step0_download_genbank: Failed to create output directory {}: {e}", out_dir.display()));
+            std::process::exit(1);
+        }
 
         logger.information(&format!("run_step0_download_genbank: Downloading data for {}", acc_trim));
 
