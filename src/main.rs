@@ -190,11 +190,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let genome_set = omcl::parse_genome_map_from_gff(&combined_gff_path, &logger)?;
         let genome_to_code = omcl::assign_genome_codes(&genome_set, &code_out_path, &logger)?;
         omcl::write_gcoded_m8_and_sort(&genome_to_code, &all_vs_all_path, &blast_m8_output_path, &logger);
-        let (bpo_path, gg_path) = omcl::convert_m8_to_orthomcl_format(&blast_m8_output_path, &omcl_prefix, &genome_to_code, &logger)?;
+        let (bpo_path, gg_path) = omcl::convert_m8_to_orthomcl_format(&blast_m8_output_path, &omcl_prefix, &genome_to_code, &logger);
 
         // run OrthoMCL
         let orthomcl_script = bin_dir.join("OrthoMCL.pl");
-        omcl::run_orthomcl_clustering(&orthomcl_script, &bpo_path, &gg_path, &omcl_log_path, &logger)?;
+        omcl::run_orthomcl_clustering(&orthomcl_script, &bpo_path, &gg_path, &omcl_log_path, &logger);
     }
  
     if args.synima_step.contains(&SynimaStep::BlastToRbh) {

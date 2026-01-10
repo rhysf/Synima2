@@ -245,7 +245,7 @@ pub fn convert_m8_to_orthomcl_format(
     m8_path: &Path,
     out_prefix: &Path,
     _genome_to_code: &HashMap<String, String>, // kept only to match call-site
-    logger: &Logger) -> Result<(PathBuf, PathBuf), String> {
+    logger: &Logger) -> (PathBuf, PathBuf) {
 
     logger.information(&format!("convert_m8_to_orthomcl_format: reading {}", m8_path.display()));
 
@@ -333,19 +333,32 @@ pub fn convert_m8_to_orthomcl_format(
 
     logger.information(&format!("convert_m8_to_orthomcl_format: OMCL .bpo and .gg written to {}.*", out_prefix.display()));
 
-    Ok((bpo_path, gg_path))
+    (bpo_path, gg_path)
 }
 
-pub fn run_orthomcl_clustering<P: AsRef<Path>>(
+pub fn run_orthomcl_clustering(
     orthomcl_script: &Path,
     bpo_path: &Path,
-    gg_path: P,
+    gg_path: &Path,
     log_path: &Path,
-    logger: &Logger) -> Result<(), String> {
+    logger: &Logger) {
 
     // Convert full paths to filenames for in-place output
-    let bpo_file = bpo_path.file_name().ok_or("Invalid BPO file path")?;
-    let gg_file = gg_path.as_ref().file_name().ok_or("Invalid GG file path")?;
+    let bpo_file = match bpo_path.file_name() {
+        Some(name) => name,
+        None => {
+            logger.error("run_orthomcl_clustering: Invalid BPO file path");
+            std::process::exit(1);
+        }
+    };
+
+    let gg_file = match gg_path.file_name() {
+        Some(name) => name,
+        None => {
+            logger.error("run_orthomcl_clustering: Invalid GG file path");
+            std::process::exit(1);
+        }
+    };
 
     logger.information(&format!("run_orthomcl_clustering: {} and {}", bpo_file.to_string_lossy(), gg_file.to_string_lossy()));
 
@@ -357,14 +370,34 @@ pub fn run_orthomcl_clustering<P: AsRef<Path>>(
         .arg("--bpo_file").arg(bpo_file)
         .arg("--gg_file").arg(gg_file);
 
-    let work_dir = bpo_path.parent().ok_or("bpo_path has no parent directory")?;
+    let work_dir = match bpo_path.parent() {
+        Some(dir) => dir,
+        None => {
+            logger.error("run_orthomcl_clustering: bpo_path has no parent directory");
+            std::process::exit(1);
+        }
+    };
+
     cmd.current_dir(work_dir).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
 
     // Run and capture output
-    let output = cmd.output().map_err(|e| format!("Failed to run OrthoMCL: {}", e))?;
+    let output = match cmd.output() {
+        Ok(output) => output,
+        Err(e) => {
+            logger.error(&format!("run_orthomcl_clustering: Failed to run {}: {}", orthomcl_script.display(), e));
+            std::process::exit(1);
+        }
+    };
 
     // Write stdout and stderr to the log
-    let mut log_file = File::create(&log_path).map_err(|e| format!("Cannot write log file: {}", e))?;
+    let mut log_file = match File::create(&log_path) {
+        Ok(f) => f,
+        Err(e) => {
+            logger.error(&format!("run_orthomcl_clustering: Cannot write log file: {}", e));
+            std::process::exit(1);
+        }
+    };
+
     let _ = log_file.write_all(&output.stdout);
     let _ = log_file.write_all(&output.stderr);
 
@@ -386,26 +419,46 @@ pub fn run_orthomcl_clustering<P: AsRef<Path>>(
     }
 
     // Use the path extracted from the log
-    let orthomcl_out_path = orthomcl_out_path.ok_or("Failed to extract final .out file from OrthoMCL log")?;
-    let final_filename = orthomcl_out_path.file_name().ok_or("Failed to extract final .out filename")?;
-    let tmp_dir = &work_dir.join(
-    orthomcl_out_path.parent().and_then(|p| p.file_name()).ok_or("Cannot resolve tmp dir from output path")?);
+    let orthomcl_out_path = match orthomcl_out_path {
+        Some(p) => p,
+        None => {
+            logger.error("run_orthomcl_clustering: Failed to extract final .out file from OrthoMCL log");
+            std::process::exit(1);
+        }
+    };
 
+    let final_filename = match orthomcl_out_path.file_name() {
+        Some(name) => name,
+        None => {
+            logger.error("run_orthomcl_clustering: Failed to extract final .out filename");
+            std::process::exit(1);
+        }
+    };
+
+    let tmp_dir = match orthomcl_out_path.parent().and_then(|p| p.file_name()) {
+        Some(tmp_name) => work_dir.join(tmp_name),
+        None => {
+            logger.error("run_orthomcl_clustering: Cannot resolve tmp dir from output path");
+            std::process::exit(1);
+        }
+    };
+    let tmp_dir = &tmp_dir;
     let final_destination = work_dir.join(final_filename);
 
     // Move the result file
-    fs::rename(&orthomcl_out_path, &final_destination)
-        .map_err(|e| format!("Failed to move {} to {}: {}", orthomcl_out_path.display(), final_destination.display(), e))?;
-
-    logger.information(&format!("Relocated {} to {}", orthomcl_out_path.display(), final_destination.display()));
+    if let Err(e) = fs::rename(&orthomcl_out_path, &final_destination) {
+        logger.error(&format!("run_orthomcl_clustering: Failed to move {} to {}: {}", orthomcl_out_path.display(), final_destination.display(), e));
+        std::process::exit(1);
+    }
+    logger.information(&format!("run_orthomcl_clustering: Relocated {} to {}", orthomcl_out_path.display(), final_destination.display()));
 
     // Clean up the tmp subdirectory
     if tmp_dir != work_dir {
-        fs::remove_dir_all(tmp_dir).map_err(|e| format!("Failed to remove temporary directory {}: {}", tmp_dir.display(), e))?;
-        logger.information(&format!("Cleaned up temporary OrthoMCL directory: {}", tmp_dir.display()));
+        if let Err(e) = fs::remove_dir_all(tmp_dir) {
+            logger.warning(&format!("run_orthomcl_clustering: Failed to remove temporary directory {}: {}", tmp_dir.display(), e));
+        }
+        logger.information(&format!("run_orthomcl_clustering: Cleaned up temporary OrthoMCL directory: {}", tmp_dir.display()));
     }
-
-    Ok(())
 }
 
 /// Load genome code → genome name mapping from genome_codes.tsv.
