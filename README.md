@@ -47,9 +47,9 @@ To build and run Synima2, you’ll only need Rust installed:
 
   - Perl (if using OrthoMCL)
 
-  - Python3 (Only if OrthoFinder used)
+  - Python3 (if using OrthoFinder)
 
-  - R (Required for the plotting files outside of main synima output page).
+  - R (Required for the plotting files in step 4 ortholog summary).
 
   - External aligners and search tools (BLAST, DIAMOND, etc.)
 
@@ -69,8 +69,8 @@ To build and run Synima2, you’ll only need Rust installed:
 Clone the repo and install with Cargo:
 
 ```bash
-git clone https://github.com/rhysf/Synima.git
-cd Synima
+git clone https://github.com/rhysf/Synima2.git
+cd Synima2
 cargo install --path .
 ```
 
