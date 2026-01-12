@@ -15,6 +15,7 @@ use Bio::SearchIO;
 use Storable;
 require Exporter;
 use File::Basename;
+use File::Path qw(make_path);
 use FindBin qw($Bin);
 our $VERSION = 1.4;
 our @ISA    = qw( Exporter );
@@ -166,10 +167,12 @@ sub constructDirectory {
 		$ORTHOMCL_WORKING_DIR.="_$no";
 	}
 	$ORTHOMCL_WORKING_DIR.="/";
-	system ("mkdir $ORTHOMCL_WORKING_DIR");
+	#system ("mkdir $ORTHOMCL_WORKING_DIR");
+	make_path($ORTHOMCL_WORKING_DIR) or die "can't create $ORTHOMCL_WORKING_DIR: $!";
 	$mcl_bi_file=$ORTHOMCL_WORKING_DIR.$mcl_bi_file;
 	$parameter_log_file=$ORTHOMCL_WORKING_DIR.$parameter_log_file;
-	$orthomcl_log_file=$ORTHOMCL_WORKING_DIR.$orthomcl_log_file;open (LOG,">$orthomcl_log_file") or die "can't create $orthomcl_log_file";
+	$orthomcl_log_file=$ORTHOMCL_WORKING_DIR.$orthomcl_log_file;
+	open (LOG,">$orthomcl_log_file") or die "can't create $orthomcl_log_file";
 	$bbh_file=$ORTHOMCL_WORKING_DIR.$bbh_file;open (BBH,">$bbh_file") or die "can't create $bbh_file";
 	write_log("### WORKING DIRECTORY: ###\n  $ORTHOMCL_WORKING_DIR\n\n");
 
