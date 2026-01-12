@@ -53,7 +53,7 @@ To build and run Synima2, you’ll only need Rust installed:
 
   - External aligners and search tools (BLAST, DIAMOND, etc.)
 
-    Synima2 bundles several binaries under `bin/<platform>` and will try those
+    Synima2 bundles several binaries under `synima_dependencies/<platform>` and will try those
     first. If a bundled binary is not available or fails, Synima2 falls back to
     tools found on `PATH`. You may therefore want to ensure at least one of the
     following is available on your system:
