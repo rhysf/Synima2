@@ -10,8 +10,11 @@
 ## README.
 
 use strict;
-my $starttime = `date`;
-warn "$1: startime = $starttime\n";
+
+#my $starttime = `date`;
+my $starttime = scalar localtime();
+chomp $starttime;
+warn "startime = $starttime\n";
 use FindBin qw($Bin);
 use lib "$Bin/perl_modules/";
 use Getopt::Long;
