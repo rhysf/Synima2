@@ -14,6 +14,7 @@ use strict;
 use Bio::SearchIO;
 use Storable;
 require Exporter;
+use File::Basename;
 use FindBin qw($Bin);
 our $VERSION = 1.4;
 our @ISA    = qw( Exporter );
@@ -79,13 +80,21 @@ our $BLAST_NOCPU                         = 1;          # Useful when running BLA
 our $FORMATDB                            = "formatdb";
 
 # RF add MCL path for Synima2
+# detect OS
+my %os = $^0;
+my $exe_suffix = '';
+
+if($os =~ /MSWin32|cygwin|msys/i) {
+	$exe_suffix = '.exe';
+}
+
 #my $uname = $ENV{HOSTTYPE};
 #my $os = `uname`;
 #my $arch = `uname -m`;
 #chomp $os;
 #chomp $arch;
 #our $MCL = "$Bin/$os.$arch/mcl";
-our $MCL = "$Bin/mcl";
+our $MCL = "$Bin/mcl$exe_suffix";
 die "Error: $0 cannot locate mcl" if(! -e $MCL);
 warn "Using $MCL\n";
 
