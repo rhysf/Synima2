@@ -81,7 +81,7 @@ our $FORMATDB                            = "formatdb";
 
 # RF add MCL path for Synima2
 # detect OS
-my %os = $^0;
+my $os = $^0;
 my $exe_suffix = '';
 
 if($os =~ /MSWin32|cygwin|msys/i) {
