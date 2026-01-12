@@ -177,7 +177,8 @@ sub constructDirectory {
 	write_log("### WORKING DIRECTORY: ###\n  $ORTHOMCL_WORKING_DIR\n\n");
 
 	$ORTHOMCL_TMP_DIR=$ORTHOMCL_WORKING_DIR."tmp/";
-	system ("mkdir $ORTHOMCL_TMP_DIR");
+	#system ("mkdir $ORTHOMCL_TMP_DIR");
+	make_path($ORTHOMCL_TMP_DIR) or die "can't create $ORTHOMCL_TMP_DIR: $!";
 	
 	if (defined $former_run_dir) {
 		$ORTHOMCL_FORMER_RUN_DIR = $PATH_TO_ORTHOMCL.$former_run_dir."/tmp/";
@@ -237,10 +238,12 @@ sub mode5 {
 		$ORTHOMCL_WORKING_DIR.="_$no";
 	}
 	$ORTHOMCL_WORKING_DIR.="/";
-	system ("mkdir $ORTHOMCL_WORKING_DIR");
+	#system ("mkdir $ORTHOMCL_WORKING_DIR");
+	make_path($ORTHOMCL_WORKING_DIR) or die "can't create $ORTHOMCL_WORKING_DIR: $!";
 
 	$ORTHOMCL_TMP_DIR=$ORTHOMCL_WORKING_DIR."tmp/";
-	system ("mkdir $ORTHOMCL_TMP_DIR");
+	#system ("mkdir $ORTHOMCL_TMP_DIR");
+	make_path($ORTHOMCL_TMP_DIR) or die "can't create $ORTHOMCL_TMP_DIR: $!";
 	
 	my ($former_matrix_file,$former_index_file);
 	if (defined $former_run_dir) {
