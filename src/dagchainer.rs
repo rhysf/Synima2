@@ -515,7 +515,7 @@ fn collect_aligncoords_files(dir: &Path, acc: &mut Vec<PathBuf>, logger: &Logger
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(e) => {
-            logger.error(&format!("dagchainer: failed to read directory {}: {}", dir.display(), e));
+            logger.error(&format!("collect_aligncoords_files: failed to read directory {}: {}", dir.display(), e));
             std::process::exit(1);
         }
     };
@@ -524,7 +524,7 @@ fn collect_aligncoords_files(dir: &Path, acc: &mut Vec<PathBuf>, logger: &Logger
         let entry = match entry_res {
             Ok(en) => en,
             Err(e) => {
-                logger.error(&format!("dagchainer: read_dir error in {}: {}", dir.display(), e));
+                logger.error(&format!("collect_aligncoords_files: read_dir error in {}: {}", dir.display(), e));
                 std::process::exit(1);
             }
         };
