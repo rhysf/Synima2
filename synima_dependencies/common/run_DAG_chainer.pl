@@ -26,12 +26,19 @@ warn "Running $0 -c $opt_c -z $opt_z -v $opt_v\n";
 my $DEBUG = 0;
 
 # DAGChainer
+# detect OS
+my $os = $^O;
+my $exe_suffix = '';
+
+if($os =~ /MSWin32|cygwin|msys/i) {
+	$exe_suffix = '.exe';
+}
 #my $os = `uname`;
 #my $arch = `uname -m`;
 #chomp $os;
 #chomp $arch;
 #my $dagchainer_program = "$Bin/$os.$arch/dagchainer";
-my $dagchainer_program = "$Bin/dagchainer";
+my $dagchainer_program = "$Bin/dagchainer$exe_suffix";
 warn "progpath = $dagchainer_program\n" if($opt_v eq 'y');
 die "Error: cannot find dagchainer_program : $!" if(! -e $dagchainer_program);
 
