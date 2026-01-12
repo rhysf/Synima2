@@ -11,6 +11,7 @@
 
 use strict;
 my $starttime = `date`;
+warn "$1: startime = $starttime\n";
 use FindBin qw($Bin);
 use lib "$Bin/perl_modules/";
 use Getopt::Long;
