@@ -373,8 +373,7 @@ pub fn get_dagchainer_conf_template(
     annot_section: &str,
     genome_seq_section: &str,
     hit_pairs_path: &Path,
-    min_pairs: usize,
-) -> String {
+    min_pairs: usize) -> String {
     let hit_pairs_str = hit_pairs_path.to_string_lossy();
 
     format!(
@@ -505,7 +504,8 @@ pub fn concatenate_aligncoords_and_make_spans(
     });
 
     // If the script has a proper shebang and executable bit, this is enough:
-    let status = Command::new(dagchainer_to_spans)
+    let status = Command::new("perl")
+        .arg(dagchainer_to_spans)
         .stdin(Stdio::from(input_file))
         .stdout(Stdio::from(output_file))
         .stderr(Stdio::inherit())
