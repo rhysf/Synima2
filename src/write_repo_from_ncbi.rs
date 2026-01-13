@@ -132,7 +132,7 @@ pub fn run_step0_download_genbank(accessions: &[String], logger: &Logger) -> Res
 
     // Write repo spec as before…
     let spec_path = cwd.join("Synima_repo_spec.txt");
-    write_repo_spec(accessions, &spec_path)?;
+    write_repo_spec(accessions, &spec_path, &logger);
     Ok(())
 }
 
@@ -309,7 +309,7 @@ fn download_via_datasets_api(accession: &str, out_dir: &Path, logger: &Logger) -
 }
 
 /// Write Synima_repo_spec.txt for the downloaded accessions
-fn write_repo_spec(accessions: &[String], spec_path: &Path) -> Result<()> {
+fn write_repo_spec(accessions: &[String], spec_path: &Path, logger: &Logger) {
     let mut s = String::new();
 
     for acc in accessions {
@@ -323,8 +323,13 @@ fn write_repo_spec(accessions: &[String], spec_path: &Path) -> Result<()> {
         s.push_str(&format!("{name}\tgff\tannotation.gff\n"));
     }
 
-    let mut f = fs::File::create(spec_path)?;
-    f.write_all(s.as_bytes())?;
+    let mut f = fs::File::create(spec_path).unwrap_or_else(|e| {
+        logger.error(&format!("write_repo_spec: failed to create {}: {e}", spec_path.display()));
+        std::process::exit(1);
+    });
 
-    Ok(())
+    if let Err(e) = f.write_all(s.as_bytes()) {
+        logger.error(&format!("write_repo_spec: failed to write {}: {e}", spec_path.display()));
+        std::process::exit(1);
+    }
 }
