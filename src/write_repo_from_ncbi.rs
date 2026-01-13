@@ -138,6 +138,18 @@ pub fn run_step0_download_genbank(accessions: &[String], logger: &Logger) -> Res
 
 /// Decide whether to use efetch or the Datasets API.
 fn download_from_ncbi(accession: &str, out_dir: &Path, logger: &Logger, mappings: &AssemblyMapping) -> Result<()> {
+
+    // Check if already downloaded and skip if it has
+    let fasta_out_path = out_dir.join("genome.fa");
+    let gff_out_path = out_dir.join("annotation.gff");
+
+    let fasta_ok = std::fs::metadata(&fasta_out_path).map(|m| m.len() > 0).unwrap_or(false);
+    let gff_ok   = std::fs::metadata(&gff_out_path).map(|m| m.len() > 0).unwrap_or(false);
+
+    if fasta_ok && gff_ok {
+        logger.warning(&format!("download_from_ncbi: {} already has genome.fa + annotation.gff, skipping download", out_dir.display()));
+        return Ok(());
+    }
     
     // Case 1: RefSeq directly
     if accession.starts_with("GCF_") {
@@ -221,7 +233,7 @@ fn download_via_efetch(accession: &str, out_dir: &Path, logger: &Logger) -> Resu
 /// Downloads a zip, extracts all .fna into genome.fa and one .gff into annotation.gff.
 fn download_via_datasets_api(accession: &str, out_dir: &Path, logger: &Logger) -> Result<()> {
 
-    logger.information(&format!("Requesting ZIP archive from NCBI Datasets API for {}", accession));
+    logger.information(&format!("download_via_datasets_api: Requesting ZIP archive from NCBI Datasets API for {}", accession));
 
     let url = format!("https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/{}/download?include_annotation_type=GENOME_FASTA,GENOME_GFF", accession);
 
@@ -241,23 +253,19 @@ fn download_via_datasets_api(accession: &str, out_dir: &Path, logger: &Logger) -
         .map_err(|e| anyhow!("Failed to read zip response for {}: {}", accession, e))?;
 
     let cursor = Cursor::new(zip_bytes);
-    let mut archive = ZipArchive::new(cursor)
-        .map_err(|e| anyhow!("Failed to open zip archive for {}: {}", accession, e))?;
+    let mut archive = ZipArchive::new(cursor).map_err(|e| anyhow!("Failed to open zip archive for {}: {}", accession, e))?;
 
     let fasta_out_path = out_dir.join("genome.fa");
     let gff_out_path = out_dir.join("annotation.gff");
 
-    let mut fasta_out = fs::File::create(&fasta_out_path)
-        .map_err(|e| anyhow!("Failed to create {}: {}", fasta_out_path.display(), e))?;
-    let mut gff_out = fs::File::create(&gff_out_path)
-        .map_err(|e| anyhow!("Failed to create {}: {}", gff_out_path.display(), e))?;
+    let mut fasta_out = fs::File::create(&fasta_out_path).map_err(|e| anyhow!("Failed to create {}: {}", fasta_out_path.display(), e))?;
+    let mut gff_out = fs::File::create(&gff_out_path).map_err(|e| anyhow!("Failed to create {}: {}", gff_out_path.display(), e))?;
 
     let mut found_fasta = false;
     let mut found_gff = false;
 
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i)
-            .map_err(|e| anyhow!("Failed to read zip entry {} for {}: {}", i, accession, e))?;
+        let mut file = archive.by_index(i).map_err(|e| anyhow!("Failed to read zip entry {} for {}: {}", i, accession, e))?;
         let name = file.name().to_string();
 
         // Skip directories
@@ -283,25 +291,18 @@ fn download_via_datasets_api(accession: &str, out_dir: &Path, logger: &Logger) -
                 // If more than one GFF appears, append with newline
                 writeln!(gff_out)?;
             }
-            std::io::copy(&mut file, &mut gff_out)
-                .map_err(|e| anyhow!("Failed to copy GFF from {} for {}: {}", name, accession, e))?;
+            std::io::copy(&mut file, &mut gff_out).map_err(|e| anyhow!("Failed to copy GFF from {} for {}: {}", name, accession, e))?;
             found_gff = true;
             continue;
         }
     }
 
     if !found_fasta {
-        return Err(anyhow!(
-            "Datasets API archive for {} did not contain any FASTA (.fna/.fa/.fasta) files",
-            accession
-        ));
+        return Err(anyhow!("Datasets API archive for {} did not contain any FASTA (.fna/.fa/.fasta) files", accession));
     }
 
     if !found_gff {
-        return Err(anyhow!(
-            "Datasets API archive for {} did not contain any GFF (.gff/.gff3) files",
-            accession
-        ));
+        return Err(anyhow!("Datasets API archive for {} did not contain any GFF (.gff/.gff3) files", accession));
     }
 
     Ok(())

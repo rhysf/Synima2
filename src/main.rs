@@ -49,7 +49,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     args::validate_alignment_compatibility(&args, &logger);
 
     // Set input subdirs
-    let exe = std::env::current_exe()?;
+    let exe = match std::env::current_exe() {
+        Ok(p) => p,
+        Err(e) => {
+            logger.error(&format!("failed to get current executable path: {e}"));
+            std::process::exit(1);
+        }
+    };
     let exe_dir = exe.parent().unwrap();
     let bin_dir = exe_dir.join("synima_dependencies");
 
