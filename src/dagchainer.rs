@@ -25,6 +25,13 @@ pub struct DagchainerPaths {
     pub genome_fasta: PathBuf,
 }
 
+#[derive(Clone, Debug)]
+pub struct Cmd {
+    pub program: std::path::PathBuf, // "perl" or full path to perl.exe
+    pub args: Vec<String>,           // argv, no quoting
+    pub display: String,             // for logging only
+}
+
 // cluster_id -> list of members
 pub type ClusterToGenes = HashMap<String, Vec<ClusterMember>>;
 
@@ -203,7 +210,7 @@ pub fn write_dagchainer_conf_file(
     genome_pair_to_gene_pairs: &GenomePairToGenePairs,
     dagchainer_args: &str,                        // e.g. "-v" or ""
     min_pairs: usize,
-    logger: &Logger) -> Vec<String> {
+    logger: &Logger) -> Vec<Cmd> {
 
     // Ensure run directory exists
     mkdir(dagchainer_rundir, logger, "write_dagchainer_conf_file");
@@ -221,7 +228,7 @@ pub fn write_dagchainer_conf_file(
 
     logger.information(&format!("write_dagchainer_conf_file: writing DAGchainer config + hit_pairs for {} genomes to {}", genomes.len(), dagchainer_rundir.display()));
 
-    let mut all_cmds: Vec<String> = Vec::new();
+    let mut all_cmds: Vec<Cmd> = Vec::new();
 
     // all unordered genome pairs i<j
     for i in 0..genomes.len() {
@@ -316,21 +323,31 @@ pub fn write_dagchainer_conf_file(
             }
 
             // Build the run command (Perl: "$DAGCHAINER_PROG -c $conf_file $dagchainer_commands\n")
-            let dag_prog_str = dagchainer_prog.display();
-            let args_trimmed = dagchainer_args.trim();
+            //let dag_prog_str = dagchainer_prog.display();
+            //let args_trimmed = dagchainer_args.trim();
 
-            let cmd = if args_trimmed.is_empty() {
-                format!("perl \"{}\" -c \"{}\"\n", dag_prog_str, conf_path.display())
-            } else {
-                format!("perl \"{}\" -c \"{}\" {}\n", dag_prog_str, conf_path.display(), args_trimmed)
-            };
+            //let cmd = if args_trimmed.is_empty() {
+            //    format!("perl {} -c {}\n", dag_prog_str, conf_path.display())
+            //} else {
+            //    format!("perl {} -c {} {}\n", dag_prog_str, conf_path.display(), args_trimmed)
+            //};
+            let mut args: Vec<String> = Vec::new();
 
-            if let Err(e) = cmds_writer.write_all(cmd.as_bytes()) {
-                logger.error(&format!("write_dagchainer_conf_file: failed to write to {}: {}", cmds_path.display(), e));
-                std::process::exit(1);
-            }
+            // perl <script> -c <conf> <extra args...>
+            args.push(dagchainer_prog.to_string_lossy().to_string()); // run_DAG_chainer.pl
+            args.push("-c".to_string());
+            args.push(conf_path.to_string_lossy().to_string());
 
-            all_cmds.push(cmd);
+            // add "-v n" as separate args
+            args.extend(dagchainer_args.split_whitespace().map(|s| s.to_string()));
+
+            let display = format!("perl {} -c {} {}", dagchainer_prog.display(), conf_path.display(), dagchainer_args);
+
+            all_cmds.push(Cmd {
+                program: std::path::PathBuf::from("perl"),
+                args,
+                display,
+            });
         }
     }
 

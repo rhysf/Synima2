@@ -159,27 +159,23 @@ pub fn open_bufwrite(path: &Path, logger: &Logger, context: &str) -> BufWriter<F
     BufWriter::new(file)
 }
 
-pub fn run_shell_cmd(cmd: &str, logger: &Logger, context: &str) {
-    logger.information(&format!("{context}: running: {cmd}"));
+pub fn run_shell_cmd(cmd: &crate::dagchainer::Cmd, logger: &Logger, context: &str) {
+    logger.information(&format!("{context}: running: {}", cmd.display));
 
-    let status_res = if cfg!(windows) {
-        // Use cmd.exe on Windows
-        Command::new("cmd").arg("/C").arg(cmd).status()
-    } else {
-        // Use sh on Unix
-        Command::new("sh").arg("-c").arg(cmd).status()
-    };
+    let status = Command::new(&cmd.program)
+        .args(&cmd.args)
+        .status();
 
-    let status = match status_res {
+    let status = match status {
         Ok(s) => s,
         Err(e) => {
-            logger.error(&format!("{context}: failed to start '{cmd}': {e}"));
+            logger.error(&format!("{context}: failed to start {}: {e}", cmd.display));
             std::process::exit(1);
         }
     };
 
     if !status.success() {
-        logger.error(&format!("{context}: command failed with status {status}: {cmd}"));
+        logger.error(&format!("{context}: command failed with status {status}: {}", cmd.display));
         std::process::exit(1);
     }
 }
