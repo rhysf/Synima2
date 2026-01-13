@@ -203,8 +203,7 @@ pub fn write_dagchainer_conf_file(
     genome_pair_to_gene_pairs: &GenomePairToGenePairs,
     dagchainer_args: &str,                        // e.g. "-v" or ""
     min_pairs: usize,
-    logger: &Logger,
-) -> Vec<String> {
+    logger: &Logger) -> Vec<String> {
 
     // Ensure run directory exists
     mkdir(dagchainer_rundir, logger, "write_dagchainer_conf_file");
