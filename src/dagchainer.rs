@@ -320,9 +320,9 @@ pub fn write_dagchainer_conf_file(
             let args_trimmed = dagchainer_args.trim();
 
             let cmd = if args_trimmed.is_empty() {
-                format!("{prog} -c {conf}\n", prog = dag_prog_str, conf = conf_path.display())
+                format!("perl \"{}\" -c \"{}\"\n", dag_prog_str, conf_path.display())
             } else {
-                format!("{prog} -c {conf} {args}\n", prog = dag_prog_str, conf = conf_path.display(), args = args_trimmed)
+                format!("perl \"{}\" -c \"{}\" {}\n", dag_prog_str, conf_path.display(), args_trimmed)
             };
 
             if let Err(e) = cmds_writer.write_all(cmd.as_bytes()) {

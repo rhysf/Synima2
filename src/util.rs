@@ -162,13 +162,21 @@ pub fn open_bufwrite(path: &Path, logger: &Logger, context: &str) -> BufWriter<F
 pub fn run_shell_cmd(cmd: &str, logger: &Logger, context: &str) {
     logger.information(&format!("{context}: running: {cmd}"));
 
-    let status = Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
-        .status()
-        .log_or_exit(logger, |e| {
-            format!("{context}: failed to start '{cmd}': {e}")
-        });
+    let status_res = if cfg!(windows) {
+        // Use cmd.exe on Windows
+        Command::new("cmd").arg("/C").arg(cmd).status()
+    } else {
+        // Use sh on Unix
+        Command::new("sh").arg("-c").arg(cmd).status()
+    };
+
+    let status = match status_res {
+        Ok(s) => s,
+        Err(e) => {
+            logger.error(&format!("{context}: failed to start '{cmd}': {e}"));
+            std::process::exit(1);
+        }
+    };
 
     if !status.success() {
         logger.error(&format!("{context}: command failed with status {status}: {cmd}"));
