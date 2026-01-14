@@ -6,7 +6,7 @@
 
 Synima (Synteny Imager) is an orthology prediction pipeline and synteny viewer. The key features are:
 
-* Orthologous genes are infered by either reciprocal best hits (RBH) from BLAST, OrthoMCL or Orthofinder. 
+* Orthologous genes are inferred by either reciprocal best hits (RBH) from BLAST, OrthoMCL or Orthofinder. 
 * Synteny is determined using DAGchainer and plotted using Javascript.
 * All prerequisite programs are bundled with Synima
 * Synima 2 is a complete re-write in rust, which has a range of improvements, including:
@@ -28,24 +28,47 @@ For issues, questions, comments or feature requests, please check or post to the
 
 ## Version / History
 
+* 14th Jan 2026 - Updated dependencies to work on Mac (arm64 and x86_64), Linux (x86_64) and Windows (x86_64)
 * 7th Jan 2026 - Included Bio::SearchIO within package to avoid installation requirement 
 * 18th Dec 2025 - First complete version
 * 20th Nov 2025 - Initial, albeit incomplete version
 
+## Windows pre-installation notes
+
+Synima runs on Windows (x86_64), but requires a small amount of setup before installation.
+
+All commands below are intended to be run in PowerShell.
+
+Required tools
+	1.	Git with: 
+  
+  `winget install --id Git.Git -e`
+ 
+  After installation, restart PowerShell and verify:
+
+  `git --version`
+
+  2. Perl (required for OrthoMCL and DAGchainer). Install Strawberry Perl (which includes a full Perl distribution and required libraries):
+
+  `winget install --id StrawberryPerl.StrawberryPerl -e`
+
+  Restart PowerShell and verify:
+
+  `perl -v`
+
+  3. Rust can also be installed with:
+
+  `winget install --id Rustlang.Rustup -e`
+
 ## Prerequisites
 
-To build and run Synima2, you’ll only need Rust installed:
+- [Rust](https://www.rust-lang.org/tools/install) (if not already installed):
 
-- [Rust](https://www.rust-lang.org/tools/install) (stable, installed via `rustup`).  
-  - Verify install with:  
-    ```bash
-    rustc --version
-    cargo --version
-    ```
+`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 
-- Optional dependencies
+- [Perl](https://www.perl.org/get.html) (if not already installed) (Required for DAGchainer)
 
-  - Perl (if using OrthoMCL)
+## Optional dependencies
 
   - Python3 (if using OrthoFinder)
 
@@ -58,15 +81,13 @@ To build and run Synima2, you’ll only need Rust installed:
     tools found on `PATH`. You may therefore want to ensure at least one of the
     following is available on your system:
 
-    - BLAST+ or legacy BLAST (for `--aligner blastplus` or `--aligner blastlegacy`)
-    - DIAMOND (for `--aligner diamond`)
-    - MAFFT, FastTree, MCL, etc, if you plan to run OrthoFinder outside of the
-      bundled setup or extend the workflow
-
----
+  - BLAST+ or legacy BLAST (for `--aligner blastplus` or `--aligner blastlegacy`)
+  - DIAMOND (for `--aligner diamond`)
+  - MAFFT, FastTree, MCL, etc, if you plan to run OrthoFinder outside of the bundled setup or extend the workflow
 
 ## Installation
-Clone the repo and install with Cargo:
+
+The following installation steps work on macOS, Linux, and Windows (after completing any platform-specific pre-installation steps above).
 
 ```bash
 git clone https://github.com/rhysf/Synima2.git
@@ -88,31 +109,24 @@ You can now run:
 Synima --help
 ```
 
-Alternative (manual install): If you prefer to place the binary in ~/.local/bin
-
-```bash
-cargo build --release
-cp ./target/release/Synima ~/.local/bin/
-```
-
 ## Pipeline overview
 
 Synima2 takes annotated genomes, calls orthologous genes, and then visualises synteny blocks between genomes.
 
-The high level stages are:
+The pipeline consists of the following stages:
 
 1.	Prepare a repository of genomes and parsed feature FASTA files.
 2.	Run an all vs all sequence search (BLAST or DIAMOND).
 3.	Infer orthologous groups with OrthoFinder, OrthoMCL, or an RBH pipeline, and summarise them.
 4.	Run DAGChainer on the orthologs to call synteny blocks and generate Synima plots.
 
-All of these stages can be run using: Synima -r Repo_spec.txt -s <step-name> or Synima -r Repo_spec.txt -s <step-name1>,<step-name2>,...
+By default, Synima runs all stages automatically unless specific steps are selected with -s (e.g., Synima -r Repo_spec.txt -s <step-name> or Synima -r Repo_spec.txt -s <step-name1>,<step-name2>,...).
 
-## Getting started / example 1 (human, bonobo, chimp, gorilla, gibbon and orangutan)
+## Example 1 - NCBI download mode (human, bonobo, chimp, gorilla, gibbon and orangutan)
 
 Synima -w GCA_000001405.29,GCA_029281585.3,GCA_028858775.3,GCA_029289425.3,GCA_028885655.3,GCA_009828535.3
 
-## Getting started / examples 2 (local files)
+## Example 2 - Local genome files
 
 Synima -r examples/repo_spec.txt
 
@@ -211,7 +225,7 @@ Next, identify chains of orthologs using dagchainer
 Synima -r Repo_spec.txt -s dagchainer
 ```
 
-The output from dachainer will then be used to generate the final visualisations.
+The output from dagchainer will then be used to generate the final visualisations.
 
 ## Visualising synteny
 
@@ -229,7 +243,7 @@ Synima -r Repo_spec.txt -s synima
 * The tree tab gives details about how the phylogenetic tree was generated, the tree in newick format, and a tree generated in javascript. Default settings are midpoint rooted. The tree can be downloaded as an external SVG or PNG. There are various options below, which include
 
   - Increase the height of the tree using the expansion option.
-  - Align tip labes (default on)
+  - Align tip labels (default on)
   - Various graphical options including branch line weight, background colour, taxa label colour, and branch colour.
   - Rooting is midpoint by default. However, "user selection" will remove midpoint rooting. The dropdown menu provides options to root by any of the taxa, and by clicking on a taxa label, this will bring up that taxa in dropdown menu to 'apply'.
   - The font size of the tip labels can be changed, as can the name. By clicking on any taxa and then the 'annotate' button, or by clicking on the 'annotate' button and then clicking on the taxa, will bring up a new box to replace that taxa name.
