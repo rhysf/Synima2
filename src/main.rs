@@ -515,8 +515,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &serde_json::to_string(&json)?
         )?;
 
+        // open webpage
+        try_open_in_browser(&index_path, &logger);
     }
 
     logger.information("Synima: All requested steps completed.");
     Ok(())
+}
+
+fn try_open_in_browser(path: &Path, logger: &Logger) {
+    let abs = match path.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            logger.warning(&format!("try_open_in_browser: cannot canonicalize {}: {}", path.display(), e));
+            return;
+        }
+    };
+
+    logger.information(&format!("Opening results: {}", abs.display()));
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = Command::new("open").arg(&abs).status().map_err(|e| {
+            logger.warning(&format!("try_open_in_browser: failed to run 'open': {e}"));
+        });
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Try xdg-open first, then gio
+        let ok = Command::new("xdg-open").arg(&abs).status().is_ok();
+        if !ok {
+            let _ = Command::new("gio").arg("open").arg(&abs).status().map_err(|e| {
+                logger.warning(&format!("try_open_in_browser: failed to run 'gio open': {e}"));
+            });
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // cmd /C start "" "<file>"
+        let abs_str = abs.to_string_lossy().to_string();
+        let _ = Command::new("cmd")
+            .args(["/C", "start", "", &abs_str])
+            .status()
+            .map_err(|e| {
+                logger.warning(&format!("try_open_in_browser: failed to run 'start': {e}"));
+            });
+    }
 }
