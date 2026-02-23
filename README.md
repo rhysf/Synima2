@@ -39,8 +39,9 @@ Synima runs on Windows (x86_64), but requires a small amount of setup before ins
 
 All commands below are intended to be run in PowerShell.
 
-Required tools
-	1.	Git with: 
+Required tools:
+
+  1. Git with: 
   
   `winget install --id Git.Git -e`
  
@@ -56,7 +57,11 @@ Required tools
 
   `perl -v`
 
-  3. Rust can also be installed with:
+  3. VisualStudio BuildTooks
+
+  `winget install Microsoft.VisualStudio.2022.BuildTools`
+
+  4. Rust can also be installed with:
 
   `winget install --id Rustlang.Rustup -e`
 
