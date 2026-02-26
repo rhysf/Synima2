@@ -1,4 +1,255 @@
 window.SYNIMA = window.SYNIMA || {};
+window.SYNIMA_CONFIG = window.SYNIMA_CONFIG || {};
+
+window.SYNIMA_CLOUD_KEYS = window.SYNIMA_CLOUD_KEYS || {
+	baseUrl: "synima_cloud_base_url",
+	userEmail: "synima_cloud_user_email",
+	apiKey: "synima_cloud_api_key"
+};
+
+SYNIMA.getCloudBaseUrl = function () {
+	const configUrl = (window.SYNIMA_CONFIG && typeof window.SYNIMA_CONFIG.cloudBaseUrl === "string")
+		? window.SYNIMA_CONFIG.cloudBaseUrl.trim()
+		: "";
+	const storedUrl = (() => {
+		try {
+			const v = localStorage.getItem(window.SYNIMA_CLOUD_KEYS.baseUrl);
+			return typeof v === "string" ? v.trim() : "";
+		} catch (e) {
+			return "";
+		}
+	})();
+	const raw = configUrl || storedUrl;
+	return raw ? raw.replace(/\/+$/, "") : "";
+};
+
+SYNIMA.getCloudUserEmail = function () {
+	try {
+		const email = localStorage.getItem(window.SYNIMA_CLOUD_KEYS.userEmail);
+		return (typeof email === "string" && email.trim()) ? email.trim() : "";
+	} catch (e) {
+		return "";
+	}
+};
+
+SYNIMA.getCloudApiKey = function () {
+	try {
+		const apiKey = localStorage.getItem(window.SYNIMA_CLOUD_KEYS.apiKey);
+		return (typeof apiKey === "string" && apiKey.trim()) ? apiKey.trim() : "";
+	} catch (e) {
+		return "";
+	}
+};
+
+SYNIMA.setCloudAuth = function (email, apiKey) {
+	try {
+		localStorage.setItem(window.SYNIMA_CLOUD_KEYS.userEmail, (email || "").trim());
+		localStorage.setItem(window.SYNIMA_CLOUD_KEYS.apiKey, (apiKey || "").trim());
+	} catch (e) {}
+};
+
+SYNIMA.clearCloudAuth = function () {
+	try {
+		localStorage.removeItem(window.SYNIMA_CLOUD_KEYS.userEmail);
+		localStorage.removeItem(window.SYNIMA_CLOUD_KEYS.apiKey);
+	} catch (e) {}
+};
+
+SYNIMA.syncCloudSession = async function () {
+	const baseUrl = SYNIMA.getCloudBaseUrl();
+	if (!baseUrl) return false;
+
+	try {
+		const resp = await fetch(`${baseUrl}/api/me.php`, {
+			method: "GET",
+			mode: "cors",
+			credentials: "include",
+			cache: "no-store"
+		});
+		const payload = await resp.json();
+		if (!resp.ok || !payload || payload.ok === false) return false;
+		if (payload.logged_in && payload.user) {
+			const email = payload.user.email || "";
+			const apiKey = payload.user.api_key || SYNIMA.getCloudApiKey();
+			if (email || apiKey) SYNIMA.setCloudAuth(email, apiKey);
+			return Boolean(apiKey);
+		}
+		return false;
+	} catch (e) {
+		return false;
+	}
+};
+
+SYNIMA.pollCloudSession = async function (timeoutMs, intervalMs) {
+	const timeout = Number.isFinite(timeoutMs) ? timeoutMs : 90000;
+	const interval = Number.isFinite(intervalMs) ? intervalMs : 1500;
+	const start = Date.now();
+
+	while ((Date.now() - start) < timeout) {
+		const ok = await SYNIMA.syncCloudSession();
+		if (ok) return true;
+		await new Promise((resolve) => setTimeout(resolve, interval));
+	}
+	return false;
+};
+
+SYNIMA.cloudState = window.SYNIMA.cloudState || {
+	baseUrl: "",
+	enabled: false,
+	online: navigator.onLine !== false,
+	reachable: false,
+	userEmail: "",
+	statusLabel: "Offline mode"
+};
+
+SYNIMA.refreshCloudState = async function () {
+	const baseUrl = SYNIMA.getCloudBaseUrl();
+	const online = navigator.onLine !== false;
+	const enabled = Boolean(baseUrl);
+	let reachable = false;
+
+	if (enabled && online) {
+		let timer = null;
+		try {
+			const controller = new AbortController();
+			timer = setTimeout(() => controller.abort(), 2500);
+			await fetch(baseUrl, {
+				method: "GET",
+				mode: "no-cors",
+				cache: "no-store",
+				signal: controller.signal
+			});
+			reachable = true;
+		} catch (e) {
+			reachable = false;
+		} finally {
+			if (timer) clearTimeout(timer);
+		}
+	}
+
+	const userEmail = enabled ? SYNIMA.getCloudUserEmail() : "";
+	const apiKey = enabled ? SYNIMA.getCloudApiKey() : "";
+
+	if (enabled && online && !apiKey) {
+		const now = Date.now();
+		const last = Number(window.SYNIMA._lastCloudSessionSyncAt || 0);
+		if (!last || (now - last) > 12000) {
+			window.SYNIMA._lastCloudSessionSyncAt = now;
+			await SYNIMA.syncCloudSession();
+		}
+	}
+
+	const userEmailFinal = enabled ? SYNIMA.getCloudUserEmail() : "";
+	const apiKeyFinal = enabled ? SYNIMA.getCloudApiKey() : "";
+	const statusLabel = !enabled
+		? "Offline mode"
+		: !online
+			? "Offline"
+			: reachable
+				? "Cloud connected"
+				: "Cloud unavailable";
+
+	SYNIMA.cloudState = {
+		baseUrl,
+		enabled,
+		online,
+		reachable,
+		userEmail: userEmailFinal,
+		apiKey: apiKeyFinal,
+		statusLabel
+	};
+
+	return SYNIMA.cloudState;
+};
+
+SYNIMA.cloudApi = async function (path, options) {
+	const cloudState = await SYNIMA.refreshCloudState();
+	if (!cloudState.enabled) {
+		throw new Error("Cloud mode is not configured.");
+	}
+	const headers = Object.assign({}, (options && options.headers) ? options.headers : {});
+	if (cloudState.apiKey) headers["X-API-Key"] = cloudState.apiKey;
+	const isFormData = (options && options.body && typeof FormData !== "undefined" && options.body instanceof FormData);
+	if (!headers["Content-Type"] && options && options.body && !isFormData) headers["Content-Type"] = "application/json";
+
+	const resp = await fetch(`${cloudState.baseUrl}${path}`, Object.assign({}, options || {}, {
+		headers,
+		credentials: "include",
+		mode: "cors"
+	}));
+
+	let payload = {};
+	try {
+		payload = await resp.json();
+	} catch (e) {
+		payload = {};
+	}
+
+	if (!resp.ok || payload.ok === false) {
+		const detail = [payload.message, payload.detail, payload.json_error]
+			.filter((x) => typeof x === "string" && x.trim())
+			.join(" | ");
+		const message = detail || `Request failed (${resp.status})`;
+		throw new Error(message);
+	}
+
+	return payload;
+};
+
+SYNIMA.getCurrentReportPayload = function () {
+	const load = function (id) {
+		try {
+			const el = document.getElementById(id);
+			return el ? JSON.parse(el.textContent || "{}") : {};
+		} catch (e) {
+			return {};
+		}
+	};
+
+	const orthologs = load("data-orthologs");
+	const tree = load("data-tree");
+	const synteny = load("data-synteny");
+	const methods = load("data-methods");
+
+	const summary = {
+		single_copy_orthologs: orthologs.single_copy_orthologs || null,
+		num_genomes: synteny && synteny.synteny_config ? Number(synteny.synteny_config.num_genomes || 0) : null,
+		max_length: synteny && synteny.synteny_config ? Number(synteny.synteny_config.max_length || 0) : null,
+		synima_version: methods && Array.isArray(methods.tools)
+			? ((methods.tools.find((t) => t && t.name === "Synima") || {}).version || "")
+			: ""
+	};
+
+	return {
+		report: {
+			orthologs,
+			tree,
+			synteny,
+			methods
+		},
+		summary
+	};
+};
+
+SYNIMA.loadSavedReportPayload = function (reportData) {
+	if (!reportData || typeof reportData !== "object") {
+		throw new Error("Invalid report payload.");
+	}
+
+	const update = function (id, value) {
+		const el = document.getElementById(id);
+		if (el) el.textContent = JSON.stringify(value || {});
+	};
+
+	update("data-orthologs", reportData.orthologs);
+	update("data-tree", reportData.tree);
+	update("data-synteny", reportData.synteny);
+	update("data-methods", reportData.methods);
+
+	if (typeof SYNIMA.router === "function") {
+		SYNIMA.router(SYNIMA.currentPage || "orthologs");
+	}
+};
 
 // Do NOT use `const` here if other files previously declared it.
 // This prevents "Identifier already declared" errors.

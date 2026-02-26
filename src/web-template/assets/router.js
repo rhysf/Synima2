@@ -4,6 +4,7 @@ SYNIMA.routes = {
   orthologs: SYNIMA.showOrthologs,
   tree: SYNIMA.showTree,
   synteny: SYNIMA.showSynteny,
+  cloud: SYNIMA.showCloud,
   methods: SYNIMA.showMethods,
   about: SYNIMA.showAbout
 };

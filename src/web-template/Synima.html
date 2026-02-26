@@ -23,12 +23,18 @@
   </main>
 
   <!-- load globals first -->
+  <script>
+    window.SYNIMA_CONFIG = window.SYNIMA_CONFIG || {};
+    // Optional: set this to your cloud site (e.g. "https://synima.net") to enable cloud links.
+    window.SYNIMA_CONFIG.cloudBaseUrl = window.SYNIMA_CONFIG.cloudBaseUrl || "https://synima.net";
+  </script>
   <script src="./assets/components/globals.js"></script>
 
   <script src="./assets/components/header.js"></script>
   <script src="./assets/components/orthologs.js"></script>
   <script src="./assets/components/tree.js"></script>
   <script src="./assets/components/synteny.js"></script>
+  <script src="./assets/components/cloud.js"></script>
   <script src="./assets/components/methods.js"></script>
   <script src="./assets/components/about.js"></script>
 

@@ -51,6 +51,142 @@
   color: #fb923c;            /* orange-400 */
 }
 
+.synima-nav-divider {
+  color: #64748b;
+}
+
+.synima-cloud-user {
+  color: #ffffff;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.synima-cloud-account {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.synima-cloud-account-trigger {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  color: #ffffff;
+}
+
+.synima-cloud-account-trigger:hover,
+.synima-cloud-account-trigger:focus {
+  color: #fb923c;
+  outline: none;
+}
+
+.synima-cloud-caret {
+  margin-left: 0.35rem;
+  font-size: 0.72em;
+}
+
+.synima-cloud-menu {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  min-width: 12rem;
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  display: none;
+  flex-direction: column;
+  gap: 0.35rem;
+  z-index: 30;
+}
+
+.synima-cloud-account.open .synima-cloud-menu {
+  display: flex;
+}
+
+.synima-cloud-menu a {
+  white-space: nowrap;
+}
+
+.synima-cloud-status {
+  color: #fbbf24;
+  font-size: 0.9rem;
+}
+
+.synima-cloud-save-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.synima-cloud-report-name {
+  flex: 1 1 24rem;
+  max-width: 36rem;
+  min-width: 14rem;
+}
+
+.synima-cloud-upload-indicator {
+  display: none;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  color: #cbd5e1;
+}
+
+.synima-cloud-upload-indicator.is-active {
+  display: inline-flex;
+}
+
+.synima-cloud-upload-bar {
+  width: 130px;
+  height: 7px;
+  border-radius: 999px;
+  background: #38bdf8;
+  opacity: 0.85;
+}
+
+.synima-cloud-report-card {
+  margin-bottom: 0.7rem;
+  padding: 0.7rem;
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+}
+
+.synima-cloud-report-meta {
+  color: #e2e8f0;
+}
+
+.synima-cloud-report-meta small {
+  color: #cbd5e1;
+}
+
+.synima-cloud-report-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.synima-cloud-status-ok {
+  color: #86efac;
+}
+
+.synima-disabled-link {
+  color: #6b7280 !important;
+  cursor: not-allowed;
+  pointer-events: auto;
+}
+
+.synima-mobile-divider {
+  height: 1px;
+  background: #334155;
+  width: 100%;
+  margin: 0.25rem 0;
+}
+
 /* Simple responsive visibility helpers */
 .desktop-only {
   display: flex;
@@ -110,6 +246,11 @@
 
   .synima-title {
     font-size: 1.75rem;
+  }
+
+  .synima-cloud-user,
+  .synima-cloud-status {
+    font-size: 0.85rem;
   }
 }
 
