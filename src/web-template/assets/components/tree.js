@@ -1286,38 +1286,17 @@ SYNIMA.showTree = function () {
 
           <label style="margin-left: 10px;">
             Background colour:
-            <select id="tree-bg-select">
-              <option value="#0f1b30">Navy</option>
-              <option value="#111827">Slate</option>
-              <option value="#111111">Charcoal</option>
-              <option value="#000000">Black</option>
-              <option value="#ffffff">White</option>
-            </select>
+            <input id="tree-bg-select" class="synima-colour-input" type="color" value="#0f1b30" />
           </label>
 
           <label style="margin-left: 10px;">
             Taxa label colour:
-            <select id="tree-label-colour-select">
-              <option value="#ffffff">White</option>
-              <option value="#000000">Black</option>
-              <option value="#0f1b30">Navy</option>
-              <option value="#d1d5db">Light grey</option>
-              <option value="#fbbf24">Amber</option>
-              <option value="#93c5fd">Light blue</option>
-            </select>
+            <input id="tree-label-colour-select" class="synima-colour-input" type="color" value="#ffffff" />
           </label>
 
           <label style="margin-left: 10px;">
             Branch colour:
-            <select id="tree-branch-colour-select">
-              <option value="#ffffff">White</option>
-              <option value="#000000">Black</option>
-              <option value="#66cc99">Green Cyan</option>
-              <option value="#6699cc">Blue Gray</option>
-              <option value="#cc6699">Pink</option>
-              <option value="#cc9966">Light Orange</option>
-              <option value="#ff0000">Red</option>
-            </select>
+            <input id="tree-branch-colour-select" class="synima-colour-input" type="color" value="#ffffff" />
           </label>
 
         </fieldset>

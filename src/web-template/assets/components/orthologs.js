@@ -6,12 +6,49 @@ const BREWER_SET2_8 = [
   "#A6D854", "#FFD92F", "#E5C494", "#B3B3B3"
 ];
 
-const ORTHO_CATS = [
+const ORTHO_DEFAULT_CATS = [
   { key: "core_1to1",  label: "Core (1:1)",     color: BREWER_SET2_8[0] },
   { key: "core_multi", label: "Core (multi)",   color: BREWER_SET2_8[1] },
   { key: "aux",        label: "Aux",           color: BREWER_SET2_8[2] },
   { key: "unique",     label: "Unique",        color: BREWER_SET2_8[3] },
 ];
+
+function readOrthologAppearanceState() {
+  const S = window.SYNIMA_STATE || {};
+  const K = window.SYNIMA_PERSIST_KEYS || {};
+
+  const get = function (stateKey, persistKey, fallback) {
+    let v = S[stateKey];
+    if (typeof v === "string" && v.trim()) return v;
+    try {
+      const stored = localStorage.getItem(persistKey);
+      if (typeof stored === "string" && stored.trim()) {
+        S[stateKey] = stored.trim();
+        return S[stateKey];
+      }
+    } catch (e) {}
+    S[stateKey] = fallback;
+    return fallback;
+  };
+
+  const bgColor = get("orthologBgColor", K.orthologBgColor, "#0f1b30");
+  const textColor = get("orthologTextColor", K.orthologTextColor, "#ffffff");
+  const c1 = get("orthologCatCore1to1Color", K.orthologCatCore1to1Color, ORTHO_DEFAULT_CATS[0].color);
+  const c2 = get("orthologCatCoreMultiColor", K.orthologCatCoreMultiColor, ORTHO_DEFAULT_CATS[1].color);
+  const c3 = get("orthologCatAuxColor", K.orthologCatAuxColor, ORTHO_DEFAULT_CATS[2].color);
+  const c4 = get("orthologCatUniqueColor", K.orthologCatUniqueColor, ORTHO_DEFAULT_CATS[3].color);
+
+  return {
+    bgColor,
+    textColor,
+    cats: [
+      { key: ORTHO_DEFAULT_CATS[0].key, label: ORTHO_DEFAULT_CATS[0].label, color: c1 },
+      { key: ORTHO_DEFAULT_CATS[1].key, label: ORTHO_DEFAULT_CATS[1].label, color: c2 },
+      { key: ORTHO_DEFAULT_CATS[2].key, label: ORTHO_DEFAULT_CATS[2].label, color: c3 },
+      { key: ORTHO_DEFAULT_CATS[3].key, label: ORTHO_DEFAULT_CATS[3].label, color: c4 }
+    ]
+  };
+}
 
 function ensureOrthoTooltip() {
   let tip = document.getElementById("ortho-tooltip");
@@ -94,7 +131,7 @@ function niceStep(raw) {
   return n * pow;
 }
 
-function renderOrthologStackedChart(summary, containerId) {
+function renderOrthologStackedChart(summary, containerId, appearance) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -125,7 +162,9 @@ function renderOrthologStackedChart(summary, containerId) {
   const heightNeeded = (axisY + 10 + TICK_FONT + 6 + AXIS_TITLE_FONT + 18) + Math.round(FONT * 1.2);
 
   // Find max total for scaling
-  const totals = rows.map(r => ORTHO_CATS.reduce((s, c) => s + (Number(r[c.key]) || 0), 0));
+  const cats = (appearance && Array.isArray(appearance.cats) && appearance.cats.length) ? appearance.cats : ORTHO_DEFAULT_CATS;
+  const textColor = (appearance && appearance.textColor) ? appearance.textColor : "#ffffff";
+  const totals = rows.map(r => cats.reduce((s, c) => s + (Number(r[c.key]) || 0), 0));
   const maxTotal = Math.max(...totals, 1);
 
   // Axis unit choice: hundreds or thousands
@@ -168,12 +207,12 @@ function renderOrthologStackedChart(summary, containerId) {
     t.setAttribute("text-anchor", "end");
     t.setAttribute("font-family", "sans-serif");
     t.setAttribute("font-size", String(FONT));
-    t.setAttribute("fill", "#111");
+    t.setAttribute("fill", textColor);
     t.textContent = genome;
     svg.appendChild(t);
 
     let x0 = 0;
-    ORTHO_CATS.forEach(cat => {
+    cats.forEach(cat => {
       const v = Number(r[cat.key]) || 0;
       const w = (v / axisMaxGenes) * innerW;
 
@@ -210,7 +249,7 @@ function renderOrthologStackedChart(summary, containerId) {
   axisLine.setAttribute("x2", String(margin.left + innerW));
   axisLine.setAttribute("y1", String(axisY));
   axisLine.setAttribute("y2", String(axisY));
-  axisLine.setAttribute("stroke", "#111");
+  axisLine.setAttribute("stroke", textColor);
   axisLine.setAttribute("stroke-width", "2");
   svg.appendChild(axisLine);
 
@@ -224,7 +263,7 @@ function renderOrthologStackedChart(summary, containerId) {
     tick.setAttribute("x2", String(x));
     tick.setAttribute("y1", String(axisY));
     tick.setAttribute("y2", String(axisY + 10));
-    tick.setAttribute("stroke", "#111");
+    tick.setAttribute("stroke", textColor);
     tick.setAttribute("stroke-width", "2");
     svg.appendChild(tick);
 
@@ -234,7 +273,7 @@ function renderOrthologStackedChart(summary, containerId) {
     lab.setAttribute("text-anchor", "middle");
     lab.setAttribute("font-family", "sans-serif");
     lab.setAttribute("font-size", String(TICK_FONT));
-    lab.setAttribute("fill", "#111");
+    lab.setAttribute("fill", textColor);
     lab.textContent = Number.isInteger(vUnits) ? String(vUnits) : vUnits.toFixed(1);
     svg.appendChild(lab);
   });
@@ -246,7 +285,7 @@ function renderOrthologStackedChart(summary, containerId) {
   axisTitle.setAttribute("text-anchor", "middle");
   axisTitle.setAttribute("font-family", "sans-serif");
   axisTitle.setAttribute("font-size", String(AXIS_TITLE_FONT));
-  axisTitle.setAttribute("fill", "#111");
+  axisTitle.setAttribute("fill", textColor);
   axisTitle.textContent = unitLabel;
   svg.appendChild(axisTitle);
 
@@ -256,7 +295,7 @@ function renderOrthologStackedChart(summary, containerId) {
   const legend = document.createElementNS(ns, "g");
   const legendX = margin.left + innerW + 24;
   const legendY = margin.top;
-  const legendItems = [...ORTHO_CATS].reverse();
+  const legendItems = [...cats].reverse();
 
   const swatch = Math.round(FONT * 0.9);
   const legendGap = Math.round(FONT * 1.15);
@@ -279,7 +318,7 @@ function renderOrthologStackedChart(summary, containerId) {
     lt.setAttribute("y", String(yy + swatch * 0.82));
     lt.setAttribute("font-family", "sans-serif");
     lt.setAttribute("font-size", String(FONT));
-    lt.setAttribute("fill", "#111");
+    lt.setAttribute("fill", textColor);
     lt.textContent = cat.label;
     legend.appendChild(lt);
   });
@@ -369,12 +408,16 @@ function formatOrthoTool(method) {
 SYNIMA.showOrthologs = function () {
   const app = document.getElementById("app");
   const data = JSON.parse(document.getElementById("data-orthologs").textContent);
+  const appearance = readOrthologAppearanceState();
 
   const main = document.getElementById("app");
   if (main) {
       main.classList.add("max-w-6xl", "mx-auto");
       main.style.maxWidth = "";
       main.style.margin = "";
+      main.classList.add("orthologs-page");
+      main.style.setProperty("--synima-ortho-bg", appearance.bgColor);
+      main.style.setProperty("--synima-ortho-text", appearance.textColor);
   }
 
   const params = data.params || null;
@@ -505,7 +548,7 @@ SYNIMA.showOrthologs = function () {
         </div>
       </div>
 
-      <div class="tree-view" style="--synima-tree-bg:#ffffff;">
+      <div class="tree-view">
         <div id="${chartId}" style="width:100%; overflow-x:auto;"></div>
       </div>
     `;
@@ -514,25 +557,65 @@ SYNIMA.showOrthologs = function () {
 
       //  <h2>Plot</h2>
 
-
     // ----------------------------
     // Rscript 
     // ----------------------------
-      html += `
-        <h2>R code</h2>
-        <pre>${summary.rscript}</pre>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText(\`${summary.rscript}\`)">
-          Copy R Script
-        </button>
-      </div>
-    `;
+    //  html += `
+    //    <h2>R code</h2>
+    //    <pre>${summary.rscript}</pre>
+    //    <button class="copy-btn" onclick="navigator.clipboard.writeText(\`${summary.rscript}\`)">
+    //      Copy R Script
+    //    </button>
+    //  </div>
+    //`;
   });
+
+  html += `
+    <div class="section">
+      <h2>Graphical Options</h2>
+      <div class="synteny-controls">
+        <div class="synteny-controls-row">
+          <button id="ortholog-reset-colours-btn" type="button" class="copy-btn" style="margin-left:10px;">Reset ortholog colours</button>
+        </div>
+        <fieldset class="synteny-controls-group">
+          <legend>Appearance</legend>
+          <label style="margin-left: 10px;">
+            Background colour:
+            <input id="ortholog-bg-color-input" class="synima-colour-input" type="color" value="${appearance.bgColor}" />
+          </label>
+          <label style="margin-left: 10px;">
+            Text colour:
+            <input id="ortholog-text-color-input" class="synima-colour-input" type="color" value="${appearance.textColor}" />
+          </label>
+        </fieldset>
+        <fieldset class="synteny-controls-group">
+          <legend>Orthogroup colours</legend>
+          <label style="margin-left: 10px;">
+            Core (1:1):
+            <input id="ortholog-core1-color-input" class="synima-colour-input" type="color" value="${appearance.cats[0].color}" />
+          </label>
+          <label style="margin-left: 10px;">
+            Core (multi):
+            <input id="ortholog-coremulti-color-input" class="synima-colour-input" type="color" value="${appearance.cats[1].color}" />
+          </label>
+          <label style="margin-left: 10px;">
+            Aux:
+            <input id="ortholog-aux-color-input" class="synima-colour-input" type="color" value="${appearance.cats[2].color}" />
+          </label>
+          <label style="margin-left: 10px;">
+            Unique:
+            <input id="ortholog-unique-color-input" class="synima-colour-input" type="color" value="${appearance.cats[3].color}" />
+          </label>
+        </fieldset>
+      </div>
+    </div>
+  `;
 
 
   app.innerHTML = html;
 
   chartJobs.forEach(job => {
-  renderOrthologStackedChart(job.summary, job.chartId);
+  renderOrthologStackedChart(job.summary, job.chartId, appearance);
 
   wireDropdown(`${job.menuId}-btn`, `${job.menuId}-dd`);
 
@@ -551,6 +634,73 @@ SYNIMA.showOrthologs = function () {
     });
   }
 });
+
+  const persistAppearance = function () {
+    try {
+      localStorage.setItem(window.SYNIMA_PERSIST_KEYS.orthologBgColor, window.SYNIMA_STATE.orthologBgColor);
+      localStorage.setItem(window.SYNIMA_PERSIST_KEYS.orthologTextColor, window.SYNIMA_STATE.orthologTextColor);
+      localStorage.setItem(window.SYNIMA_PERSIST_KEYS.orthologCatCore1to1Color, window.SYNIMA_STATE.orthologCatCore1to1Color);
+      localStorage.setItem(window.SYNIMA_PERSIST_KEYS.orthologCatCoreMultiColor, window.SYNIMA_STATE.orthologCatCoreMultiColor);
+      localStorage.setItem(window.SYNIMA_PERSIST_KEYS.orthologCatAuxColor, window.SYNIMA_STATE.orthologCatAuxColor);
+      localStorage.setItem(window.SYNIMA_PERSIST_KEYS.orthologCatUniqueColor, window.SYNIMA_STATE.orthologCatUniqueColor);
+    } catch (e) {}
+  };
+
+  const rerenderCharts = function () {
+    const current = readOrthologAppearanceState();
+    app.style.setProperty("--synima-ortho-bg", current.bgColor);
+    app.style.setProperty("--synima-ortho-text", current.textColor);
+    chartJobs.forEach((job) => renderOrthologStackedChart(job.summary, job.chartId, current));
+  };
+
+  const bindColor = function (id, stateKey) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = window.SYNIMA_STATE[stateKey];
+    el.addEventListener("change", () => {
+      window.SYNIMA_STATE[stateKey] = el.value;
+      persistAppearance();
+      rerenderCharts();
+    });
+  };
+
+  bindColor("ortholog-bg-color-input", "orthologBgColor");
+  bindColor("ortholog-text-color-input", "orthologTextColor");
+  bindColor("ortholog-core1-color-input", "orthologCatCore1to1Color");
+  bindColor("ortholog-coremulti-color-input", "orthologCatCoreMultiColor");
+  bindColor("ortholog-aux-color-input", "orthologCatAuxColor");
+  bindColor("ortholog-unique-color-input", "orthologCatUniqueColor");
+
+  document.getElementById("ortholog-reset-colours-btn")?.addEventListener("click", () => {
+    window.SYNIMA_STATE.orthologBgColor = "#0f1b30";
+    window.SYNIMA_STATE.orthologTextColor = "#ffffff";
+    window.SYNIMA_STATE.orthologCatCore1to1Color = ORTHO_DEFAULT_CATS[0].color;
+    window.SYNIMA_STATE.orthologCatCoreMultiColor = ORTHO_DEFAULT_CATS[1].color;
+    window.SYNIMA_STATE.orthologCatAuxColor = ORTHO_DEFAULT_CATS[2].color;
+    window.SYNIMA_STATE.orthologCatUniqueColor = ORTHO_DEFAULT_CATS[3].color;
+
+    try {
+      localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.orthologBgColor);
+      localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.orthologTextColor);
+      localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.orthologCatCore1to1Color);
+      localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.orthologCatCoreMultiColor);
+      localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.orthologCatAuxColor);
+      localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.orthologCatUniqueColor);
+    } catch (e) {}
+
+    const setInput = function (id, value) {
+      const el = document.getElementById(id);
+      if (el) el.value = value;
+    };
+    setInput("ortholog-bg-color-input", window.SYNIMA_STATE.orthologBgColor);
+    setInput("ortholog-text-color-input", window.SYNIMA_STATE.orthologTextColor);
+    setInput("ortholog-core1-color-input", window.SYNIMA_STATE.orthologCatCore1to1Color);
+    setInput("ortholog-coremulti-color-input", window.SYNIMA_STATE.orthologCatCoreMultiColor);
+    setInput("ortholog-aux-color-input", window.SYNIMA_STATE.orthologCatAuxColor);
+    setInput("ortholog-unique-color-input", window.SYNIMA_STATE.orthologCatUniqueColor);
+
+    rerenderCharts();
+  });
 
 
 

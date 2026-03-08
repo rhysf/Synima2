@@ -683,35 +683,13 @@ SYNIMA.showSynteny = function () {
             <!-- contig border colours -->
             <label style="margin-left: 10px;">
               Contig outline:
-              <select id="synteny-contig-stroke-select">
-                <option value="#ffffff">White</option>
-                <option value="#000000">Black</option>
-                <option value="#0f1b30">Navy</option>
-                <option value="#d1d5db">Light grey</option>
-                <option value="#fbbf24">Amber</option>
-                <option value="#93c5fd">Light blue</option>
-                <option value="#66cc99">Green cyan</option>
-                <option value="#cc6699">Pink</option>
-                <option value="#cc9966">Light orange</option>
-                <option value="#ff0000">Red</option>
-              </select>
+              <input id="synteny-contig-stroke-select" class="synima-colour-input" type="color" value="#ffffff" />
             </label>
 
             <!-- synteny colours -->
             <label style="margin-left: 10px;">
               Synteny block colour:
-              <select id="synteny-block-colour-select">
-                <option value="#ffffff">White</option>
-                <option value="#d1d5db">Light grey</option>
-                <option value="#93c5fd">Light blue</option>
-                <option value="#a7f3d0">Mint</option>
-                <option value="#fde68a">Soft yellow</option>
-                <option value="#fca5a5">Soft red</option>
-                <option value="#c4b5fd">Lavender</option>
-                <option value="#22c55e">Green</option>
-                <option value="#f59e0b">Orange</option>
-                <option value="#60a5fa">Blue</option>
-              </select>
+              <input id="synteny-block-colour-select" class="synima-colour-input" type="color" value="#ffffff" />
             </label>
 
             <!-- synteny opacity -->
@@ -733,26 +711,13 @@ SYNIMA.showSynteny = function () {
             <!-- Background colour -->
             <label style="margin-left: 10px;">
               Background colour:
-              <select id="synteny-bg-select">
-                <option value="#0f1b30">Navy</option>
-                <option value="#111827">Slate</option>
-                <option value="#111111">Charcoal</option>
-                <option value="#000000">Black</option>
-                <option value="#ffffff">White</option>
-              </select>
+              <input id="synteny-bg-select" class="synima-colour-input" type="color" value="#0f1b30" />
             </label>
 
             <!-- Contig label colour -->
             <label style="margin-left: 10px;">
               Label colour:
-              <select id="synteny-label-colour-select">
-                <option value="#ffffff">White</option>
-                <option value="#000000">Black</option>
-                <option value="#0f1b30">Navy</option>
-                <option value="#d1d5db">Light grey</option>
-                <option value="#fbbf24">Amber</option>
-                <option value="#93c5fd">Light blue</option>
-              </select>
+              <input id="synteny-label-colour-select" class="synima-colour-input" type="color" value="#ffffff" />
             </label>
 
         </fieldset>

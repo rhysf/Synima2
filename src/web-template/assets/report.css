@@ -410,6 +410,38 @@ body {
   background: #3b82f6;
 }
 
+.synima-colour-input {
+  width: 2.5rem;
+  height: 1.8rem;
+  padding: 0;
+  border: 1px solid #334155;
+  border-radius: 0.35rem;
+  background: #111827;
+  cursor: pointer;
+}
+
+.orthologs-page {
+  color: var(--synima-ortho-text, #ffffff);
+}
+
+.orthologs-page .ortho-table th,
+.orthologs-page .param-table th {
+  background: var(--synima-ortho-bg, #0f1b30);
+  background: color-mix(in srgb, var(--synima-ortho-bg, #0f1b30) 65%, #334155 35%);
+  color: var(--synima-ortho-text, #ffffff) !important;
+}
+
+.orthologs-page .ortho-table td,
+.orthologs-page .param-table td {
+  background: var(--synima-ortho-bg, #0f1b30);
+  background: color-mix(in srgb, var(--synima-ortho-bg, #0f1b30) 80%, #1e293b 20%);
+  color: var(--synima-ortho-text, #ffffff) !important;
+}
+
+.orthologs-page .tree-view {
+  background: var(--synima-ortho-bg, #0f1b30);
+}
+
 
 /* Force content headings to white */
 #app h1,

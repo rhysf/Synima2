@@ -22,6 +22,12 @@ SYNIMA.updateActiveNav = function (page) {
 };
 
 SYNIMA.router = function (page) {
+  const app = document.getElementById("app");
+  if (app && page !== "orthologs") {
+    app.classList.remove("orthologs-page");
+    app.style.removeProperty("--synima-ortho-bg");
+    app.style.removeProperty("--synima-ortho-text");
+  }
   const view = SYNIMA.routes[page] || SYNIMA.showOrthologs;
   SYNIMA.currentPage = page;       // track which tab is active
   view();
