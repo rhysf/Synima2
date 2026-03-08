@@ -912,6 +912,18 @@ SYNIMA.showSynteny = function () {
             return;
         }
 
+        // Gene marker tooltip
+        const marker = e.target.closest(".synima-gene-marker");
+        if (marker) {
+            const tip = marker.getAttribute("data-tip") || "";
+            if (!tip) { tooltip.style.display = "none"; return; }
+            tooltip.innerHTML = escapeHtml(tip).replace(/\n/g, "<br>");
+            tooltip.style.left = (e.pageX + 12) + "px";
+            tooltip.style.top = (e.pageY + 12) + "px";
+            tooltip.style.display = "block";
+            return;
+        }
+
         // existing contig tooltip
         const ctg = e.target.closest(".synteny-ctg");
         if (!ctg) {
@@ -1411,7 +1423,7 @@ SYNIMA.showSynteny = function () {
         //plotEl.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
         const svgHost = document.getElementById("synteny-plot-svg");
         if (svgHost) {
-            svgHost.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
+            svgHost.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout, aligncoords);
             //console.log("rerendered with new tracks etc.", svgHost.innerHTML);
         }
     }
@@ -2095,7 +2107,7 @@ function prepareBlocksForPlot(blocks, config, maps, layout) {
 }
 
 // Render a simple SVG: genome tracks + polygons
-function renderSyntenySvg(blocks, config, maps, layout) {
+function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText) {
     const svgW = layout.plotWidthPx;
     let svgH = Math.max(layout.treeHeightPx, 200);
 
@@ -2301,6 +2313,15 @@ function renderSyntenySvg(blocks, config, maps, layout) {
     }
 
     // ----------------------------
+    // Gene markers (optional)
+    // ----------------------------
+    let geneMarkersSvg = "";
+    if (typeof SYNIMA.getGeneMarkersForSynteny === "function") {
+        const markers = SYNIMA.getGeneMarkersForSynteny(aligncoordsText || "");
+        geneMarkersSvg = renderGeneMarkersSvg(markers, config, maps, layout, yFor, trackHeight);
+    }
+
+    // ----------------------------
     // Scale bar (optional)
     // ----------------------------
     const showScale = (window.SYNIMA_STATE.syntenyScaleShow !== false);
@@ -2390,9 +2411,76 @@ function renderSyntenySvg(blocks, config, maps, layout) {
         <svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
         ${polys}
         ${tracks}
+        ${geneMarkersSvg}
         ${scaleBarSvg}
-        </svg>
+      </svg>
     `;
+}
+
+function renderGeneMarkersSvg(markers, config, maps, layout, yFor, trackHeight) {
+    if (!Array.isArray(markers) || markers.length === 0) return "";
+
+    const flips = window.SYNIMA_STATE.syntenyContigFlips || {};
+    const rankByGenomeContig = {};
+    for (const g of (config.genomes || [])) {
+        const rank = {};
+        const order = maps.contigOrder?.[g.name] || [];
+        order.forEach((ctg, i) => { rank[ctg] = i; });
+        rankByGenomeContig[g.name] = rank;
+    }
+
+    let out = "";
+    for (const m of markers) {
+        const yBase = yFor(m.genome);
+        if (yBase == null) continue;
+
+        const contigOffset = maps.contigOffset?.[m.genome]?.[m.contig];
+        const contigLen = maps.contigLen?.[m.genome]?.[m.contig];
+        if (!Number.isFinite(contigOffset) || !Number.isFinite(contigLen)) continue;
+
+        let localPos = Number(m.pos);
+        if (!Number.isFinite(localPos)) continue;
+        localPos = Math.max(1, Math.min(contigLen, localPos));
+
+        const key = `${m.genome}|${m.contig}`;
+        if (flips[key]) {
+            localPos = (contigLen - localPos + 1);
+        }
+
+        const rank = rankByGenomeContig?.[m.genome]?.[m.contig] ?? 0;
+        const x = layout.xStart + ((contigOffset + localPos) * layout.scaleX) + (rank * (layout.gapPx ?? 0));
+        const y = (yBase - (trackHeight / 2) - 8) + (Number(m.yOffset) || 0);
+
+        const size = Math.max(2, Math.min(30, Number(m.size) || 10));
+        const color = String(m.color || "#f59e0b");
+        const title = `${m.gene} [${m.categoryName}]\n${m.genome}:${m.contig} @ ${Math.round(localPos)} bp`;
+        const shape = renderGeneMarkerShape(String(m.shape || "circle"), x, y, size, color);
+        if (!shape) continue;
+
+        out += `<g class="synima-gene-marker" data-tip="${escapeAttr(title)}">${shape}</g>`;
+    }
+
+    return out;
+}
+
+function renderGeneMarkerShape(shape, x, y, size, color) {
+    if (shape === "square") {
+        const s = size * 0.9;
+        const x0 = x - (s / 2);
+        const y0 = y - (s / 2);
+        return `<rect x="${x0}" y="${y0}" width="${s}" height="${s}" fill="${color}" stroke="#111827" stroke-width="0.8" />`;
+    }
+
+    if (shape === "triangle") {
+        const h = size;
+        const half = size * 0.85;
+        const p1 = `${x},${y - h}`;
+        const p2 = `${x - half},${y + half}`;
+        const p3 = `${x + half},${y + half}`;
+        return `<polygon points="${p1} ${p2} ${p3}" fill="${color}" stroke="#111827" stroke-width="0.8" />`;
+    }
+
+    return `<circle cx="${x}" cy="${y}" r="${size / 2}" fill="${color}" stroke="#111827" stroke-width="0.8" />`;
 }
 
 function buildSyntenyLayout(config, maps) {

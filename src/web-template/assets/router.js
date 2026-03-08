@@ -3,6 +3,7 @@ window.SYNIMA = window.SYNIMA || {};
 SYNIMA.routes = {
   orthologs: SYNIMA.showOrthologs,
   tree: SYNIMA.showTree,
+  genes: SYNIMA.showGenes,
   synteny: SYNIMA.showSynteny,
   cloud: SYNIMA.showCloud,
   methods: SYNIMA.showMethods,
@@ -11,10 +12,20 @@ SYNIMA.routes = {
 
 SYNIMA.currentPage = "orthologs";  // default
 
+SYNIMA.updateActiveNav = function (page) {
+  const links = document.querySelectorAll("a[data-page]");
+  links.forEach((link) => {
+    const p = link.getAttribute("data-page");
+    if (p === page) link.classList.add("synima-nav-active");
+    else link.classList.remove("synima-nav-active");
+  });
+};
+
 SYNIMA.router = function (page) {
   const view = SYNIMA.routes[page] || SYNIMA.showOrthologs;
   SYNIMA.currentPage = page;       // track which tab is active
   view();
+  SYNIMA.updateActiveNav(page);
 };
 
 SYNIMA.routerInit = function () {

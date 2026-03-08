@@ -280,7 +280,10 @@ window.SYNIMA_PERSIST_KEYS = window.SYNIMA_PERSIST_KEYS || {
 
 	syntenyBgColor: "synima_synteny_bg_color",
 
-	syntenyLabelColor: "synima_synteny_label_color"
+	syntenyLabelColor: "synima_synteny_label_color",
+
+	// genes tab
+	genesCategories: "synima_genes_categories"
 };
 
 window.SYNIMA_STATE = window.SYNIMA_STATE || {};
@@ -361,3 +364,6 @@ window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth = window.SYNIMA_PERSIST_KEYS.sy
 
 // default state
 window.SYNIMA_STATE.syntenyScaleLineWidth = window.SYNIMA_STATE.syntenyScaleLineWidth ?? 1.0;
+
+// genes tab defaults
+window.SYNIMA_STATE.geneCategories = window.SYNIMA_STATE.geneCategories ?? [];

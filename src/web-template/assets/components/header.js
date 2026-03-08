@@ -23,6 +23,7 @@ SYNIMA.renderHeader = function () {
         <div class="synima-nav-row desktop-only synima-nav">
           <a href="#" data-page="orthologs">Orthologs</a>
 <a href="#" data-page="tree">Tree</a>
+<a href="#" data-page="genes">Genes</a>
 <a href="#" data-page="synteny">Synteny</a>
 <!--<a href="#" data-page="plot">Plot</a>-->
 <a href="#" data-page="methods">Methods</a>
@@ -48,6 +49,7 @@ SYNIMA.renderHeader = function () {
         <div id="mobile-menu" class="mobile-menu synima-nav">
           <a href="#" data-page="orthologs">Orthologs</a>
 <a href="#" data-page="tree">Tree</a>
+<a href="#" data-page="genes">Genes</a>
 <a href="#" data-page="synteny">Synteny</a>
 <!--<a href="#" data-page="plot">Plot</a>-->
 <a href="#" data-page="methods">Methods</a>
