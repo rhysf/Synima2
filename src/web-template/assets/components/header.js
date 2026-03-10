@@ -85,10 +85,9 @@ SYNIMA.renderHeader = function () {
     }
   };
 
-  const openLoginWindow = function (baseUrl) {
-    const next = encodeURIComponent("/auth/connect.php");
-    const url = `${baseUrl}/auth/login.php?next=${next}`;
-    const popup = window.open(url, "synima-login", "width=540,height=720,resizable=yes,scrollbars=yes");
+  const openConnectWindow = function (baseUrl) {
+    const url = `${baseUrl}/auth/connect.php`;
+    const popup = window.open(url, "synima-connect", "width=540,height=720,resizable=yes,scrollbars=yes");
     if (!popup) {
       window.open(url, "_blank", "noopener,noreferrer");
     }
@@ -261,7 +260,21 @@ SYNIMA.renderHeader = function () {
       }
 
       if (action === "login") {
-        openLoginWindow(cloud.baseUrl);
+        const ok = await SYNIMA.syncCloudSession();
+        let fresh = await SYNIMA.refreshCloudState();
+        if (ok && fresh.apiKey) {
+          renderCloudState(fresh);
+          closeCloudMenus();
+          return;
+        }
+
+        openConnectWindow(cloud.baseUrl);
+        const connected = await SYNIMA.pollCloudSession(90000, 1500);
+        if (connected) {
+          fresh = await SYNIMA.refreshCloudState();
+          renderCloudState(fresh);
+          closeCloudMenus();
+        }
         return;
       }
 
