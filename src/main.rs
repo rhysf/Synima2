@@ -246,6 +246,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // get orthofinder
         let orthofinder_path = external_tools::find_executable("orthofinder", &bin_dir, &logger);
+        let orthofinder_version_text = util::get_orthofinder_version_from_path(&orthofinder_path);
+        let orthofinder_major = orthofinder_version_text
+            .as_deref()
+            .and_then(util::parse_orthofinder_major_version);
+
+        if let Some(v) = orthofinder_version_text.as_deref() {
+            let first_line = v.lines().next().unwrap_or(v).trim();
+            logger.information(&format!("Detected OrthoFinder version info: {}", first_line));
+        } else {
+            logger.warning("Could not determine OrthoFinder version from the resolved executable.");
+        }
+
+        if let Some(major) = orthofinder_major {
+            if major >= 3 {
+                logger.warning("Detected OrthoFinder 3. Synima2 currently runs the standard OrthoFinder command line, parsing the Orthogroups/Orthogroups.tsv output rather than the newer Phylogenetic_Hierarchical_Orthogroups/N0.tsv workflow.");
+            }
+        }
 
         // make output director
         mkdir(&orthofinder_out_dir, &logger, "main (blast-to-orthofinder)");

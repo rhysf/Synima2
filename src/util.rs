@@ -227,6 +227,44 @@ pub fn get_version(tool: &str, args: &[&str]) -> Option<String> {
     }
 }
 
+pub fn get_version_from_path(tool_path: &Path, args: &[&str]) -> Option<String> {
+    match std::process::Command::new(tool_path)
+        .args(args)
+        .output()
+    {
+        Ok(out) => {
+            let text = String::from_utf8_lossy(&out.stdout).to_string();
+            if text.trim().is_empty() {
+                let text = String::from_utf8_lossy(&out.stderr).to_string();
+                if !text.trim().is_empty() {
+                    Some(text)
+                } else {
+                    None
+                }
+            } else {
+                Some(text)
+            }
+        }
+        Err(_) => None,
+    }
+}
+
+pub fn get_orthofinder_version_from_path(tool_path: &Path) -> Option<String> {
+    if let Some(v) = get_version_from_path(tool_path, &["-h"]) {
+        return Some(v);
+    }
+    if let Some(v) = get_version_from_path(tool_path, &["--version"]) {
+        return Some(v);
+    }
+    None
+}
+
+pub fn parse_orthofinder_major_version(version_text: &str) -> Option<u32> {
+    let re = Regex::new(r"(?i)orthofinder(?:\s+version)?\s+v?(\d+)").ok()?;
+    let caps = re.captures(version_text)?;
+    caps.get(1)?.as_str().parse::<u32>().ok()
+}
+
 pub fn get_orthology_tool_version(method: &str) -> String {
     match method.to_lowercase().as_str() {
         "orthofinder" => {
