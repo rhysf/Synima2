@@ -53,6 +53,8 @@ let SYNIMA_TREES = {
 // tree tab
 SYNIMA_TAXON_NAMES = {}; // mapping oldName → newName
 SYNIMA.selectedLabelName = null;   // currently selected displayed name
+SYNIMA.selectedBranchNode = null;   // currently selected internal branch/clade
+SYNIMA.selectedBranchId = null;     // rendered branch number for dropdown sync
 SYNIMA.annotateArmed = false;  // tracks "Annotate" armed state
 let SYNIMA_LINE_WIDTH = 2;   // default stroke width
 let SYNIMA_FONT_SIZE = 14;   // default tip label font-size
@@ -236,6 +238,77 @@ function layoutTree(root) {
   return root;
 }
 
+function isRotatableBranch(node) {
+  return !!(node && node.children && node.children.length > 1);
+}
+
+function collectRotatableBranches(root) {
+  const branches = [];
+  (function walk(node) {
+    if (isRotatableBranch(node)) branches.push(node);
+    if (node.children) node.children.forEach(walk);
+  })(root);
+  return branches;
+}
+
+function countDescendantTips(node) {
+  if (!node) return 0;
+  if (!node.children || node.children.length === 0) return 1;
+  return node.children.reduce((sum, child) => sum + countDescendantTips(child), 0);
+}
+
+function clearBranchIds(root) {
+  if (!root) return;
+  (function walk(node) {
+    delete node._branchId;
+    if (node.children) node.children.forEach(walk);
+  })(root);
+}
+
+function assignBranchIds(root) {
+  clearBranchIds(root);
+  const branches = collectRotatableBranches(root)
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x));
+
+  branches.forEach((node, i) => {
+    node._branchId = String(i + 1);
+  });
+
+  if (SYNIMA.selectedBranchNode && !branches.includes(SYNIMA.selectedBranchNode)) {
+    SYNIMA.selectedBranchNode = null;
+    SYNIMA.selectedBranchId = null;
+  }
+
+  if (SYNIMA.selectedBranchNode) {
+    SYNIMA.selectedBranchId = SYNIMA.selectedBranchNode._branchId || null;
+  }
+
+  return branches;
+}
+
+function findBranchById(root, branchId) {
+  if (!root || !branchId) return null;
+  return collectRotatableBranches(root)
+    .find(node => node._branchId === String(branchId)) || null;
+}
+
+function renderBranchSegment(x1, y1, x2, y2, branchColor, lineW, branchNode, isMini) {
+  const isSelectable = !isMini && isRotatableBranch(branchNode) && branchNode._branchId;
+  const isSelected = isSelectable && SYNIMA.selectedBranchNode === branchNode;
+  const branchIdAttr = isSelectable ? ` data-branch-id="${branchNode._branchId}"` : "";
+  const selectableClass = isSelectable ? " tree-branch-selectable" : "";
+  const selectedClass = isSelected ? " tree-branch-selected" : "";
+
+  let out = "";
+  if (isSelectable) {
+    const hitWidth = Math.max(lineW + 10, 12);
+    out += `<line class="tree-branch-hit tree-branch-selectable"${branchIdAttr} x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="transparent" stroke-width="${hitWidth}" pointer-events="stroke" style="stroke:transparent; stroke-width:${hitWidth}px;" />`;
+  }
+
+  out += `<line class="tree-branch-visible${selectableClass}${selectedClass}"${branchIdAttr} x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${branchColor}" stroke-width="${lineW}" style="stroke:${branchColor}; stroke-width:${lineW}px;" />`;
+  return out;
+}
+
 // Label click handlers (select / deselect / sync root dropdown / annotate-armed)
 SYNIMA.attachLabelClickHandlers = function(root) {
 
@@ -246,6 +319,8 @@ SYNIMA.attachLabelClickHandlers = function(root) {
       evt.stopPropagation(); // don't trigger background deselect
 
       const name = el.getAttribute("data-tip-name");
+
+      SYNIMA.clearBranchSelection();
 
       // Toggle off if clicking same taxon again
       if (SYNIMA.selectedLabelName === name) {
@@ -328,6 +403,8 @@ function renderTreeSvg(root, containerId, opts={}) {
   });
   //}
 
+  assignBranchIds(root);
+
   // Boost font size and line width in mini trees
   const effectiveFontSize = isMini ? SYNIMA_FONT_SIZE * 3 : SYNIMA_FONT_SIZE;
   const lineW = isMini ? SYNIMA_LINE_WIDTH * 3 : SYNIMA_LINE_WIDTH;
@@ -354,9 +431,9 @@ function renderTreeSvg(root, containerId, opts={}) {
       let y2 = offsetY + child.y;
 
       // Vertical segment
-      lines.push(`<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y2}" stroke="${branchColor}" stroke-width="${lineW}" style="stroke:${branchColor}; stroke-width:${lineW}px;" />`);
+      lines.push(renderBranchSegment(x1, y1, x1, y2, branchColor, lineW, node, isMini));
       // Horizontal segment
-      lines.push(`<line x1="${x1}" y1="${y2}" x2="${x2}" y2="${y2}" stroke="${branchColor}" stroke-width="${lineW}" style="stroke:${branchColor}; stroke-width:${lineW}px;" />`);
+      lines.push(renderBranchSegment(x1, y2, x2, y2, branchColor, lineW, child, isMini));
 
       drawBranches(child);
     });
@@ -520,10 +597,12 @@ function renderTreeSvg(root, containerId, opts={}) {
     svgEl.addEventListener("click", (e) => {
       // Ignore clicks on labels (handled in label handler)
       if (e.target.tagName.toLowerCase() === "text") return;
+      if (e.target.closest(".tree-branch-selectable")) return;
 
       SYNIMA.selectedLabelName = null;
       document.querySelectorAll(".tree-label-text")
         .forEach(n => n.classList.remove("tree-label-selected"));
+      SYNIMA.clearBranchSelection();
 
       // Clear Root-by-tip dropdown when clicking empty background
       const rootSel = document.getElementById("tip-root-select");
@@ -534,7 +613,9 @@ function renderTreeSvg(root, containerId, opts={}) {
   }
 
   if (!isMini) {
+    SYNIMA.attachBranchClickHandlers(root, containerId);
     SYNIMA.attachLabelClickHandlers(root);
+    SYNIMA.buildBranchRotationControls();
   }
 
 }
@@ -558,6 +639,141 @@ SYNIMA.getTipNames = function(root) {
     }
   })(root);
   return out;
+};
+
+SYNIMA.attachBranchClickHandlers = function(root, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  container.querySelectorAll(".tree-branch-selectable").forEach(el => {
+    el.addEventListener("click", (evt) => {
+      evt.stopPropagation();
+      SYNIMA.selectBranchById(el.getAttribute("data-branch-id"));
+    });
+  });
+};
+
+SYNIMA.clearBranchSelection = function() {
+  SYNIMA.selectedBranchNode = null;
+  SYNIMA.selectedBranchId = null;
+
+  document.querySelectorAll(".tree-branch-visible")
+    .forEach(el => el.classList.remove("tree-branch-selected"));
+
+  const sel = document.getElementById("tree-branch-select");
+  if (sel) sel.value = "";
+
+  const btn = document.getElementById("rotate-branch-btn");
+  if (btn) btn.disabled = true;
+};
+
+SYNIMA.updateBranchSelectionDisplay = function() {
+  const selectedId = SYNIMA.selectedBranchNode ? SYNIMA.selectedBranchNode._branchId : null;
+  SYNIMA.selectedBranchId = selectedId || null;
+
+  document.querySelectorAll(".tree-branch-visible").forEach(el => {
+    el.classList.toggle(
+      "tree-branch-selected",
+      !!selectedId && el.getAttribute("data-branch-id") === selectedId
+    );
+  });
+
+  const sel = document.getElementById("tree-branch-select");
+  if (sel) sel.value = selectedId || "";
+
+  const btn = document.getElementById("rotate-branch-btn");
+  if (btn) btn.disabled = !selectedId;
+};
+
+SYNIMA.selectBranchById = function(branchId) {
+  const branch = findBranchById(SYNIMA_TREES.current, branchId);
+
+  SYNIMA.selectedLabelName = null;
+  document.querySelectorAll(".tree-label-text")
+    .forEach(n => n.classList.remove("tree-label-selected"));
+
+  const rootSel = document.getElementById("tip-root-select");
+  if (rootSel) rootSel.value = "";
+
+  if (!branch) {
+    SYNIMA.clearBranchSelection();
+    return;
+  }
+
+  if (SYNIMA.selectedBranchNode === branch) {
+    SYNIMA.clearBranchSelection();
+    return;
+  }
+
+  SYNIMA.selectedBranchNode = branch;
+  SYNIMA.selectedBranchId = branch._branchId || String(branchId);
+  SYNIMA.updateBranchSelectionDisplay();
+};
+
+SYNIMA.buildBranchRotationControls = function() {
+  const host = document.getElementById("branch-rotation-controls");
+  if (!host || !SYNIMA_TREES.current) return;
+
+  const branches = collectRotatableBranches(SYNIMA_TREES.current)
+    .filter(node => node._branchId)
+    .sort((a, b) => Number(a._branchId) - Number(b._branchId));
+
+  if (SYNIMA.selectedBranchNode && !branches.includes(SYNIMA.selectedBranchNode)) {
+    SYNIMA.selectedBranchNode = null;
+    SYNIMA.selectedBranchId = null;
+  }
+
+  if (!branches.length) {
+    host.innerHTML = `<span class="tree-control-note">No rotatable branches</span>`;
+    return;
+  }
+
+  const selectedId = SYNIMA.selectedBranchNode ? SYNIMA.selectedBranchNode._branchId : "";
+  host.innerHTML = `
+    <label>
+      Rotate branch:
+      <select id="tree-branch-select">
+        <option value="">Select branch</option>
+        ${branches.map(node => {
+          const taxaCount = countDescendantTips(node);
+          const taxaText = taxaCount === 1 ? "taxon" : "taxa";
+          return `<option value="${node._branchId}">Branch ${node._branchId} (${taxaCount} ${taxaText})</option>`;
+        }).join("")}
+      </select>
+    </label>
+    <button id="rotate-branch-btn" type="button" ${selectedId ? "" : "disabled"}>Rotate</button>
+  `;
+
+  const sel = document.getElementById("tree-branch-select");
+  const btn = document.getElementById("rotate-branch-btn");
+
+  if (sel) {
+    sel.value = selectedId || "";
+    sel.addEventListener("change", () => {
+      SYNIMA.selectBranchById(sel.value);
+    });
+  }
+
+  if (btn) {
+    btn.addEventListener("click", () => {
+      SYNIMA.rotateSelectedBranch();
+    });
+  }
+};
+
+SYNIMA.rotateSelectedBranch = function() {
+  const branch = SYNIMA.selectedBranchNode || findBranchById(SYNIMA_TREES.current, SYNIMA.selectedBranchId);
+  if (!branch || !isRotatableBranch(branch)) return;
+
+  branch.children.reverse();
+
+  const el = document.getElementById("tree-view-0");
+  if (el) renderTreeSvg(SYNIMA_TREES.current, "tree-view-0");
+  SYNIMA.buildRootByTipDropdown();
+
+  if (typeof SYNIMA._syntenyRerender === "function") {
+    SYNIMA._syntenyRerender();
+  }
 };
 
 // Root-by-tip dropdown builder
@@ -598,6 +814,7 @@ SYNIMA.buildRootByTipDropdown = function () {
         if (SYNIMA_TREES && SYNIMA_TREES.original) {
           SYNIMA_TREES.current = cloneTree(SYNIMA_TREES.original);
           applyRenamedTaxa(SYNIMA_TREES.current); // keep any renames
+          SYNIMA.clearBranchSelection();
           try { localStorage.removeItem(SYNIMA_PERSIST_KEYS.rootTip); } catch (e) {}
 
           const el = document.getElementById("tree-view-0");
@@ -1306,6 +1523,7 @@ SYNIMA.showTree = function () {
           <legend>Trees</legend>
 
           <div id="rooting-controls"></div>
+          <div id="branch-rotation-controls" class="tree-branch-rotation-controls"></div>
 
           <div id="tip-root-dialog" class="tip-dialog hidden"></div>
         </fieldset>
@@ -1582,6 +1800,7 @@ SYNIMA.resetRoot = function () {
 
   SYNIMA_TAXON_NAMES = {};
   SYNIMA.selectedLabelName = null;
+  SYNIMA.clearBranchSelection();
   SYNIMA.annotateArmed = false;
 
   window.SYNIMA_STATE.treeBgColor = "#0f1b30";

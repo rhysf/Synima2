@@ -527,6 +527,19 @@ body {
   stroke-width: 2px;
 }
 
+.tree-branch-selectable {
+  cursor: pointer;
+}
+
+.tree-branch-hit {
+  pointer-events: stroke;
+}
+
+.tree-branch-visible.tree-branch-selected {
+  stroke: #facc15 !important;
+  stroke-width: 5px !important;
+}
+
 /*.tree-label {
   fill: #e2e8f0;  
   font-size: 0.9rem;
@@ -646,6 +659,24 @@ body {
   align-items: center;
   gap: 6px;
   color: white;
+}
+
+.tree-branch-rotation-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 10px;
+  margin-top: 0.5rem;
+}
+
+.tree-branch-rotation-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.tree-control-note {
+  color: #cbd5e1;
+  margin-left: 10px;
 }
 
 .annotate-wrap {
