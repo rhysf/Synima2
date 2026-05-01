@@ -4,14 +4,117 @@ if (typeof window !== "undefined") {
     window.SYNIMA_PERSIST_KEYS = window.SYNIMA_PERSIST_KEYS || {};
     if (!window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle) window.SYNIMA_PERSIST_KEYS.syntenyLinkStyle = "synima_syntenyLinkStyle";
     if (!window.SYNIMA_STATE.syntenyLinkStyle) window.SYNIMA_STATE.syntenyLinkStyle = "polygons";
+    if (!window.SYNIMA_PERSIST_KEYS.syntenyTheme) window.SYNIMA_PERSIST_KEYS.syntenyTheme = "synima_synteny_theme";
+    if (!window.SYNIMA_STATE.syntenyTheme) window.SYNIMA_STATE.syntenyTheme = "dark";
 
     // Contig order overrides
     if (!window.SYNIMA_PERSIST_KEYS.syntenyContigOrder) window.SYNIMA_PERSIST_KEYS.syntenyContigOrder = "synima_syntenyContigOrder";
     if (!window.SYNIMA_STATE.syntenyContigOrderOverrides) window.SYNIMA_STATE.syntenyContigOrderOverrides = {};
 }
 
+const SYNIMA_SYNTENY_THEME_PRESETS = {
+    dark: {
+        syntenyBgColor: "#0f1b30",
+        syntenyLabelColor: "#ffffff",
+        syntenyBlockColor: "#ffffff",
+        syntenyContigStrokeColor: "#ffffff",
+        treeBgColor: "#0f1b30",
+        treeLabelColor: "#ffffff",
+        treeBranchColor: "#ffffff"
+    },
+    light: {
+        syntenyBgColor: "#ffffff",
+        syntenyLabelColor: "#000000",
+        syntenyBlockColor: "#000000",
+        syntenyContigStrokeColor: "#000000",
+        treeBgColor: "#ffffff",
+        treeLabelColor: "#000000",
+        treeBranchColor: "#000000"
+    }
+};
+
+function setPersistedValue(key, value) {
+    if (!key) return;
+    try { localStorage.setItem(key, String(value)); } catch (e) {}
+}
+
+function setControlValue(id, value) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = value;
+}
+
+function updateSyntenyThemeControls(theme) {
+    const toggle = document.getElementById("synteny-theme-toggle");
+    if (toggle) toggle.checked = theme === "light";
+
+    setControlValue("synteny-bg-select", window.SYNIMA_STATE.syntenyBgColor || "#0f1b30");
+    setControlValue("synteny-label-colour-select", window.SYNIMA_STATE.syntenyLabelColor || "#ffffff");
+    setControlValue("synteny-block-colour-select", window.SYNIMA_STATE.syntenyBlockColor || "#ffffff");
+    setControlValue("synteny-contig-stroke-select", window.SYNIMA_STATE.syntenyContigStrokeColor || "#ffffff");
+    setControlValue("tree-bg-select", window.SYNIMA_STATE.treeBgColor || "#0f1b30");
+    setControlValue("tree-label-colour-select", window.SYNIMA_STATE.treeLabelColor || "#ffffff");
+    setControlValue("tree-branch-colour-select", window.SYNIMA_STATE.treeBranchColor || "#ffffff");
+}
+
+function rerenderThemeTreeViews() {
+    const tree = (typeof SYNIMA_TREES !== "undefined" && SYNIMA_TREES.current) ? SYNIMA_TREES.current : null;
+    if (!tree || !SYNIMA.renderTreeSvg) return;
+
+    const treeView = document.getElementById("tree-view-0");
+    if (treeView) {
+        treeView.style.setProperty("--synima-tree-bg", window.SYNIMA_STATE.treeBgColor || "#0f1b30");
+        SYNIMA.renderTreeSvg(tree, "tree-view-0");
+    }
+
+    if (document.getElementById("synteny-tree-mini")) {
+        SYNIMA.renderTreeSvg(tree, "synteny-tree-mini", { mini: true });
+    }
+}
+
+function applySyntenyTheme(theme, opts = {}) {
+    const nextTheme = theme === "light" ? "light" : "dark";
+    const preset = SYNIMA_SYNTENY_THEME_PRESETS[nextTheme];
+
+    window.SYNIMA_STATE.syntenyTheme = nextTheme;
+    Object.assign(window.SYNIMA_STATE, preset);
+
+    if (opts.persist !== false) {
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.syntenyTheme, nextTheme);
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.syntenyBgColor, preset.syntenyBgColor);
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor, preset.syntenyLabelColor);
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.syntenyBlockColor, preset.syntenyBlockColor);
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor, preset.syntenyContigStrokeColor);
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.treeBgColor, preset.treeBgColor);
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.treeLabelColor, preset.treeLabelColor);
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.treeBranchColor, preset.treeBranchColor);
+    }
+
+    if (opts.updateControls !== false) updateSyntenyThemeControls(nextTheme);
+    applySyntenyBackground();
+    rerenderThemeTreeViews();
+
+    if (opts.rerender !== false && typeof SYNIMA._syntenyRerender === "function") {
+        SYNIMA._syntenyRerender();
+    }
+}
+
+SYNIMA.applySyntenyTheme = applySyntenyTheme;
+SYNIMA.updateSyntenyThemeControls = updateSyntenyThemeControls;
+
 // Useful function to start with - finding default values that might have been preselected
 function syncSyntenyModeFromStorage() {
+    // theme macro (dark is the report default)
+    try {
+        const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyTheme);
+        if (saved === "light" || saved === "dark") {
+            window.SYNIMA_STATE.syntenyTheme = saved;
+            applySyntenyTheme(saved, { persist: false, rerender: false, updateControls: false });
+        }
+    } catch (e) {
+        console.warn("Could not read synteny theme from localStorage", e);
+    }
+
     // synteny mode (spans vs gene/aligncoords)
     try {
         const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyMode);
@@ -473,8 +576,15 @@ SYNIMA.showSynteny = function () {
     // ----------------------------
     // Header / Download
     // ----------------------------
-    let html = `<div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:6px;"><h1>Synteny Viewer</h1>`;
-    html += `<div style="position:relative; display:inline-block;">
+    let html = `<div style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:6px;"><h1>Synteny Viewer</h1>`;
+    html += `<div class="synteny-header-actions">
+      <label class="synima-theme-switch" title="Toggle Synteny Viewer theme">
+        <span>Dark</span>
+        <input id="synteny-theme-toggle" type="checkbox" aria-label="Use light Synteny Viewer theme" />
+        <span class="synima-theme-track" aria-hidden="true"><span class="synima-theme-knob"></span></span>
+        <span>Light</span>
+      </label>
+      <div style="position:relative; display:inline-block;">
       <button id="synteny-download-btn" style="padding:2px 6px; margin:0;">
         Download ▾
       </button>
@@ -523,6 +633,7 @@ SYNIMA.showSynteny = function () {
           Tree + Synteny (SVG)
         </button>
 
+      </div>
       </div>
     </div>
     </div>`;
@@ -821,6 +932,14 @@ SYNIMA.showSynteny = function () {
 
     syncSyntenyModeFromStorage();
     syncSyntenyFontFromStorage();
+    updateSyntenyThemeControls(window.SYNIMA_STATE.syntenyTheme || "dark");
+
+    const themeToggle = document.getElementById("synteny-theme-toggle");
+    if (themeToggle) {
+      themeToggle.addEventListener("change", () => {
+        applySyntenyTheme(themeToggle.checked ? "light" : "dark");
+      });
+    }
 
     const initMode = window.SYNIMA_STATE.syntenyMode || "spans";
     const initRadio = document.querySelector(`input[name="synteny-mode"][value="${initMode}"]`);
@@ -1569,6 +1688,10 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyBlockOpacity = 0.5;
     window.SYNIMA_STATE.syntenyBgColor = "#0f1b30";
     window.SYNIMA_STATE.syntenyLabelColor = "#ffffff";
+    window.SYNIMA_STATE.syntenyTheme = "dark";
+    window.SYNIMA_STATE.treeBgColor = "#0f1b30";
+    window.SYNIMA_STATE.treeLabelColor = "#ffffff";
+    window.SYNIMA_STATE.treeBranchColor = "#ffffff";
     window.SYNIMA_STATE.selectedContigKey = null;
     window.SYNIMA_STATE.syntenyContigNameOverrides = {};
     window.SYNIMA_STATE.syntenyContigFlips = {};
@@ -1638,6 +1761,7 @@ SYNIMA.resetSynteny = function () {
     // contig label colour
     const lc = document.getElementById("synteny-label-colour-select");
     if (lc) lc.value = "#ffffff";
+    updateSyntenyThemeControls("dark");
 
     // scale bar
     const scShow = document.getElementById("synteny-scale-show");
@@ -1679,6 +1803,10 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockColor);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockOpacity);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTheme);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.treeBgColor);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.treeLabelColor);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.treeBranchColor);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigNames);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigFlips);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides);
@@ -1700,6 +1828,7 @@ SYNIMA.resetSynteny = function () {
     if (typeof SYNIMA._syntenyRerender === "function") {
         SYNIMA._syntenyRerender();
     }
+    rerenderThemeTreeViews();
     console.log("Synteny reset to defaults.");
 };
 

@@ -689,6 +689,67 @@ body {
   overflow: hidden;
 }
 
+.synteny-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.synima-theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.synima-theme-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.synima-theme-track {
+  position: relative;
+  width: 2.4rem;
+  height: 1.25rem;
+  border: 1px solid #475569;
+  border-radius: 999px;
+  background: #0f172a;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.synima-theme-knob {
+  position: absolute;
+  top: 0.17rem;
+  left: 0.18rem;
+  width: 0.82rem;
+  height: 0.82rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.synima-theme-switch input:checked + .synima-theme-track {
+  background: #e5e7eb;
+  border-color: #94a3b8;
+}
+
+.synima-theme-switch input:checked + .synima-theme-track .synima-theme-knob {
+  transform: translateX(1.1rem);
+  background: #111827;
+}
+
+.synima-theme-switch input:focus-visible + .synima-theme-track {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
 /*choice-group*/
 .synteny-controls label {
   color: #ffffff;

@@ -281,6 +281,7 @@ window.SYNIMA_PERSIST_KEYS = window.SYNIMA_PERSIST_KEYS || {
 	syntenyBgColor: "synima_synteny_bg_color",
 
 	syntenyLabelColor: "synima_synteny_label_color",
+	syntenyTheme: "synima_synteny_theme",
 
 	// genes tab
 	genesCategories: "synima_genes_categories",
@@ -332,6 +333,7 @@ window.SYNIMA_STATE.syntenyBlockColor = window.SYNIMA_STATE.syntenyBlockColor ??
 window.SYNIMA_STATE.syntenyBlockOpacity = window.SYNIMA_STATE.syntenyBlockOpacity ?? 0.5;
 window.SYNIMA_STATE.syntenyBgColor = window.SYNIMA_STATE.syntenyBgColor ?? "#0f1b30";
 window.SYNIMA_STATE.syntenyLabelColor = window.SYNIMA_STATE.syntenyLabelColor ?? "#ffffff";
+window.SYNIMA_STATE.syntenyTheme = window.SYNIMA_STATE.syntenyTheme ?? "dark";
 window.SYNIMA_MIDPOINT_VALUE = window.SYNIMA_MIDPOINT_VALUE || "__SYNIMA_MIDPOINT__";
 
 // renaming contigs etc.
