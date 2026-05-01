@@ -7,7 +7,7 @@ use crate::util::{mkdir, open_bufread, open_bufwrite}; //,open_file_read,open_fi
 use std::process;
 use std::process::Command;
 use std::path::Path;
-//use std::collections::{HashSet}; //HashMap, 
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::fs::{self};
 use std::io::{BufRead, Write};
@@ -455,7 +455,12 @@ pub fn run_all_vs_all(
     });
 }
 
-pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, logger: &Logger) {
+pub fn concatenate_unique_blast_pairs(
+    blast_out_dir: &Path,
+    output_file: &Path,
+    allowed_genomes: Option<&HashSet<String>>,
+    logger: &Logger,
+) {
     //let mut seen_pairs = HashSet::new();
 
     // Create output file
@@ -470,6 +475,7 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
         }
     };
 
+    let mut blast_paths = Vec::new();
     for entry in read_dir {
         let entry = match entry {
             Ok(e) => e,
@@ -478,8 +484,15 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
                 continue;
             }
         };
+        blast_paths.push(entry.path());
+    }
 
-        let path = entry.path();
+    blast_paths.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+
+    let mut included_count = 0usize;
+    let mut skipped_stale_count = 0usize;
+
+    for path in blast_paths {
         if !path.is_file() {
             continue;
         }
@@ -507,6 +520,17 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
             continue;
         };
 
+        if let Some(allowed_genomes) = allowed_genomes {
+            if !allowed_genomes.contains(q) || !allowed_genomes.contains(r) {
+                skipped_stale_count += 1;
+                logger.information(&format!(
+                    "concatenate_unique_blast_pairs: Skipping BLAST result outside current genome set: {} vs {}",
+                    q, r
+                ));
+                continue;
+            }
+        }
+
         // Ensure we only process one of (A,B) or (B,A)
         //let pair = if q <= r { (q.to_string(), r.to_string()) } else { (r.to_string(), q.to_string()) };
         //if run_type == "orthomcl" && seen_pairs.contains(&pair) {
@@ -515,6 +539,7 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
         //}
 
         logger.information(&format!("concatenate_unique_blast_pairs: Including BLAST result: {} vs {}", q, r));
+        included_count += 1;
         //seen_pairs.insert(pair);
 
         // Open the BLAST file
@@ -535,6 +560,21 @@ pub fn concatenate_unique_blast_pairs(blast_out_dir: &Path, output_file: &Path, 
             }
         }
     }
+
+    if included_count == 0 {
+        logger.error(&format!(
+            "concatenate_unique_blast_pairs: No BLAST .out files in {} matched the current genome set. Run Step 2 for this analysis first.",
+            blast_out_dir.display()
+        ));
+        process::exit(1);
+    }
+
+    if skipped_stale_count > 0 {
+        logger.information(&format!(
+            "concatenate_unique_blast_pairs: Skipped {} stale BLAST result file(s) from other runs.",
+            skipped_stale_count
+        ));
+    }
 }
 
 pub fn ensure_blast_dir(out_dir: &Path) -> Result<PathBuf, String> {
@@ -542,4 +582,32 @@ pub fn ensure_blast_dir(out_dir: &Path) -> Result<PathBuf, String> {
     fs::create_dir_all(&blast_dir)
         .map_err(|e| format!("create {}: {}", blast_dir.display(), e))?;
     Ok(blast_dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn concatenate_unique_blast_pairs_filters_to_allowed_genomes() {
+        let temp = tempfile::tempdir().unwrap();
+        let blast_dir = temp.path().join("blast");
+        fs::create_dir(&blast_dir).unwrap();
+
+        fs::write(blast_dir.join("A_vs_A.out"), "kept_self\n").unwrap();
+        fs::write(blast_dir.join("A_vs_B.out"), "kept_pair\n").unwrap();
+        fs::write(blast_dir.join("A_vs_C.out"), "stale_pair\n").unwrap();
+        fs::write(blast_dir.join("C_vs_C.out"), "stale_self\n").unwrap();
+
+        let allowed_genomes = HashSet::from(["A".to_string(), "B".to_string()]);
+        let output_file = temp.path().join("all_vs_all.out");
+
+        concatenate_unique_blast_pairs(&blast_dir, &output_file, Some(&allowed_genomes), &Logger);
+
+        let output = fs::read_to_string(output_file).unwrap();
+        assert!(output.contains("kept_self"));
+        assert!(output.contains("kept_pair"));
+        assert!(!output.contains("stale_pair"));
+        assert!(!output.contains("stale_self"));
+    }
 }

@@ -4,28 +4,16 @@ use crate::write_fasta;
 use crate::util::{mkdir, open_bufread, open_bufwrite};
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fs::{self};
 use std::io::{Write, BufRead};
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 
 /// Build SpeciesIDs.txt and return species name to ID map
-fn generate_species_ids(blast_dir: &Path, out_dir: &Path, logger: &Logger) -> Result<BTreeMap<String, usize>, String> {
-    let mut species_set = BTreeMap::new();
-
-    for entry in fs::read_dir(blast_dir).map_err(|e| format!("Failed to read blast dir: {e}"))? {
-        let path = entry.map_err(|e| format!("Dir entry error: {e}"))?.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("out") {
-            if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
-                if let Some((a, b)) = file_stem.split_once("_vs_") {
-                    species_set.insert(a.to_string(), ());
-                    species_set.insert(b.to_string(), ());
-                }
-            }
-        }
-    }
-
-    let species_list: Vec<String> = species_set.keys().cloned().collect();
+fn generate_species_ids(current_genomes: &HashSet<String>, out_dir: &Path, logger: &Logger) -> Result<BTreeMap<String, usize>, String> {
+    let mut species_list: Vec<String> = current_genomes.iter().cloned().collect();
+    species_list.sort();
     let species_id_map: BTreeMap<String, usize> = species_list.iter().enumerate().map(|(i, s)| (s.clone(), i)).collect();
 
     let blast_subdir = out_dir.join("Blast");
@@ -52,6 +40,7 @@ pub fn rewrite_blast_files(
     of_out_dir: &Path,
     species_ids: &BTreeMap<String, usize>,
     seq_id_map: &HashMap<String, String>,
+    current_genomes: &HashSet<String>,
     logger: &Logger
 ) -> Result<(), String> {
 
@@ -59,15 +48,34 @@ pub fn rewrite_blast_files(
     let of_blast = of_out_dir.join("Blast");
     mkdir(&of_blast, &logger, "rewrite_blast_files");
 
+    let mut paths = Vec::new();
     for entry in fs::read_dir(blast_dir).map_err(|e| format!("Failed to read blast dir: {e}"))? {
-        let path = entry.map_err(|e| format!("Dir entry error: {e}"))?.path();
+        paths.push(entry.map_err(|e| format!("Dir entry error: {e}"))?.path());
+    }
+    paths.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+
+    let mut seen_pairs = HashSet::new();
+    let mut skipped_stale_count = 0usize;
+
+    for path in paths {
         if path.extension().and_then(|s| s.to_str()) != Some("out") {
             continue;
         }
         let file_stem = path.file_stem().and_then(|s| s.to_str()).ok_or_else(|| format!("Non-UTF8 file name: {}", path.display()))?;
         let (a_name, b_name) = file_stem.split_once("_vs_").ok_or_else(|| format!("Unexpected BLAST filename (need A_vs_B.out): {}", path.display()))?;
+
+        if !current_genomes.contains(a_name) || !current_genomes.contains(b_name) {
+            skipped_stale_count += 1;
+            logger.information(&format!(
+                "rewrite_blast_files: Skipping BLAST result outside current genome set: {} vs {}",
+                a_name, b_name
+            ));
+            continue;
+        }
+
         let i = *species_ids.get(a_name).ok_or_else(|| format!("Species not found in ID map: {a_name}"))?;
         let j = *species_ids.get(b_name).ok_or_else(|| format!("Species not found in ID map: {b_name}"))?;
+        seen_pairs.insert((a_name.to_string(), b_name.to_string()));
 
         // Input/Output
         let reader = open_bufread(&path, &logger, "rewrite_blast_files");
@@ -100,6 +108,27 @@ pub fn rewrite_blast_files(
         }
         writer.flush().map_err(|e| format!("Flush error {}: {e}", out_path.display()))?;
     }
+
+    for a_name in species_ids.keys() {
+        for b_name in species_ids.keys() {
+            if !seen_pairs.contains(&(a_name.clone(), b_name.clone())) {
+                return Err(format!(
+                    "Missing BLAST output for current genome pair {} vs {} in {}",
+                    a_name,
+                    b_name,
+                    blast_dir.display()
+                ));
+            }
+        }
+    }
+
+    if skipped_stale_count > 0 {
+        logger.information(&format!(
+            "rewrite_blast_files: Skipped {} stale BLAST result file(s) from other runs.",
+            skipped_stale_count
+        ));
+    }
+
     Ok(())
 }
 
@@ -109,11 +138,12 @@ pub fn prepare_orthofinder_blast(
     alignment_type: &str,
     blast_out_dir: &Path, 
     orthofinder_out_dir: &Path, 
+    current_genomes: &HashSet<String>,
     logger: &Logger) -> Result<(), String> {
 
     // speciesID.txt
     logger.information(&format!("prepare_orthofinder_blast: generate species ids: {}", orthofinder_out_dir.display()));
-    let species_ids = generate_species_ids(blast_out_dir, orthofinder_out_dir, &logger)?;
+    let species_ids = generate_species_ids(current_genomes, orthofinder_out_dir, &logger)?;
 
     // Process FASTAs -> Blast/Species<ID>.fa and SequenceIDs.txt, and build seq map
     logger.information(&format!("prepare_orthofinder_blast: rewrite FASTA files with species codes: {}", orthofinder_out_dir.display()));
@@ -121,7 +151,7 @@ pub fn prepare_orthofinder_blast(
 
     // Rewrite BLAST files using sequence map
     logger.information(&format!("prepare_orthofinder_blast: rewrite BLAST files with species codes: {}", orthofinder_out_dir.display()));
-    rewrite_blast_files(blast_out_dir, orthofinder_out_dir, &species_ids, &seq_id_map, &logger)?;
+    rewrite_blast_files(blast_out_dir, orthofinder_out_dir, &species_ids, &seq_id_map, current_genomes, &logger)?;
 
    Ok(())
 }

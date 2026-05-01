@@ -1,6 +1,6 @@
 use clap::Parser;
 use std::path::Path;
-use std::collections::{HashMap};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::process::Command;
 use std::process::Stdio;
@@ -93,9 +93,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let repo_spec_path = Path::new(repo_spec_file);
     let repo_base_dir = repo_spec_path.parent().unwrap_or_else(|| Path::new("."));
     let repo_basename = repo_spec_path.file_name().and_then(|s| s.to_str()).unwrap_or("repo_spec.txt");
+    let current_genomes: HashSet<String> = repo.iter().map(|entry| entry.name.clone()).collect();
 
     // Output dirs
-    let main_output_dir = repo_base_dir.join(&args.output_dir);
+    let main_output_dir = resolve_main_output_dir(repo_base_dir, &args.output_dir, output_dir_was_explicitly_set(), &logger);
     let repo_out_dir = main_output_dir.join("synima_step1-create-repo");
     let blast_out_dir = main_output_dir.join("synima_step2-align-all");
     let rbh_out_dir = main_output_dir.join("synima_step3-rbh");
@@ -190,7 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let omcl_log_path = omcl_out_dir.join("omcl.log");
 
         // Concatenate BLAST results
-        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, &logger);
+        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, Some(&current_genomes), &logger);
 
         // Assign genome codes to genes for omcl
         let genome_set = omcl::parse_genome_map_from_gff(&combined_gff_path, &logger)?;
@@ -216,7 +217,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Concatenate BLAST results
         let all_vs_all_path = rbh_out_dir.join("all_vs_all.out");
-        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, &logger);
+        blast::concatenate_unique_blast_pairs(&blast_out_dir, &all_vs_all_path, Some(&current_genomes), &logger);
 
         // Save just the first 2 columns
         let rbh_pairs_path = blast_rbh::write_blast_pairs(&all_vs_all_path, &logger)?;
@@ -264,11 +265,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // make output director
-        mkdir(&orthofinder_out_dir, &logger, "main (blast-to-orthofinder)");
+        // Clear any previous Step 3 outputs to avoid stale OrthoFinder inputs
+        util::recreate_dir(&orthofinder_out_dir, &logger, "main (blast-to-orthofinder)");
 
         // Prepare Orthofinder input folder
-        if let Err(e) = orthofinder::prepare_orthofinder_blast(&repo, &args.alignment_type, &blast_out_dir, &orthofinder_out_dir, &logger) {
+        if let Err(e) = orthofinder::prepare_orthofinder_blast(&repo, &args.alignment_type, &blast_out_dir, &orthofinder_out_dir, &current_genomes, &logger) {
             logger.error(&format!("Error: unable to prepare orthofinder BLAST folder: {}", e));
             std::process::exit(1);
         }
@@ -540,6 +541,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn output_dir_was_explicitly_set() -> bool {
+    std::env::args_os().skip(1).any(|arg| {
+        let arg = arg.to_string_lossy();
+        arg == "-o"
+            || arg == "--output_dir"
+            || arg == "--output-dir"
+            || arg.starts_with("--output_dir=")
+            || arg.starts_with("--output-dir=")
+            || (arg.starts_with("-o") && arg.len() > 2)
+    })
+}
+
+fn resolve_main_output_dir(
+    repo_base_dir: &Path,
+    requested_output_dir: &str,
+    output_dir_was_explicit: bool,
+    logger: &Logger,
+) -> PathBuf {
+    let requested = repo_base_dir.join(requested_output_dir);
+
+    if output_dir_was_explicit || !requested.exists() {
+        return requested;
+    }
+
+    for suffix in 2usize.. {
+        let candidate = repo_base_dir.join(format!("{requested_output_dir}{suffix}"));
+        if !candidate.exists() {
+            logger.warning(&format!(
+                "Default output directory {} already exists; using {}",
+                requested.display(),
+                candidate.display()
+            ));
+            return candidate;
+        }
+    }
+
+    unreachable!("unbounded suffix search should always return");
+}
+
 fn try_open_in_browser(path: &Path, logger: &Logger) {
     let abs = match path.canonicalize() {
         Ok(p) => p,
@@ -579,5 +619,32 @@ fn try_open_in_browser(path: &Path, logger: &Logger) {
             .map_err(|e| {
                 logger.warning(&format!("try_open_in_browser: failed to run 'start': {e}"));
             });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_main_output_dir_numbers_existing_default_dirs() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::create_dir(temp.path().join("synima_output")).unwrap();
+        fs::create_dir(temp.path().join("synima_output2")).unwrap();
+
+        let output_dir = resolve_main_output_dir(temp.path(), "synima_output", false, &Logger);
+
+        assert_eq!(output_dir, temp.path().join("synima_output3"));
+    }
+
+    #[test]
+    fn resolve_main_output_dir_preserves_explicit_existing_dir() {
+        let temp = tempfile::tempdir().unwrap();
+        let explicit = temp.path().join("synima_output");
+        fs::create_dir(&explicit).unwrap();
+
+        let output_dir = resolve_main_output_dir(temp.path(), "synima_output", true, &Logger);
+
+        assert_eq!(output_dir, explicit);
     }
 }

@@ -11,7 +11,7 @@ use zip::read::ZipArchive;
 use std::io::Cursor;
 //use serde::Deserialize;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct AssemblyMapping {
     genbank_to_refseq: std::collections::HashMap<String, String>,
 }
@@ -100,11 +100,15 @@ const GFF_URL: &str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi
 /// Called from main.rs before Step1 (CreateRepoDb)
 pub fn run_step0_download_genbank(accessions: &[String], logger: &Logger) -> Result<()> {
 
-    if accessions.is_empty() {
+    let requested_accessions: Vec<String> = accessions
+        .iter()
+        .map(|acc| acc.trim().to_string())
+        .filter(|acc| !acc.is_empty())
+        .collect();
+
+    if requested_accessions.is_empty() {
         return Ok(());
     }
-
-    let mappings = load_refseq_assembly_mappings(&logger);
 
     let cwd = match std::env::current_dir() {
         Ok(p) => p,
@@ -114,39 +118,56 @@ pub fn run_step0_download_genbank(accessions: &[String], logger: &Logger) -> Res
         }
     };
 
-    for acc in accessions {
-        let acc_trim = acc.trim();
-        if acc_trim.is_empty() { continue; }
+    let missing_accessions: Vec<&String> = requested_accessions
+        .iter()
+        .filter(|acc| !download_files_present(&cwd.join(acc.as_str())))
+        .collect();
 
-        let out_dir = cwd.join(acc_trim);
+    let mappings = if missing_accessions.iter().any(|acc| acc.starts_with("GCA_")) {
+        load_refseq_assembly_mappings(&logger)
+    } else {
+        if missing_accessions.is_empty() {
+            logger.information("run_step0_download_genbank: All requested accessions already have genome.fa + annotation.gff; skipping RefSeq assembly summary download.");
+        } else {
+            logger.information("run_step0_download_genbank: No missing GenBank assembly accessions require the RefSeq mapping table; skipping RefSeq assembly summary download.");
+        }
+        AssemblyMapping::default()
+    };
+
+    for acc in &requested_accessions {
+        let out_dir = cwd.join(acc.as_str());
 
         if let Err(e) = std::fs::create_dir_all(&out_dir) {
             logger.error(&format!("run_step0_download_genbank: Failed to create output directory {}: {e}", out_dir.display()));
             std::process::exit(1);
         }
 
-        logger.information(&format!("run_step0_download_genbank: Downloading data for {}", acc_trim));
+        logger.information(&format!("run_step0_download_genbank: Preparing data for {}", acc));
 
-        download_from_ncbi(acc_trim, &out_dir, logger, &mappings)?;
+        download_from_ncbi(acc, &out_dir, logger, &mappings)?;
     }
 
     // Write repo spec as before…
     let spec_path = cwd.join("Synima_repo_spec.txt");
-    write_repo_spec(accessions, &spec_path, &logger);
+    write_repo_spec(&requested_accessions, &spec_path, &logger);
     Ok(())
+}
+
+fn download_files_present(out_dir: &Path) -> bool {
+    let fasta_out_path = out_dir.join("genome.fa");
+    let gff_out_path = out_dir.join("annotation.gff");
+
+    let fasta_ok = std::fs::metadata(&fasta_out_path).map(|m| m.len() > 0).unwrap_or(false);
+    let gff_ok = std::fs::metadata(&gff_out_path).map(|m| m.len() > 0).unwrap_or(false);
+
+    fasta_ok && gff_ok
 }
 
 /// Decide whether to use efetch or the Datasets API.
 fn download_from_ncbi(accession: &str, out_dir: &Path, logger: &Logger, mappings: &AssemblyMapping) -> Result<()> {
 
     // Check if already downloaded and skip if it has
-    let fasta_out_path = out_dir.join("genome.fa");
-    let gff_out_path = out_dir.join("annotation.gff");
-
-    let fasta_ok = std::fs::metadata(&fasta_out_path).map(|m| m.len() > 0).unwrap_or(false);
-    let gff_ok   = std::fs::metadata(&gff_out_path).map(|m| m.len() > 0).unwrap_or(false);
-
-    if fasta_ok && gff_ok {
+    if download_files_present(out_dir) {
         logger.warning(&format!("download_from_ncbi: {} already has genome.fa + annotation.gff, skipping download", out_dir.display()));
         return Ok(());
     }
