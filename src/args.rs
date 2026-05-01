@@ -105,6 +105,11 @@ pub struct Args {
     #[arg(long = "tree-full", default_value_t = false)]
     pub tree_full: bool,
 
+    /// Embed the full gene-level aligncoords file in Synima.html even when it is large.
+    /// By default, Synima omits aligncoords over 100 MiB so large reports still open in browsers.
+    #[arg(long = "report-full-aligncoords", default_value_t = false)]
+    pub report_full_aligncoords: bool,
+
     /// Number of DAGchainer chains
     #[arg(long = "dagchainer_chains", default_value_t = 4)]
     pub dagchainer_chains: usize,

@@ -37,6 +37,8 @@ use crate::util::mkdir;
 use crate::synima::OrthoParams;
 use crate::synima::{MethodsData};
 
+const REPORT_ALIGNCOORDS_EMBED_LIMIT_BYTES: u64 = 100 * 1024 * 1024;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut args = Args::parse();
@@ -517,13 +519,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let leaf_order = tree::extract_leaf_order_from_newick(&newick);
 
         // synteny plot
-        let aligncoords_text = std::fs::read_to_string(&combined_aligncoords).unwrap_or_else(|_| String::new());
+        let aligncoords_size_bytes = fs::metadata(&combined_aligncoords).map(|m| m.len()).unwrap_or(0);
+        let aligncoords_over_limit = aligncoords_size_bytes > REPORT_ALIGNCOORDS_EMBED_LIMIT_BYTES;
+        let aligncoords_omitted = aligncoords_over_limit && !args.report_full_aligncoords;
+        let aligncoords_text = if aligncoords_omitted {
+            logger.warning(&format!(
+                "Synima report: {} is {}. Omitting full gene-level aligncoords from Synima.html because it exceeds the {} embed limit. Contig synteny remains available. Use --report-full-aligncoords to force embedding.",
+                combined_aligncoords.display(),
+                human_readable_bytes(aligncoords_size_bytes),
+                human_readable_bytes(REPORT_ALIGNCOORDS_EMBED_LIMIT_BYTES)
+            ));
+            String::new()
+        } else {
+            if aligncoords_over_limit {
+                logger.warning(&format!(
+                    "Synima report: embedding large aligncoords file {} ({}) because --report-full-aligncoords was used.",
+                    combined_aligncoords.display(),
+                    human_readable_bytes(aligncoords_size_bytes)
+                ));
+            }
+            std::fs::read_to_string(&combined_aligncoords).unwrap_or_else(|_| String::new())
+        };
         let aligncoords_spans_text = std::fs::read_to_string(&combined_spans).unwrap_or_else(|_| String::new());
         let synteny_config = synima::build_synteny_config(&repo, &leaf_order, &aligncoords_spans_text, &logger)?;
 
         let json = serde_json::json!({
             "synteny_config": synteny_config,
             "aligncoords": aligncoords_text,
+            "aligncoords_omitted": aligncoords_omitted,
+            "aligncoords_size_bytes": aligncoords_size_bytes,
+            "aligncoords_embed_limit_bytes": REPORT_ALIGNCOORDS_EMBED_LIMIT_BYTES,
+            "aligncoords_file": combined_aligncoords.file_name().and_then(|s| s.to_str()).unwrap_or("aligncoords"),
             "aligncoords_spans": aligncoords_spans_text
         });
 
@@ -539,6 +565,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     logger.information("Synima: All requested steps completed.");
     Ok(())
+}
+
+fn human_readable_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes as f64;
+    let mut unit = 0usize;
+
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+
+    if unit == 0 {
+        format!("{} {}", bytes, UNITS[unit])
+    } else {
+        format!("{:.1} {}", value, UNITS[unit])
+    }
 }
 
 fn output_dir_was_explicitly_set() -> bool {

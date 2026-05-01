@@ -240,6 +240,7 @@ The output from dagchainer will then be used to generate the final visualisation
 Synima -r Repo_spec.txt -s synima
 ```
 * The output webpage can be opened in any web browser (Chrome, Firefox etc.).
+* For large runs, Synima does not embed the full gene-level aligncoords file in the HTML if it is over 100 MiB, so the report remains browser-friendly. Contig synteny will still be available. To force the full gene-level aligncoords into the report, use `--report-full-aligncoords`.
 
 * There are 5 tabs at the top, which take you different pages (Orthologs, Tree, Synteny, Methods, About).
 

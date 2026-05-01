@@ -790,6 +790,19 @@ body {
   color: white;
 }
 
+.synima-disabled-option {
+  opacity: 0.6;
+}
+
+.synima-data-note {
+  display: inline-block;
+  max-width: 760px;
+  color: #fbbf24;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  vertical-align: middle;
+}
+
 /* contig select 
 .synteny-ctg rect {
   stroke: #ffffff;

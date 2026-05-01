@@ -102,6 +102,19 @@ function applySyntenyTheme(theme, opts = {}) {
 SYNIMA.applySyntenyTheme = applySyntenyTheme;
 SYNIMA.updateSyntenyThemeControls = updateSyntenyThemeControls;
 
+function formatBytesForSynteny(bytes) {
+    const n = Number(bytes);
+    if (!Number.isFinite(n) || n <= 0) return "unknown size";
+    const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let value = n;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+        value /= 1024;
+        unit += 1;
+    }
+    return unit === 0 ? `${n} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
+}
+
 // Useful function to start with - finding default values that might have been preselected
 function syncSyntenyModeFromStorage() {
     // theme macro (dark is the report default)
@@ -560,6 +573,14 @@ SYNIMA.showSynteny = function () {
     const config = data.synteny_config;
     const aligncoords = data.aligncoords || "";
     const spansText = data.aligncoords_spans || "";
+    const aligncoordsOmitted = !!data.aligncoords_omitted;
+    const aligncoordsUnavailable = aligncoordsOmitted && !aligncoords;
+    const aligncoordsSizeLabel = formatBytesForSynteny(data.aligncoords_size_bytes);
+    const aligncoordsLimitLabel = formatBytesForSynteny(data.aligncoords_embed_limit_bytes);
+    const aligncoordsFileLabel = data.aligncoords_file ? String(data.aligncoords_file) : "aligncoords";
+    const geneSyntenyMessage = aligncoordsUnavailable
+      ? `Gene synteny was omitted from this report because ${aligncoordsFileLabel} is ${aligncoordsSizeLabel}, above the ${aligncoordsLimitLabel} embed limit. Re-run Synima with --report-full-aligncoords to force embedding.`
+      : "";
 
 
     // Genome order should follow the current TREE PAGE settings
@@ -691,10 +712,11 @@ SYNIMA.showSynteny = function () {
               Contig synteny 
             </label>
 
-            <label>
-              <input type="radio" name="synteny-mode" value="aligncoords">
+            <label class="${aligncoordsUnavailable ? "synima-disabled-option" : ""}">
+              <input type="radio" name="synteny-mode" value="aligncoords" ${aligncoordsUnavailable ? "disabled" : ""}>
               Gene synteny 
             </label>
+            ${aligncoordsUnavailable ? `<span class="synima-data-note">${escapeHtml(geneSyntenyMessage)}</span>` : ""}
         </fieldset>
 
         <!-- Row 2: layout + size -->
@@ -939,6 +961,11 @@ SYNIMA.showSynteny = function () {
       themeToggle.addEventListener("change", () => {
         applySyntenyTheme(themeToggle.checked ? "light" : "dark");
       });
+    }
+
+    if (aligncoordsUnavailable && window.SYNIMA_STATE.syntenyMode === "aligncoords") {
+      window.SYNIMA_STATE.syntenyMode = "spans";
+      try { localStorage.setItem(window.SYNIMA_PERSIST_KEYS.syntenyMode, "spans"); } catch (e) {}
     }
 
     const initMode = window.SYNIMA_STATE.syntenyMode || "spans";
@@ -1490,7 +1517,10 @@ SYNIMA.showSynteny = function () {
     }
 
     function rerender() {
-        const mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || "spans";
+        let mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || "spans";
+        if (mode === "aligncoords" && aligncoordsUnavailable) {
+          mode = "spans";
+        }
 
         let blocks = [];
         if (mode === "spans") {
