@@ -31,14 +31,14 @@ function syncAlignFromStorage() {
 
   // add in background colour, branch colour and taxa label colour
   try {
-    const bg = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.treeBgColor);
-    if (bg) window.SYNIMA_STATE.treeBgColor = bg;
-
-    const lc = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.treeLabelColor);
-    if (lc) window.SYNIMA_STATE.treeLabelColor = lc;
-
-    const bc = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.treeBranchColor);
-    if (bc) window.SYNIMA_STATE.treeBranchColor = bc;
+    const keys = window.SYNIMA_PERSIST_KEYS;
+    const state = window.SYNIMA_STATE;
+    const theme = localStorage.getItem(keys.syntenyTheme);
+    if (theme === "light" || theme === "dark") state.syntenyTheme = theme;
+    const preset = SYNIMA_TREE_THEME_PRESETS[state.syntenyTheme === "light" ? "light" : "dark"];
+    for (const [key, color] of Object.entries(preset)) {
+      state[key] = localStorage.getItem(keys[key]) || color;
+    }
   } catch (e) {}
 }
 
@@ -1395,10 +1395,16 @@ SYNIMA.showTree = function () {
 
       <div class="section">
 
-        <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:6px;">
+        <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:6px;">
           <h2 style="margin:0;">Tree Visualisation</h2>
 
-          <div style="position:relative; display:inline-block;">
+          <div class="synima-figure-actions" style="position:relative;">
+            <label class="synima-theme-switch" title="Toggle tree theme">
+              <span>Dark</span>
+              <input id="tree-theme-toggle" type="checkbox" aria-label="Use light tree theme" />
+              <span class="synima-theme-track" aria-hidden="true"><span class="synima-theme-knob"></span></span>
+              <span>Light</span>
+            </label>
             <button id="download-btn" style="padding:2px 6px; margin:0;">
               Download ▾
             </button>
@@ -1568,6 +1574,12 @@ SYNIMA.showTree = function () {
 
   app.innerHTML = html;
   applyTreeBackground();
+
+  const themeToggle = document.getElementById("tree-theme-toggle");
+  themeToggle.checked = window.SYNIMA_STATE.syntenyTheme === "light";
+  themeToggle.addEventListener("change", () => {
+    SYNIMA.applySyntenyTheme(themeToggle.checked ? "light" : "dark", { rerender: false });
+  });
 
   // DOWNLOAD DROPDOWN LOGIC
   const downloadBtn = document.getElementById("download-btn");
@@ -1803,9 +1815,8 @@ SYNIMA.resetRoot = function () {
   SYNIMA.clearBranchSelection();
   SYNIMA.annotateArmed = false;
 
-  window.SYNIMA_STATE.treeBgColor = "#0f1b30";
-  window.SYNIMA_STATE.treeLabelColor = "#ffffff";
-  window.SYNIMA_STATE.treeBranchColor = "#ffffff";
+  const theme = window.SYNIMA_STATE.syntenyTheme === "light" ? "light" : "dark";
+  Object.assign(window.SYNIMA_STATE, SYNIMA_TREE_THEME_PRESETS[theme]);
 
   // ----------------------------
   // 2) Reset persisted state
@@ -1850,15 +1861,8 @@ SYNIMA.resetRoot = function () {
   if (dd) dd.classList.add("hidden");
 
   // colours
-  const bgSel = document.getElementById("tree-bg-select");
-  if (bgSel) bgSel.value = "#0f1b30";
+  SYNIMA.updateSyntenyThemeControls(theme);
   applyTreeBackground();
-
-  const labSel = document.getElementById("tree-label-colour-select");
-  if (labSel) labSel.value = "#ffffff";
-
-  const brSel = document.getElementById("tree-branch-colour-select");
-  if (brSel) brSel.value = "#ffffff";
 
   // ----------------------------
   // 4) Rebuild tree and apply default rooting

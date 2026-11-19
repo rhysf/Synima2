@@ -17,19 +17,13 @@ const SYNIMA_SYNTENY_THEME_PRESETS = {
         syntenyBgColor: "#0f1b30",
         syntenyLabelColor: "#ffffff",
         syntenyBlockColor: "#ffffff",
-        syntenyContigStrokeColor: "#ffffff",
-        treeBgColor: "#0f1b30",
-        treeLabelColor: "#ffffff",
-        treeBranchColor: "#ffffff"
+        syntenyContigStrokeColor: "#ffffff"
     },
     light: {
         syntenyBgColor: "#ffffff",
         syntenyLabelColor: "#000000",
         syntenyBlockColor: "#000000",
-        syntenyContigStrokeColor: "#000000",
-        treeBgColor: "#ffffff",
-        treeLabelColor: "#000000",
-        treeBranchColor: "#000000"
+        syntenyContigStrokeColor: "#000000"
     }
 };
 
@@ -177,6 +171,8 @@ function setControlValue(id, value) {
 function updateSyntenyThemeControls(theme) {
     const toggle = document.getElementById("synteny-theme-toggle");
     if (toggle) toggle.checked = theme === "light";
+    const treeToggle = document.getElementById("tree-theme-toggle");
+    if (treeToggle) treeToggle.checked = theme === "light";
 
     setControlValue("synteny-bg-select", window.SYNIMA_STATE.syntenyBgColor || "#0f1b30");
     setControlValue("synteny-label-colour-select", window.SYNIMA_STATE.syntenyLabelColor || "#ffffff");
@@ -205,9 +201,10 @@ function rerenderThemeTreeViews() {
 function applySyntenyTheme(theme, opts = {}) {
     const nextTheme = theme === "light" ? "light" : "dark";
     const preset = SYNIMA_SYNTENY_THEME_PRESETS[nextTheme];
+    const treePreset = SYNIMA_TREE_THEME_PRESETS[nextTheme];
 
     window.SYNIMA_STATE.syntenyTheme = nextTheme;
-    Object.assign(window.SYNIMA_STATE, preset);
+    Object.assign(window.SYNIMA_STATE, preset, treePreset);
 
     if (opts.persist !== false) {
         setPersistedValue(window.SYNIMA_PERSIST_KEYS.syntenyTheme, nextTheme);
@@ -215,9 +212,9 @@ function applySyntenyTheme(theme, opts = {}) {
         setPersistedValue(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor, preset.syntenyLabelColor);
         setPersistedValue(window.SYNIMA_PERSIST_KEYS.syntenyBlockColor, preset.syntenyBlockColor);
         setPersistedValue(window.SYNIMA_PERSIST_KEYS.syntenyContigStrokeColor, preset.syntenyContigStrokeColor);
-        setPersistedValue(window.SYNIMA_PERSIST_KEYS.treeBgColor, preset.treeBgColor);
-        setPersistedValue(window.SYNIMA_PERSIST_KEYS.treeLabelColor, preset.treeLabelColor);
-        setPersistedValue(window.SYNIMA_PERSIST_KEYS.treeBranchColor, preset.treeBranchColor);
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.treeBgColor, treePreset.treeBgColor);
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.treeLabelColor, treePreset.treeLabelColor);
+        setPersistedValue(window.SYNIMA_PERSIST_KEYS.treeBranchColor, treePreset.treeBranchColor);
     }
 
     if (opts.updateControls !== false) updateSyntenyThemeControls(nextTheme);
@@ -252,7 +249,7 @@ function syncSyntenyModeFromStorage() {
         const saved = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyTheme);
         if (saved === "light" || saved === "dark") {
             window.SYNIMA_STATE.syntenyTheme = saved;
-            applySyntenyTheme(saved, { persist: false, rerender: false, updateControls: false });
+            Object.assign(window.SYNIMA_STATE, SYNIMA_SYNTENY_THEME_PRESETS[saved]);
         }
     } catch (e) {
         console.warn("Could not read synteny theme from localStorage", e);
@@ -748,7 +745,7 @@ SYNIMA.showSynteny = function () {
     // Header / Download
     // ----------------------------
     let html = `<div style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:6px;"><h1>Synteny Viewer</h1>`;
-    html += `<div class="synteny-header-actions">
+    html += `<div class="synima-figure-actions">
       <label class="synima-theme-switch" title="Toggle Synteny Viewer theme">
         <span>Dark</span>
         <input id="synteny-theme-toggle" type="checkbox" aria-label="Use light Synteny Viewer theme" />

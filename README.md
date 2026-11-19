@@ -251,6 +251,7 @@ Synima -r Repo_spec.txt -s synima
 
   - Increase the height of the tree using the expansion option.
   - Align tip labels (default on)
+  - Use the **Dark / Light** toggle beside **Download** to switch the shared Tree and Synteny theme.
   - Various graphical options including branch line weight, background colour, taxa label colour, and branch colour.
   - Rooting is midpoint by default. However, "user selection" will remove midpoint rooting. The dropdown menu provides options to root by any of the taxa, and by clicking on a taxa label, this will bring up that taxa in dropdown menu to 'apply'.
   - The font size of the tip labels can be changed, as can the name. By clicking on any taxa and then the 'annotate' button, or by clicking on the 'annotate' button and then clicking on the taxa, will bring up a new box to replace that taxa name.

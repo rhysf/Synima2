@@ -312,10 +312,15 @@ window.SYNIMA_PERSIST_KEYS.syntenyTreeWidth = "synima_synteny_tree_width_pct";
 window.SYNIMA_STATE.syntenyTreeWidthPct = window.SYNIMA_STATE.syntenyTreeWidthPct ?? 20;
 
 // tree extra
+const SYNIMA_TREE_THEME_PRESETS = {
+	dark: { treeBgColor: "#0f1b30", treeLabelColor: "#ffffff", treeBranchColor: "#ffffff" },
+	light: { treeBgColor: "#ffffff", treeLabelColor: "#000000", treeBranchColor: "#000000" }
+};
+
 window.SYNIMA_STATE.treeYScale = window.SYNIMA_STATE.treeYScale ?? 1.0;
-window.SYNIMA_STATE.treeBgColor = window.SYNIMA_STATE.treeBgColor ?? "#0f1b30";
-window.SYNIMA_STATE.treeLabelColor = window.SYNIMA_STATE.treeLabelColor ?? "#ffffff";
-window.SYNIMA_STATE.treeBranchColor = window.SYNIMA_STATE.treeBranchColor ?? "#ffffff";
+window.SYNIMA_STATE.treeBgColor = window.SYNIMA_STATE.treeBgColor ?? SYNIMA_TREE_THEME_PRESETS.dark.treeBgColor;
+window.SYNIMA_STATE.treeLabelColor = window.SYNIMA_STATE.treeLabelColor ?? SYNIMA_TREE_THEME_PRESETS.dark.treeLabelColor;
+window.SYNIMA_STATE.treeBranchColor = window.SYNIMA_STATE.treeBranchColor ?? SYNIMA_TREE_THEME_PRESETS.dark.treeBranchColor;
 
 // contig colours
 window.SYNIMA_PERSIST_KEYS.syntenyContigColorMode = "synima_synteny_contig_color_mode";
