@@ -2780,10 +2780,9 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identit
           // auto “nice” max
           ({ maxNice, step } = computeNiceMax(maxUnitsRaw, intervals));
         }
-        const maxBpNice = maxNice * factor;
-
         const xStart = layout.xStart;
-        const pxLen = maxBpNice * layout.scaleX;
+        const pxPerUnit = factor * layout.scaleX;
+        const axisX2 = Math.min(xStart + maxNice * pxPerUnit, svgW);
 
         // find bottom of plotted contigs so the bar sits underneath
         let maxY = 0;
@@ -2806,7 +2805,8 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identit
 
         let ticks = "";
         for (let i = 0; i <= intervals; i++) {
-          const x = xStart + (pxLen * (i / intervals));
+          const x = xStart + (maxNice * (i / intervals)) * pxPerUnit;
+          if (x > svgW) break;
           const val = (step * i);
           ticks += `
             <line x1="${x}" y1="${axisY}" x2="${x}" y2="${axisY + tickH}" stroke="${strokeCol}" stroke-width="${axisLineW}" />
@@ -2814,21 +2814,21 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identit
           `;
         }
 
-        const axisX2 = xStart + pxLen;
         const labelY = axisY + tickH + axisFont + 2 + labelFont + 8;
         const axisLabel = `${labelText} (${label})`;
+        scaleBottom = labelY + 12;
 
+        // Keep an explicit viewport when the export moves this scale into a different SVG.
         scaleBarSvg = `
-          <g class="synteny-scale">
+          <svg class="synteny-scale" width="${svgW}" height="${scaleBottom}" overflow="hidden">
             <line x1="${xStart}" y1="${axisY}" x2="${axisX2}" y2="${axisY}" stroke="${strokeCol}" stroke-width="${axisLineW}" />
             ${ticks}
-            <text x="${(xStart + axisX2) / 2}" y="${labelY}" fill="${strokeCol}" font-size="${labelFont}" text-anchor="middle">${escapeHtml(axisLabel)}</text>
-          </g>
+            <text x="${svgW / 2}" y="${labelY}" fill="${strokeCol}" font-size="${labelFont}" text-anchor="middle">${escapeHtml(axisLabel)}</text>
+          </svg>
         `;
 
-        extraBottom = (labelY + 12) - svgH; // svgH is your existing height; we will fix it next
+        extraBottom = scaleBottom - svgH;
         if (!isFinite(extraBottom) || extraBottom < 0) extraBottom = 0;
-        scaleBottom = labelY + 12;
     }
 
     // bump svgH so the scale bar is visible
