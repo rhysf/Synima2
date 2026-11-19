@@ -266,5 +266,5 @@ Synima -r Repo_spec.txt -s synima
     - Layout and size: the tree width, contig font size, contig box height and contig gap
     - Colours: Options to change the colour of all contigs, including several palettes, the contig outline colour and synteny block colour, the synteny opacity, the background colour and label colour
     - Use **Colour synteny by** to switch between % identity and a single colour. Identity mode offers Viridis, Plasma or Magma and an adjustable range (0–100% by default). Blocks and pairs without identity data use the single colour. The legend appears below the plot and in PNG and SVG downloads.
-    - Scale bar: The scale bar can be turned on or off, with options to change the units, the maximum number, the intervals shown, the axis font and label font sizes, the line width, and the label text.
+    - Scale bar settings include units, maximum, interval count, fonts, line width, and label text. The automatic maximum rounds down from the longest genome to give whole-number ticks where possible in the selected units. The **Max** field shows that value. Clear the field to return to the automatic maximum.
   - Once any graphical changes have been made, a figure can be downloaded as either PNG or SVG of just the synteny, or a PNG or SVG of both the synteny and the tree.

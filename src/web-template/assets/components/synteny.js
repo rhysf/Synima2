@@ -387,6 +387,17 @@ function syncSyntenyModeFromStorage() {
       console.warn("Could not read contig order overrides from localStorage", e);
     }
 
+    try {
+      const state = window.SYNIMA_STATE;
+      const keys = window.SYNIMA_PERSIST_KEYS;
+      const units = localStorage.getItem(keys.syntenyScaleUnits);
+      if (["auto", "bp", "kb", "mb", "gb"].includes(units)) state.syntenyScaleUnits = units;
+      const intervals = Number(localStorage.getItem(keys.syntenyScaleIntervals));
+      if ([5, 10, 20].includes(intervals)) state.syntenyScaleIntervals = intervals;
+      const max = localStorage.getItem(keys.syntenyScaleMax);
+      if (max === "" || (Number.isFinite(Number(max)) && Number(max) > 0)) state.syntenyScaleMax = max;
+    } catch (e) {}
+
     // scale bar width
     try {
       const v = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyScaleLineWidth);
@@ -1050,7 +1061,7 @@ SYNIMA.showSynteny = function () {
 
           <label style="margin-left: 10px;">
             Max:
-            <input id="synteny-scale-max" type="number" min="0" step="1" placeholder="auto" style="width:90px;">
+            <input id="synteny-scale-max" type="number" min="0" title="Clear to restore the automatic maximum" style="width:90px;">
           </label>
 
           <label style="margin-left: 10px;">
@@ -1614,10 +1625,17 @@ SYNIMA.showSynteny = function () {
     // --------------------
     // Scale bar settings
     // --------------------
+    const scaleMaxInput = document.getElementById("synteny-scale-max");
+    function updateScaleMaxInput() {
+      if (!scaleMaxInput) return;
+      const { max, increment } = getSyntenyScale(config.max_length);
+      scaleMaxInput.step = String(increment);
+      scaleMaxInput.value = max > 0 ? String(max) : "";
+    }
+
     function bindScaleBarControls() {
       const show = document.getElementById("synteny-scale-show");
       const units = document.getElementById("synteny-scale-units");
-      const maxI  = document.getElementById("synteny-scale-max");
       const ints  = document.getElementById("synteny-scale-intervals");
       const axF   = document.getElementById("synteny-scale-axis-font");
       const lbF   = document.getElementById("synteny-scale-label-font");
@@ -1626,7 +1644,7 @@ SYNIMA.showSynteny = function () {
       // initialise UI from state
       if (show) show.checked = (window.SYNIMA_STATE.syntenyScaleShow !== false);
       if (units) units.value = window.SYNIMA_STATE.syntenyScaleUnits || "auto";
-      if (maxI) maxI.value = String(window.SYNIMA_STATE.syntenyScaleMax ?? "");
+      updateScaleMaxInput();
       if (ints) ints.value = String(window.SYNIMA_STATE.syntenyScaleIntervals ?? 10);
       if (axF) axF.value = String(window.SYNIMA_STATE.syntenyScaleAxisFont ?? 12);
       if (lbF) lbF.value = String(window.SYNIMA_STATE.syntenyScaleLabelFont ?? 12);
@@ -1661,69 +1679,17 @@ SYNIMA.showSynteny = function () {
         saveStr(window.SYNIMA_PERSIST_KEYS.syntenyScaleUnits, "syntenyScaleUnits", units.value || "auto");
       });
 
-      // new additional code to try and get auto -> change to start from auto value
-      function currentAutoNiceMax() {
-        const maxBp = Number(config?.max_length ?? 0);
-        const intervals = parseInt(String(ints?.value ?? window.SYNIMA_STATE.syntenyScaleIntervals ?? 10), 10) || 10;
-        const u = String(units?.value ?? window.SYNIMA_STATE.syntenyScaleUnits ?? "auto");
-        const { factor } = scaleUnitSpec(maxBp, u);
-        const maxRawUnits = factor > 0 ? (maxBp / factor) : 0;
-        const { maxNice } = computeNiceMax(maxRawUnits, intervals);
-        return (Number.isFinite(maxNice) && maxNice > 0) ? maxNice : 1;
-      }
-
-      function seedMaxIfAutoEmpty() {
-        const raw = String(maxI?.value ?? "").trim();
-        if (raw !== "") return false;
-        const seeded = currentAutoNiceMax();
-        maxI.value = String(seeded);
-        // do not persist yet; we will persist via the normal input handler after stepping
-        return true;
-      }
-
-      // Keyboard arrows in the field
-      maxI?.addEventListener("keydown", (e) => {
-        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-        if (!seedMaxIfAutoEmpty()) return;
-        // allow the browser to apply the step from the seeded value
-      });
-
-      // Mouse click on the spinner buttons (right side of number input)
-      maxI?.addEventListener("mousedown", (e) => {
-        if (!maxI) return;
-        const raw = String(maxI.value ?? "").trim();
-        if (raw !== "") return;
-
-        const r = maxI.getBoundingClientRect();
-        const onSpinner = (e.clientX - r.left) > (r.width - 24);
-        if (!onSpinner) return;
-
-        e.preventDefault(); // we will step manually
-        seedMaxIfAutoEmpty();
-
-        const clickedUp = (e.clientY - r.top) < (r.height / 2);
-        if (clickedUp) maxI.stepUp();
-        else maxI.stepDown();
-
-        maxI.dispatchEvent(new Event("input", { bubbles: true }));
-      }, true);
-
-
-      // max: only accept "" (auto) or a finite > 0 number, and debounce typing
-      maxI?.addEventListener("input", debounce(() => {
-        const raw = String(maxI.value ?? "").trim();
-        if (raw === "") {
-          window.SYNIMA_STATE.syntenyScaleMax = "";
-          persist(window.SYNIMA_PERSIST_KEYS.syntenyScaleMax, "");
-          rerenderSynteny();
-          return;
-        }
-        const n = Number(raw);
-        if (!Number.isFinite(n) || n <= 0) return; // ignore invalid partial typing
-        window.SYNIMA_STATE.syntenyScaleMax = raw; // keep as string, your renderer expects string-ish
+      const redrawAfterMaxEdit = debounce(rerenderSynteny, 200);
+      scaleMaxInput?.addEventListener("input", () => {
+        if (scaleMaxInput.validity.badInput) return;
+        const raw = scaleMaxInput.value;
+        const n = scaleMaxInput.valueAsNumber;
+        if (raw !== "" && (!Number.isFinite(n) || n <= 0)) return;
+        window.SYNIMA_STATE.syntenyScaleMax = raw;
         persist(window.SYNIMA_PERSIST_KEYS.syntenyScaleMax, raw);
-        rerenderSynteny();
-      }, 200));
+        redrawAfterMaxEdit();
+      });
+      scaleMaxInput?.addEventListener("blur", updateScaleMaxInput);
 
       ints?.addEventListener("change", () => {
         saveInt(window.SYNIMA_PERSIST_KEYS.syntenyScaleIntervals, "syntenyScaleIntervals", ints.value, 10);
@@ -1764,6 +1730,7 @@ SYNIMA.showSynteny = function () {
     }
 
     function rerender() {
+        if (document.activeElement !== scaleMaxInput) updateScaleMaxInput();
         let mode = document.querySelector('input[name="synteny-mode"]:checked')?.value || "spans";
         if (mode === "aligncoords" && aligncoordsUnavailable) {
           mode = "spans";
@@ -1916,32 +1883,22 @@ function scaleUnitSpec(maxBp, units) {
   return { factor: 1, label: "bp" };
 }
 
-function niceStep(v, targetIntervals) {
-  if (!isFinite(v) || v <= 0 || !isFinite(targetIntervals) || targetIntervals <= 0) return 1;
-  const raw = v / targetIntervals;
-  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
-  const mant = raw / pow;
-  let niceMant = 1;
-  if (mant <= 1) niceMant = 1;
-  else if (mant <= 2) niceMant = 2;
-  else if (mant <= 5) niceMant = 5;
-  else niceMant = 10;
-  return niceMant * pow;
-}
+function getSyntenyScale(maxBp) {
+  const state = window.SYNIMA_STATE;
+  const intervals = parseInt(state.syntenyScaleIntervals, 10) || 10;
+  const { factor, label } = scaleUnitSpec(maxBp, state.syntenyScaleUnits);
+  const bpPerUnitTick = factor * intervals;
+  const rawStep = maxBp / bpPerUnitTick;
 
-// ensure maxNice <= maxRaw by shrinking step if needed
-function computeNiceMax(maxRawUnits, intervals) {
-  if (!isFinite(maxRawUnits) || maxRawUnits <= 0) return { maxNice: 0, step: 0 };
-  let step = niceStep(maxRawUnits, intervals);
+  // Use whole-unit ticks when they fit. Otherwise use the first useful decimal place.
+  const precision = rawStep > 0 && rawStep < 1 ? Math.ceil(-Math.log10(rawStep)) : 0;
+  const divisor = 10 ** precision;
+  const increment = intervals / divisor;
+  const automaticMax = Math.floor((maxBp || 0) * divisor / bpPerUnitTick) * intervals / divisor;
+  const userMax = Number(state.syntenyScaleMax);
+  const max = Number.isFinite(userMax) && userMax > 0 ? userMax : automaticMax;
 
-  // try to reduce step until it fits
-  for (let tries = 0; tries < 20; tries++) {
-    const maxNice = step * intervals;
-    if (maxNice <= maxRawUnits) return { maxNice, step };
-    step = step / 2;
-  }
-  const fallbackStep = maxRawUnits / intervals;
-  return { maxNice: fallbackStep * intervals, step: fallbackStep };
+  return { factor, label, intervals, max, step: max / intervals, increment };
 }
 
 SYNIMA.resetSynteny = function () {
@@ -2752,34 +2709,10 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identit
     let scaleBottom = null; // bottom of the scale bar label, for placing the identity legend
 
     if (showScale) {
-        const maxBpRaw = config.max_length || 0;
-        const units = window.SYNIMA_STATE.syntenyScaleUnits || "auto";
-        const intervals = parseInt(window.SYNIMA_STATE.syntenyScaleIntervals, 10) || 10;
-
-        const { factor, label } = scaleUnitSpec(maxBpRaw, units);
-
-        // if user provided a max, interpret it in chosen units (or auto-chosen units)
-        let maxUnitsRaw = maxBpRaw / factor;
-        const userMaxStr = String(window.SYNIMA_STATE.syntenyScaleMax ?? "").trim();
-        const userMax = userMaxStr === "" ? NaN : Number(userMaxStr);
-        if (isFinite(userMax) && userMax > 0) {
-          maxUnitsRaw = userMax;
-        }
-
-        //const { maxNice, step } = computeNiceMax(maxUnitsRaw, intervals);
-        let maxNice, step;
-
-        if (Number.isFinite(userMax) && userMax > 0) {
-          // obey user max exactly
-          maxNice = userMax;
-          step = maxNice / intervals; // exact steps
-        } else {
-          // auto “nice” max
-          ({ maxNice, step } = computeNiceMax(maxUnitsRaw, intervals));
-        }
+        const { factor, label, intervals, max, step } = getSyntenyScale(config.max_length);
         const xStart = layout.xStart;
         const pxPerUnit = factor * layout.scaleX;
-        const axisX2 = Math.min(xStart + maxNice * pxPerUnit, svgW);
+        const axisX2 = Math.min(xStart + max * pxPerUnit, svgW);
 
         // find bottom of plotted contigs so the bar sits underneath
         let maxY = 0;
@@ -2802,12 +2735,13 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identit
 
         let ticks = "";
         for (let i = 0; i <= intervals; i++) {
-          const x = xStart + (maxNice * (i / intervals)) * pxPerUnit;
+          const x = xStart + (max * (i / intervals)) * pxPerUnit;
           if (x > svgW) break;
-          const val = (step * i);
+          const val = step * i;
+          const tickLabel = step < 0.001 ? Number(val.toPrecision(6)) : Number(val.toFixed(3));
           ticks += `
             <line x1="${x}" y1="${axisY}" x2="${x}" y2="${axisY + tickH}" stroke="${strokeCol}" stroke-width="${axisLineW}" />
-            <text x="${x}" y="${axisY + tickH + axisFont + 2}" fill="${strokeCol}" font-size="${axisFont}" text-anchor="middle">${Number(val.toFixed(3))}</text>
+            <text x="${x}" y="${axisY + tickH + axisFont + 2}" fill="${strokeCol}" font-size="${axisFont}" text-anchor="middle">${tickLabel}</text>
           `;
         }
 
