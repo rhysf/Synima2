@@ -110,6 +110,18 @@ pub struct Args {
     #[arg(long = "report-full-aligncoords", default_value_t = false)]
     pub report_full_aligncoords: bool,
 
+    /// Include sequence identity in Synima.html using the align-all (Step 2) output.
+    /// Use --synteny-identity=false to skip calculating and embedding identity.
+    #[arg(
+        long = "synteny-identity",
+        action = clap::ArgAction::Set,
+        num_args = 0..=1,
+        require_equals = true,
+        default_missing_value = "true",
+        default_value_t = true
+    )]
+    pub synteny_identity: bool,
+
     /// Number of DAGchainer chains
     #[arg(long = "dagchainer_chains", default_value_t = 4)]
     pub dagchainer_chains: usize,

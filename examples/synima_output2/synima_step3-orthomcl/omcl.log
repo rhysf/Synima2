@@ -1,0 +1,167 @@
+Using /Users/rhysfarrer/.cargo/bin/synima_dependencies/mcl
+startime = Thu Nov 19 14:30:51 2026
+### WORKING DIRECTORY: ###
+  ./Nov_19/
+
+
+There are 4 genomes, 26394 sequences in omcl_in.gg !
+
+open_bpofile: omcl_in.bpo
+
+Identifying inparalogs from G004
+127 sequences have better hits within species
+109 sequence pairs were identified as Reciprocal Better/Best Hit
+
+Identifying inparalogs from G002
+63 sequences have better hits within species
+37 sequence pairs were identified as Reciprocal Better/Best Hit
+
+Identifying inparalogs from G001
+109 sequences have better hits within species
+64 sequence pairs were identified as Reciprocal Better/Best Hit
+
+Identifying inparalogs from G003
+77 sequences have better hits within species
+43 sequence pairs were identified as Reciprocal Better/Best Hit
+
+Identifying ortholog pairs between G004 and G002
+12266 sequences have best hits from the other species
+6077 sequence pairs were identified as Reciprocal Better/Best Hit
+Appending co-ortholog pairs between G004 and G002: 16 pairs
+G004 and G002 average weight: 241.625288513819
+
+Identifying ortholog pairs between G004 and G001
+12560 sequences have best hits from the other species
+6273 sequence pairs were identified as Reciprocal Better/Best Hit
+Appending co-ortholog pairs between G004 and G001: 16 pairs
+G004 and G001 average weight: 243.827508225281
+
+Identifying ortholog pairs between G004 and G003
+12630 sequences have best hits from the other species
+6309 sequence pairs were identified as Reciprocal Better/Best Hit
+Appending co-ortholog pairs between G004 and G003: 30 pairs
+G004 and G003 average weight: 244.819078209041
+
+Identifying ortholog pairs between G002 and G001
+12197 sequences have best hits from the other species
+6023 sequence pairs were identified as Reciprocal Better/Best Hit
+Appending co-ortholog pairs between G002 and G001: 8 pairs
+G002 and G001 average weight: 236.561839324073
+
+Identifying ortholog pairs between G002 and G003
+12233 sequences have best hits from the other species
+6048 sequence pairs were identified as Reciprocal Better/Best Hit
+Appending co-ortholog pairs between G002 and G003: 7 pairs
+G002 and G003 average weight: 238.214652027002
+
+Identifying ortholog pairs between G001 and G003
+12574 sequences have best hits from the other species
+6255 sequence pairs were identified as Reciprocal Better/Best Hit
+Appending co-ortholog pairs between G001 and G003: 8 pairs
+G001 and G003 average weight: 240.88271443686
+
+calculate average weight from G004
+G004 average weight: 275.306965517241
+
+calculate average weight from G002
+G002 average weight: 314.423888888889
+
+calculate average weight from G001
+G001 average weight: 270.644
+
+calculate average weight from G003
+G003 average weight: 310.806536585366
+
+There are 25487 sequences to cluster
+Matrix(25487 X 25487) file ./Nov_19/tmp/all_ortho.mtx generated
+
+Index file ./Nov_19/tmp/all_ortho.idx generated
+
+Run MCL program
+  /Users/rhysfarrer/.cargo/bin/synima_dependencies/mcl ./Nov_19/tmp/all_ortho.mtx -I 1.5 -o ./Nov_19/tmp/all_ortho.mcl
+[mclIO] reading <./Nov_19/tmp/all_ortho.mtx>
+.......................................
+[mclIO] read native interchange 25487x25487 matrix with 74646 entries
+[mcl] pid 785
+ ite -------------------  chaos  time hom(avg,lo,hi) m-ie m-ex i-ex fmv
+  1  ...................   0.99  0.01 0.99/0.63/2.39 1.01 1.01 1.01   0
+  2  ...................   1.44  0.01 0.99/0.61/1.69 1.00 1.00 1.01   0
+  3  ...................   1.62  0.01 0.98/0.54/1.34 1.00 1.00 1.01   0
+  4  ...................   1.38  0.01 0.98/0.41/1.20 1.00 1.00 1.01   0
+  5  ...................   1.52  0.01 0.98/0.41/1.00 1.00 1.00 1.01   0
+  6  ...................   1.56  0.01 0.97/0.32/1.05 1.00 1.00 1.00   0
+  7  ...................   1.64  0.01 0.96/0.44/1.02 1.00 0.99 1.00   0
+  8  ...................   1.30  0.01 0.95/0.52/1.17 1.00 0.99 0.99   0
+  9  ...................   1.14  0.01 0.92/0.36/1.00 1.00 0.99 0.97   0
+ 10  ...................   1.15  0.01 0.87/0.45/1.00 1.00 0.99 0.96   0
+ 11  ...................   1.42  0.01 0.81/0.44/1.00 1.00 0.99 0.95   0
+ 12  ...................   1.47  0.01 0.76/0.50/1.00 1.00 0.99 0.94   0
+ 13  ...................   1.86  0.01 0.73/0.48/1.00 1.00 0.99 0.94   0
+ 14  ...................   1.31  0.01 0.73/0.54/1.00 1.00 0.99 0.92   0
+ 15  ...................   0.74  0.01 0.77/0.55/1.00 1.00 0.98 0.90   0
+ 16  ...................   0.73  0.01 0.84/0.57/1.00 1.00 0.96 0.87   0
+ 17  ...................   0.70  0.01 0.91/0.60/1.00 1.00 0.81 0.70   0
+ 18  ...................   0.69  0.01 0.95/0.60/1.00 1.00 0.76 0.53   0
+ 19  ...................   0.65  0.01 0.97/0.63/1.00 1.00 0.90 0.48   0
+ 20  ...................   0.61  0.01 0.98/0.64/1.00 1.00 0.71 0.34   0
+ 21  ...................   0.46  0.01 0.99/0.67/1.00 1.00 0.92 0.31   0
+ 22  ...................   0.38  0.01 0.99/0.74/1.00 1.00 0.95 0.30   0
+ 23  ...................   0.30  0.01 1.00/0.76/1.00 1.00 0.96 0.28   0
+ 24  ...................   0.24  0.01 1.00/0.78/1.00 1.00 0.97 0.28   0
+ 25  ...................   0.25  0.01 1.00/0.76/1.00 1.00 0.98 0.27   0
+ 26  ...................   0.25  0.01 1.00/0.76/1.00 1.00 0.99 0.27   0
+ 27  ...................   0.20  0.01 1.00/0.80/1.00 1.00 0.99 0.27   0
+ 28  ...................   0.23  0.01 1.00/0.81/1.00 1.00 0.99 0.26   0
+ 29  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 30  ...................   0.22  0.01 1.00/0.78/1.00 1.00 1.00 0.26   0
+ 31  ...................   0.25  0.01 1.00/0.77/1.00 1.00 1.00 0.26   0
+ 32  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 33  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 34  ...................   0.25  0.01 1.00/0.77/1.00 1.00 1.00 0.26   0
+ 35  ...................   0.24  0.01 1.00/0.78/1.00 1.00 1.00 0.26   0
+ 36  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 37  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 38  ...................   0.24  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 39  ...................   0.24  0.01 1.00/0.79/1.00 1.00 1.00 0.26   0
+ 40  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 41  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 42  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 43  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 44  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 45  ...................   0.25  0.01 1.00/0.76/1.00 1.00 1.00 0.26   0
+ 46  ...................   0.22  0.01 1.00/0.78/1.00 1.00 1.00 0.26   0
+ 47  ...................   0.14  0.01 1.00/0.86/1.00 1.00 1.00 0.26   0
+ 48  ...................   0.05  0.01 1.00/0.95/1.00 1.00 1.00 0.26   0
+ 49  ...................   0.01  0.01 1.00/0.99/1.00 1.00 1.00 0.26   0
+ 50  ...................   0.00  0.01 1.00/1.00/1.00 1.00 1.00 0.26   0
+ 51  ...................   0.00  0.01 1.00/1.00/1.00 1.00 1.00 0.26   0
+[mcl] jury pruning marks: <100,99,99>, out of 100
+[mcl] jury pruning synopsis: <99.6 or perfect> (cf -scheme, -do log)
+[mclIO] writing <./Nov_19/tmp/all_ortho.mcl>
+.......................................
+[mclIO] wrote native interchange 25487x6606 matrix with 25487 entries to stream <./Nov_19/tmp/all_ortho.mcl>
+[mcl] 6606 clusters found
+[mcl] output is in ./Nov_19/tmp/all_ortho.mcl
+
+Please cite:
+    Stijn van Dongen, Graph Clustering by Flow Simulation.  PhD thesis,
+    University of Utrecht, May 2000.
+       (  http://www.library.uu.nl/digiarchief/dip/diss/1895620/full.pdf
+       or  http://micans.org/mcl/lit/svdthesis.pdf.gz)
+OR
+    Stijn van Dongen, A cluster algorithm for graphs. Technical
+    Report INS-R0010, National Research Institute for Mathematics
+    and Computer Science in the Netherlands, Amsterdam, May 2000.
+       (  http://www.cwi.nl/ftp/CWIreports/INS/INS-R0010.ps.Z
+       or  http://micans.org/mcl/lit/INS-R0010.ps.Z)
+
+
+MCL result ./Nov_19/tmp/all_ortho.mcl generated!
+
+
+Final ORTHOMCL Result: ./Nov_19/all_orthomcl.out generated!!!
+
+
+Start Time: Thu Nov 19 14:30:51 2026
+End Time:   Thu 19 Nov 2026 14:30:57 GMT
+

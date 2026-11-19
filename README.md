@@ -241,6 +241,7 @@ Synima -r Repo_spec.txt -s synima
 ```
 * The output webpage can be opened in any web browser (Chrome, Firefox etc.).
 * For large runs, Synima does not embed the full gene-level aligncoords file in the HTML if it is over 100 MiB, so the report remains browser-friendly. Contig synteny will still be available. To force the full gene-level aligncoords into the report, use `--report-full-aligncoords`.
+* Synima colours synteny by sequence identity by default when the align-all output from Step 2 is available. For each ortholog pair in a DAGchainer block, Synima takes the identity of the highest-bitscore hit in either direction from the BLAST or DIAMOND tables. The contig view shows the mean across pairs with a hit, weighted by alignment length. The gene view shows each pair’s identity. Identity is measured on proteins with `-a pep` and on nucleotides with `-a cds`. Use `--synteny-identity=false` to skip calculating and embedding identity.
 
 * There are 5 tabs at the top, which take you different pages (Orthologs, Tree, Synteny, Methods, About).
 
@@ -263,5 +264,6 @@ Synima -r Repo_spec.txt -s synima
     - Data: plotting the contig synteny (defined by aligncoords.spans) or the gene synteny (higher resolution and defined by aligncoords).
     - Layout and size: the tree width, contig font size, contig box height and contig gap
     - Colours: Options to change the colour of all contigs, including several palettes, the contig outline colour and synteny block colour, the synteny opacity, the background colour and label colour
+    - Use **Colour synteny by** to switch between % identity and a single colour. Identity mode offers Viridis, Plasma or Magma and an adjustable range (0–100% by default). Blocks and pairs without identity data use the single colour. The legend appears below the plot and in PNG and SVG downloads.
     - Scale bar: The scale bar can be turned on or off, with options to change the units, the maximum number, the intervals shown, the axis font and label font sizes, the line width, and the label text.
   - Once any graphical changes have been made, a figure can be downloaded as either PNG or SVG of just the synteny, or a PNG or SVG of both the synteny and the tree.

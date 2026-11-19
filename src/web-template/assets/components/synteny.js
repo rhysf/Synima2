@@ -33,6 +33,136 @@ const SYNIMA_SYNTENY_THEME_PRESETS = {
     }
 };
 
+// ----------------------------
+// Colour synteny by % identity
+// ----------------------------
+// Sequential scales, 9 evenly spaced stops from low to high identity.
+const SYNIMA_IDENTITY_SCALES = {
+    viridis: { label: "Viridis", stops: ["#440154", "#472d7b", "#3b528b", "#2c728e", "#21918c", "#28ae80", "#5ec962", "#addc30", "#fde725"] },
+    plasma:  { label: "Plasma",  stops: ["#0d0887", "#4c02a1", "#7e03a8", "#a92395", "#cc4778", "#e56b5d", "#f89441", "#fdc328", "#f0f921"] },
+    magma:   { label: "Magma",   stops: ["#000004", "#1c1044", "#4f127b", "#812581", "#b5367a", "#e55964", "#fb8761", "#fec287", "#fcfdbf"] }
+};
+
+const SYNIMA_IDENTITY_LEGEND_STEPS = 64;
+
+function identityScaleColor(scaleName, t) {
+    const stops = Object.hasOwn(SYNIMA_IDENTITY_SCALES, scaleName)
+        ? SYNIMA_IDENTITY_SCALES[scaleName].stops
+        : SYNIMA_IDENTITY_SCALES.viridis.stops;
+    const x = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0)) * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(x));
+    const f = x - i;
+    const rgb = (hex) => [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16));
+    const a = rgb(stops[i]);
+    const b = rgb(stops[i + 1]);
+    return "#" + a.map((v, k) => Math.round(v + (b[k] - v) * f).toString(16).padStart(2, "0")).join("");
+}
+
+function parseIdentityLimit(v, fallback) {
+    const s = String(v ?? "").trim();
+    return s === "" ? fallback : Number(s);
+}
+
+// Scale limits: 0-100% unless the user sets min and/or max.
+const SYNIMA_IDENTITY_DEFAULT_MIN = 0;
+const SYNIMA_IDENTITY_DEFAULT_MAX = 100;
+
+function identityScaleRange() {
+    const min = parseIdentityLimit(window.SYNIMA_STATE.syntenyIdentityMin, SYNIMA_IDENTITY_DEFAULT_MIN);
+    const max = parseIdentityLimit(window.SYNIMA_STATE.syntenyIdentityMax, SYNIMA_IDENTITY_DEFAULT_MAX);
+    if (min >= 0 && max <= 100 && min < max) return { min, max, valid: true };
+    return { min: SYNIMA_IDENTITY_DEFAULT_MIN, max: SYNIMA_IDENTITY_DEFAULT_MAX, valid: false };
+}
+
+function identityKindLabel(alignmentType) {
+    return alignmentType === "cds" ? "nucleotide" : "protein";
+}
+
+function formatIdentity(v) {
+    return Number(v.toFixed(2)).toString();
+}
+
+// Copy identity values onto parsed blocks. Spans blocks use span_identity[idx] =
+// [identity|null, pairs, pairs with identity]; gene blocks use pair_identity[idx].
+function attachIdentityToBlocks(blocks, mode, identityData) {
+    if (mode === "spans") {
+        const arr = identityData.span_identity || [];
+        for (const b of blocks) {
+            const e = arr[b.idx];
+            b.identity = (Array.isArray(e) && Number.isFinite(e[0])) ? e[0] : null;
+            b.identityPairs = Array.isArray(e) ? [e[2], e[1]] : null;
+        }
+    } else {
+        const arr = identityData.pair_identity || [];
+        for (const b of blocks) {
+            const v = arr[b.idx];
+            b.identity = Number.isFinite(v) ? v : null;
+            b.identityPairs = null;
+        }
+    }
+}
+
+function identityTipLine(b) {
+    const pairs = Array.isArray(b.identityPairs) ? ` (${b.identityPairs[0]}/${b.identityPairs[1]} gene pairs)` : "";
+    return Number.isFinite(b.identity)
+        ? `Identity: ${formatIdentity(b.identity)}%${pairs}\n`
+        : `Identity: no data${pairs}\n`;
+}
+
+// Legend drawn inside the synteny SVG (so PNG/SVG downloads include it).
+// Discrete rects instead of a <linearGradient> keep exports free of url() references.
+function renderIdentityLegendSvg(opts, x0, top, maxW, colors) {
+    const titleFont = parseInt(window.SYNIMA_STATE.syntenyScaleLabelFont, 10) || 24;
+    const tickFont = parseInt(window.SYNIMA_STATE.syntenyScaleAxisFont, 10) || 20;
+    const textCol = colors.text;
+
+    const barW = Math.max(200, Math.min(480, maxW * 0.4));
+    const barH = Math.max(10, Math.round(tickFont * 0.8));
+    const titleY = top + titleFont;
+    const barY = titleY + 10;
+
+    let rects = "";
+    const n = SYNIMA_IDENTITY_LEGEND_STEPS;
+    const w = barW / n;
+    for (let i = 0; i < n; i++) {
+        const fill = identityScaleColor(opts.scale, (i + 0.5) / n);
+        // slight overlap avoids hairline seams between steps
+        rects += `<rect x="${x0 + i * w}" y="${barY}" width="${w + 0.5}" height="${barH}" fill="${fill}" />`;
+    }
+
+    // 5 ticks: min, quarters, max (0%, 25%, 50%, 75%, 100% by default)
+    const tickY = barY + barH + 4 + tickFont;
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => {
+        const x = x0 + barW * f;
+        const v = opts.min + (opts.max - opts.min) * f;
+        // first label starts at the bar's left edge so it is not clipped by the plot edge
+        const anchor = (f === 0) ? "start" : "middle";
+        return `
+        <line x1="${x}" y1="${barY + barH}" x2="${x}" y2="${barY + barH + 4}" stroke="${textCol}" stroke-width="1" />
+        <text x="${x}" y="${tickY}" fill="${textCol}" font-size="${tickFont}" text-anchor="${anchor}">${formatIdentity(v)}%</text>`;
+    }).join("");
+
+    let noData = "";
+    if (opts.missing) {
+        const sx = x0 + barW + 40;
+        const sw = barH * 1.6;
+        noData = `
+        <rect x="${sx}" y="${barY}" width="${sw}" height="${barH}" fill="${colors.missing}" fill-opacity="${colors.opacity}" stroke="${colors.missing}" stroke-opacity="${colors.strokeOpacity}" stroke-width="0.5" />
+        <text x="${sx + sw + 8}" y="${barY + barH / 2 + tickFont * 0.35}" fill="${textCol}" font-size="${tickFont}">no data</text>`;
+    }
+
+    const title = `% identity (${identityKindLabel(opts.alignmentType)})`;
+    const svg = `
+      <g class="synteny-identity-legend">
+        <text x="${x0}" y="${titleY}" fill="${textCol}" font-size="${titleFont}">${escapeHtml(title)}</text>
+        <g opacity="${colors.opacity}">${rects}</g>
+        ${ticks}
+        ${noData}
+      </g>
+    `;
+    return { svg, bottom: tickY + 8 };
+}
+
 function setPersistedValue(key, value) {
     if (!key) return;
     try { localStorage.setItem(key, String(value)); } catch (e) {}
@@ -195,6 +325,20 @@ function syncSyntenyModeFromStorage() {
       }
     } catch (e) {
         console.warn("Could not read synteny opacity from localStorage", e);
+    }
+
+    // colour synteny by (single colour vs % identity) and the identity scale
+    try {
+      const by = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyColorBy);
+      if (by === "single" || by === "identity") window.SYNIMA_STATE.syntenyColorBy = by;
+      const sc = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyIdentityScale);
+      if (Object.hasOwn(SYNIMA_IDENTITY_SCALES, sc)) window.SYNIMA_STATE.syntenyIdentityScale = sc;
+      const mn = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyIdentityMin);
+      if (mn !== null) window.SYNIMA_STATE.syntenyIdentityMin = mn;
+      const mx = localStorage.getItem(window.SYNIMA_PERSIST_KEYS.syntenyIdentityMax);
+      if (mx !== null) window.SYNIMA_STATE.syntenyIdentityMax = mx;
+    } catch (e) {
+        console.warn("Could not read synteny identity colour options from localStorage", e);
     }
 
     // background colour
@@ -582,6 +726,12 @@ SYNIMA.showSynteny = function () {
       ? `Gene synteny was omitted from this report because ${aligncoordsFileLabel} is ${aligncoordsSizeLabel}, above the ${aligncoordsLimitLabel} embed limit. Re-run Synima with --report-full-aligncoords to force embedding.`
       : "";
 
+    // Older reports and reports without alignment hits have no identity data.
+    const identityData = (data.identity && Array.isArray(data.identity.span_identity)) ? data.identity : null;
+    const identityAvailable = !!identityData;
+    const identityScaleOptions = Object.entries(SYNIMA_IDENTITY_SCALES)
+      .map(([k, s]) => `<option value="${k}">${s.label}</option>`).join("");
+
 
     // Genome order should follow the current TREE PAGE settings
     let genomeOrder = [];
@@ -819,8 +969,34 @@ SYNIMA.showSynteny = function () {
               <input id="synteny-contig-stroke-select" class="synima-colour-input" type="color" value="#ffffff" />
             </label>
 
-            <!-- synteny colours -->
+            ${identityAvailable ? `<!-- colour synteny by single colour or % identity -->
             <label style="margin-left: 10px;">
+              Colour synteny by:
+              <select id="synteny-colour-by-select">
+                <option value="single">Single colour</option>
+                <option value="identity">% identity</option>
+              </select>
+            </label>
+            <span id="synteny-identity-controls" class="hidden">
+              <label style="margin-left: 10px;">
+                Scale:
+                <select id="synteny-identity-scale-select">${identityScaleOptions}</select>
+              </label>
+              <label style="margin-left: 10px;">
+                Min %:
+                <input id="synteny-identity-min" type="number" min="0" max="100" step="1" placeholder="0" style="width:90px;">
+              </label>
+              <label style="margin-left: 10px;">
+                Max %:
+                <input id="synteny-identity-max" type="number" min="0" max="100" step="1" placeholder="100" style="width:90px;">
+              </label>
+              <span id="synteny-identity-range-status" role="status" class="hidden">
+                Using 0–100%. Enter a minimum below the maximum, both between 0 and 100.
+              </span>
+            </span>` : ""}
+
+            <!-- synteny colours -->
+            <label style="margin-left: 10px;" ${identityAvailable ? `title="Also used for blocks with no identity value"` : ""}>
               Synteny block colour:
               <input id="synteny-block-colour-select" class="synima-colour-input" type="color" value="#ffffff" />
             </label>
@@ -1326,6 +1502,80 @@ SYNIMA.showSynteny = function () {
       });
     }
 
+    // colour synteny by: single colour / % identity
+    // (empty min/max boxes mean the 0-100% default)
+    const identityAutoLimits = { min: SYNIMA_IDENTITY_DEFAULT_MIN, max: SYNIMA_IDENTITY_DEFAULT_MAX };
+    if (identityAvailable) {
+      const bySel = document.getElementById("synteny-colour-by-select");
+      const scaleSel = document.getElementById("synteny-identity-scale-select");
+      const subControls = document.getElementById("synteny-identity-controls");
+      const syncIdentityControls = () => {
+        if (subControls) subControls.classList.toggle("hidden", window.SYNIMA_STATE.syntenyColorBy !== "identity");
+      };
+
+      if (bySel) {
+        bySel.value = (window.SYNIMA_STATE.syntenyColorBy === "identity") ? "identity" : "single";
+        bySel.addEventListener("change", () => {
+          window.SYNIMA_STATE.syntenyColorBy = (bySel.value === "identity") ? "identity" : "single";
+          persist(window.SYNIMA_PERSIST_KEYS.syntenyColorBy, window.SYNIMA_STATE.syntenyColorBy);
+          syncIdentityControls();
+          rerender();
+        });
+      }
+
+      if (scaleSel) {
+        const cur = window.SYNIMA_STATE.syntenyIdentityScale;
+        scaleSel.value = Object.hasOwn(SYNIMA_IDENTITY_SCALES, cur) ? cur : "viridis";
+        scaleSel.addEventListener("change", () => {
+          window.SYNIMA_STATE.syntenyIdentityScale = scaleSel.value;
+          persist(window.SYNIMA_PERSIST_KEYS.syntenyIdentityScale, window.SYNIMA_STATE.syntenyIdentityScale);
+          rerender();
+        });
+      }
+
+      // min / max: "" means auto; stepping an empty box starts from the auto value
+      [
+        ["synteny-identity-min", "syntenyIdentityMin", "min"],
+        ["synteny-identity-max", "syntenyIdentityMax", "max"]
+      ].forEach(([id, stateKey, autoKey]) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.value = String(window.SYNIMA_STATE[stateKey] ?? "");
+
+        const seedFromAuto = () => {
+          if (String(input.value ?? "").trim() !== "") return false;
+          const a = identityAutoLimits[autoKey];
+          if (!Number.isFinite(a)) return false;
+          input.value = String(a);
+          return true;
+        };
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") seedFromAuto();
+        });
+
+        input.addEventListener("mousedown", (e) => {
+          const r = input.getBoundingClientRect();
+          if ((e.clientX - r.left) <= (r.width - 24)) return; // not on the spinner
+          if (String(input.value ?? "").trim() !== "") return;
+          e.preventDefault();
+          if (!seedFromAuto()) return;
+          if ((e.clientY - r.top) < (r.height / 2)) input.stepUp(); else input.stepDown();
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }, true);
+
+        input.addEventListener("input", debounce(() => {
+          if (input.validity.badInput) return;
+          const raw = String(input.value ?? "").trim();
+          window.SYNIMA_STATE[stateKey] = raw;
+          persist(window.SYNIMA_PERSIST_KEYS[stateKey], raw);
+          rerender();
+        }, 200));
+      });
+
+      syncIdentityControls();
+    }
+
     // Small helpers (keeps the bindings consistent)
     function persist(key, val) {
       try { localStorage.setItem(key, String(val)); } catch (e) {}
@@ -1529,15 +1779,31 @@ SYNIMA.showSynteny = function () {
           blocks = parseAligncoordsText(aligncoords);
         }
 
+        const byIdentity = identityAvailable && window.SYNIMA_STATE.syntenyColorBy === "identity";
+        if (byIdentity) attachIdentityToBlocks(blocks, mode, identityData);
+
         const maps = buildGenomeMaps(config);
         window.SYNIMA_STATE._syntenyLastMaps = maps;
         const layout = buildSyntenyLayout(config, maps);
         const prepared = prepareBlocksForPlot(blocks, config, maps, layout);
 
+        let identityOpts = null;
+        if (byIdentity) {
+            const range = identityScaleRange();
+            document.getElementById("synteny-identity-range-status")?.classList.toggle("hidden", range.valid);
+            identityOpts = {
+                min: range.min,
+                max: range.max,
+                scale: window.SYNIMA_STATE.syntenyIdentityScale,
+                alignmentType: identityData.alignment_type,
+                missing: prepared.blocks.some(b => !Number.isFinite(b.identity))
+            };
+        }
+
         //plotEl.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout);
         const svgHost = document.getElementById("synteny-plot-svg");
         if (svgHost) {
-            svgHost.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout, aligncoords);
+            svgHost.innerHTML = renderSyntenySvg(prepared.blocks, config, maps, layout, aligncoords, identityOpts);
             //console.log("rerendered with new tracks etc.", svgHost.innerHTML);
         }
     }
@@ -1716,6 +1982,10 @@ SYNIMA.resetSynteny = function () {
     window.SYNIMA_STATE.syntenyContigPalette   = SYNIMA_SYNTENY_DEFAULTS.contigPalette;
     window.SYNIMA_STATE.syntenyBlockColor = "#ffffff";
     window.SYNIMA_STATE.syntenyBlockOpacity = 0.5;
+    window.SYNIMA_STATE.syntenyColorBy = "identity";
+    window.SYNIMA_STATE.syntenyIdentityScale = "viridis";
+    window.SYNIMA_STATE.syntenyIdentityMin = "";
+    window.SYNIMA_STATE.syntenyIdentityMax = "";
     window.SYNIMA_STATE.syntenyBgColor = "#0f1b30";
     window.SYNIMA_STATE.syntenyLabelColor = "#ffffff";
     window.SYNIMA_STATE.syntenyTheme = "dark";
@@ -1782,6 +2052,17 @@ SYNIMA.resetSynteny = function () {
     const opSel = document.getElementById("synteny-block-opacity-select");
     if (opSel) opSel.value = "0.50";
 
+    // colour synteny by (only present in reports with identity data)
+    const bySel = document.getElementById("synteny-colour-by-select");
+    if (bySel) bySel.value = "identity";
+    document.getElementById("synteny-identity-controls")?.classList.remove("hidden");
+    const idScale = document.getElementById("synteny-identity-scale-select");
+    if (idScale) idScale.value = "viridis";
+    const idMin = document.getElementById("synteny-identity-min");
+    if (idMin) idMin.value = "";
+    const idMax = document.getElementById("synteny-identity-max");
+    if (idMax) idMax.value = "";
+
     // background colour
     const bgSel = document.getElementById("synteny-bg-select");
     if (bgSel) bgSel.value = "#0f1b30";
@@ -1832,6 +2113,10 @@ SYNIMA.resetSynteny = function () {
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyContigOverrides);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockColor);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyBlockOpacity);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyColorBy);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyIdentityScale);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyIdentityMin);
+        localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyIdentityMax);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyLabelColor);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.syntenyTheme);
         localStorage.removeItem(window.SYNIMA_PERSIST_KEYS.treeBgColor);
@@ -2018,10 +2303,12 @@ function buildGenomeMaps(config) {
 function parseAligncoordsSpansText(text) {
   const blocks = [];
   const lines = (text || "").split(/\r?\n/);
+  let idx = -1; // index among non-empty lines (matches data-synteny.identity.span_identity)
 
   for (const line of lines) {
     const t = line.trim();
     if (!t) continue;
+    idx++;
 
     const cols = t.split("\t");
     if (cols.length < 6) continue;
@@ -2041,7 +2328,8 @@ function parseAligncoordsSpansText(text) {
       g2, c2, s2, e2,
       len1: parseInt(len1s, 10) || 0,
       len2: parseInt(len2s, 10) || 0,
-      strand
+      strand,
+      idx
     });
   }
 
@@ -2052,6 +2340,7 @@ function parseAligncoordsSpansText(text) {
 function parseAligncoordsText(text) {
   const blocks = [];
   const lines = (text || "").split(/\r?\n/);
+  let idx = -1; // index among MATCHES lines (matches data-synteny.identity.pair_identity)
 
   for (const line of lines) {
     const t = line.trim();
@@ -2068,6 +2357,7 @@ function parseAligncoordsText(text) {
     //if (cols[5] !== "MATCHES") continue; // keeps us from accidentally parsing junk
     const mi = cols.indexOf("MATCHES");
     if (mi < 0) continue;
+    idx++;
 
     // Need: g1,c1,s1,e1 then after MATCHES: g2,c2,s2,e2
     // Layout: [g1,c1,gene1,s1,e1,?,MATCHES,g2,c2,gene2,s2,e2,...]
@@ -2089,7 +2379,7 @@ function parseAligncoordsText(text) {
 
     // Strand: same direction => '+', opposite direction => '-'
     const strand = ((s1 <= e1) === (s2 <= e2)) ? "+" : "-";
-    blocks.push({ g1, c1, s1, e1, g2, c2, s2, e2, strand });
+    blocks.push({ g1, c1, s1, e1, g2, c2, s2, e2, strand, idx });
   }
 
   return blocks;
@@ -2223,7 +2513,11 @@ function prepareBlocksForPlot(blocks, config, maps, layout) {
 
           x1lo, x1hi, x2lo, x2hi,
 
-          strand
+          strand,
+
+          // only set when colouring by % identity
+          identity: b.identity,
+          identityPairs: b.identityPairs
         });
     }
 
@@ -2231,7 +2525,9 @@ function prepareBlocksForPlot(blocks, config, maps, layout) {
 }
 
 // Render a simple SVG: genome tracks + polygons
-function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText) {
+// identityOpts: null for the single colour, or {min, max, scale, alignmentType, missing}
+// to colour each block by its % identity (blocks without a value keep the single colour).
+function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identityOpts = null) {
     const svgW = layout.plotWidthPx;
     let svgH = Math.max(layout.treeHeightPx, 200);
 
@@ -2272,7 +2568,12 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText) {
             : "polygons";
 
         const tip = `${b.topGenome}:${b.topContig} ${b.topAbsStart}-${b.topAbsEnd}\n` +
-            `↔ ${b.botGenome}:${b.botContig} ${b.botAbsStart}-${b.botAbsEnd}\n`;
+            `↔ ${b.botGenome}:${b.botContig} ${b.botAbsStart}-${b.botAbsEnd}\n` +
+            (identityOpts ? identityTipLine(b) : "");
+
+        const blockColor = (identityOpts && Number.isFinite(b.identity))
+            ? identityScaleColor(identityOpts.scale, (b.identity - identityOpts.min) / (identityOpts.max - identityOpts.min))
+            : polyColor;
 
             // + `strand=${b.strand}`
 
@@ -2296,9 +2597,9 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText) {
                 class="synteny-block" 
                 data-tip="${escapeAttr(tip)}" 
                 d="${d}"
-                fill="${polyColor}"
+                fill="${blockColor}"
                 fill-opacity="${polyFillOpacity}"
-                stroke="${polyColor}"
+                stroke="${blockColor}"
                 stroke-opacity="${polyStrokeOpacity}"
                 stroke-width="0.5">
 
@@ -2321,9 +2622,9 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText) {
                 class="synteny-block"
                 data-tip="${escapeAttr(tip)}" 
                 points="${points}"
-                fill="${polyColor}"
+                fill="${blockColor}"
                 fill-opacity="${polyFillOpacity}"
-                stroke="${polyColor}"
+                stroke="${blockColor}"
                 stroke-opacity="${polyStrokeOpacity}"
                 stroke-width="0.5">
               </polygon>
@@ -2451,6 +2752,7 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText) {
     const showScale = (window.SYNIMA_STATE.syntenyScaleShow !== false);
     let scaleBarSvg = "";
     let extraBottom = 0;
+    let scaleBottom = null; // bottom of the scale bar label, for placing the identity legend
 
     if (showScale) {
         const maxBpRaw = config.max_length || 0;
@@ -2526,17 +2828,39 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText) {
 
         extraBottom = (labelY + 12) - svgH; // svgH is your existing height; we will fix it next
         if (!isFinite(extraBottom) || extraBottom < 0) extraBottom = 0;
+        scaleBottom = labelY + 12;
     }
 
     // bump svgH so the scale bar is visible
     svgH = Math.max(svgH, svgH + extraBottom);
+
+    // ----------------------------
+    // % identity legend (identity mode only), below the scale bar or the tracks
+    // ----------------------------
+    let identityLegendSvg = "";
+    if (identityOpts) {
+        let maxY = 0;
+        for (const g of config.genomes) {
+            const y = yFor(g.name);
+            if (y > maxY) maxY = y;
+        }
+        const top = (scaleBottom !== null) ? scaleBottom + 16 : maxY + trackHeight + 20;
+        const legend = renderIdentityLegendSvg(identityOpts, layout.xStart, top, svgW - layout.xStart, {
+            text: labelColor,
+            missing: polyColor,
+            opacity: polyFillOpacity,
+            strokeOpacity: polyStrokeOpacity
+        });
+        identityLegendSvg = legend.svg;
+        svgH = Math.max(svgH, legend.bottom + 4);
+    }
 
     return `
         <svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
         ${polys}
         ${tracks}
         ${geneMarkersSvg}
-        ${scaleBarSvg}
+        ${scaleBarSvg}${identityLegendSvg}
       </svg>
     `;
 }

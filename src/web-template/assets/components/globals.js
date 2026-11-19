@@ -334,6 +334,16 @@ window.SYNIMA_STATE.syntenyBlockOpacity = window.SYNIMA_STATE.syntenyBlockOpacit
 window.SYNIMA_STATE.syntenyBgColor = window.SYNIMA_STATE.syntenyBgColor ?? "#0f1b30";
 window.SYNIMA_STATE.syntenyLabelColor = window.SYNIMA_STATE.syntenyLabelColor ?? "#ffffff";
 window.SYNIMA_STATE.syntenyTheme = window.SYNIMA_STATE.syntenyTheme ?? "dark";
+
+// Colour synteny by % identity when the report includes identity data.
+window.SYNIMA_PERSIST_KEYS.syntenyColorBy       = "synima_synteny_color_by";       // single | identity
+window.SYNIMA_PERSIST_KEYS.syntenyIdentityScale = "synima_synteny_identity_scale"; // viridis | plasma | magma
+window.SYNIMA_PERSIST_KEYS.syntenyIdentityMin   = "synima_synteny_identity_min";   // "" => auto
+window.SYNIMA_PERSIST_KEYS.syntenyIdentityMax   = "synima_synteny_identity_max";   // "" => auto
+window.SYNIMA_STATE.syntenyColorBy       = window.SYNIMA_STATE.syntenyColorBy ?? "identity";
+window.SYNIMA_STATE.syntenyIdentityScale = window.SYNIMA_STATE.syntenyIdentityScale ?? "viridis";
+window.SYNIMA_STATE.syntenyIdentityMin   = window.SYNIMA_STATE.syntenyIdentityMin ?? "";
+window.SYNIMA_STATE.syntenyIdentityMax   = window.SYNIMA_STATE.syntenyIdentityMax ?? "";
 window.SYNIMA_MIDPOINT_VALUE = window.SYNIMA_MIDPOINT_VALUE || "__SYNIMA_MIDPOINT__";
 
 // renaming contigs etc.

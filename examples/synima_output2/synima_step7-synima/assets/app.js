@@ -1,0 +1,1 @@
+// Global helpers for future use

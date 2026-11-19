@@ -27,6 +27,7 @@ mod ortholog_summary_plot;
 mod tree;
 mod dagchainer;
 mod synima;
+mod synteny_identity;
 mod write_repo_from_ncbi;
 
 use args::{Args, SynimaStep};
@@ -543,7 +544,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let aligncoords_spans_text = std::fs::read_to_string(&combined_spans).unwrap_or_else(|_| String::new());
         let synteny_config = synima::build_synteny_config(&repo, &leaf_order, &aligncoords_spans_text, &logger)?;
 
-        let json = serde_json::json!({
+        // Compute % identity per gene pair and per block unless disabled.
+        // Pair values index the embedded aligncoords text, so they are only added when it is embedded.
+        let synteny_identity = if args.synteny_identity {
+            synteny_identity::compute_synteny_identity(
+                &combined_aligncoords,
+                &aligncoords_spans_text,
+                &blast_out_dir,
+                &args.alignment_type,
+                !aligncoords_text.is_empty(),
+                &logger,
+            )
+        } else {
+            None
+        };
+
+        let mut json = serde_json::json!({
             "synteny_config": synteny_config,
             "aligncoords": aligncoords_text,
             "aligncoords_omitted": aligncoords_omitted,
@@ -552,6 +568,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "aligncoords_file": combined_aligncoords.file_name().and_then(|s| s.to_str()).unwrap_or("aligncoords"),
             "aligncoords_spans": aligncoords_spans_text
         });
+        if let Some(identity) = synteny_identity {
+            json["identity"] = serde_json::to_value(identity)?;
+        }
 
         synima::inject_json_into_html(
             &index_path,
