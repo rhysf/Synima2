@@ -41,6 +41,10 @@ SYNIMA.getCloudApiKey = function () {
 	}
 };
 
+SYNIMA.hasCloudAuth = function () {
+	return Boolean(SYNIMA.getCloudBaseUrl() && SYNIMA.getCloudApiKey());
+};
+
 SYNIMA.setCloudAuth = function (email, apiKey) {
 	const hadKey = Boolean(SYNIMA.getCloudApiKey());
 	try {

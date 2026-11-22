@@ -511,7 +511,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             Vec::new()
         };
-        synima::process_ortholog_summaries(&gene_clusters_out_dir, &index_path, params, categories, &combined_gff_path)?;
+        synima::process_ortholog_summaries(
+            &gene_clusters_out_dir, &index_path, params, categories, &combined_gff_path, &combined_fasta_path, &repo,
+        )?;
 
         // update tree
         if tree_out_dir.is_dir() {

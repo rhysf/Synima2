@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 //use std::io::{BufRead, BufReader};
 //use std::io::{BufRead, BufReader};
 //use std::collections::HashSet;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::{BufRead, BufReader};
 //use anyhow::anyhow;
 //use anyhow::bail;
@@ -50,6 +50,71 @@ struct OrthologSummary {
     single_copy_orthologs: usize,
     gene_categories: Vec<OrthologGeneCategory>,
     category_gene_loci: Vec<GeneLocus>,
+    gene_ids: BTreeSet<String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    gene_aliases: BTreeMap<String, String>,
+}
+
+fn fasta_gene_ids(path: &Path) -> Result<BTreeSet<String>> {
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(BTreeSet::new()),
+        Err(error) => return Err(error).with_context(|| format!("Cannot open {}", path.display())),
+    };
+    let mut ids = BTreeSet::new();
+    for line in BufReader::new(file).lines() {
+        let line = line.with_context(|| format!("Cannot read {}", path.display()))?;
+        if let Some(id) = line.strip_prefix('>').and_then(|header| header.split_whitespace().next()) {
+            ids.insert(id.to_owned());
+        }
+    }
+    Ok(ids)
+}
+
+fn report_gene_aliases(repo: &[RepoEntry], gene_ids: &BTreeSet<String>) -> Result<BTreeMap<String, String>> {
+    // Only identifiers explicitly linked on the same GFF feature can be aliases.
+    // A key with no target is ambiguous and must stay unmapped.
+    let mut candidates: BTreeMap<String, Option<String>> = BTreeMap::new();
+    for genome in repo {
+        let prefix = format!("{}|", genome.name);
+        if !gene_ids.range(prefix.clone()..).next().is_some_and(|id| id.starts_with(&prefix)) {
+            continue;
+        }
+        let Some(gff) = genome.files.get("gff") else { continue };
+        let file = match fs::File::open(&gff.path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error).with_context(|| format!("Cannot open {}", gff.path)),
+        };
+        for line in BufReader::new(file).lines() {
+            let line = line.with_context(|| format!("Cannot read {}", gff.path))?;
+            if line.starts_with("##FASTA") {
+                break;
+            }
+            if line.starts_with('#') || (!line.contains("Alias=") && !line.contains("locus_tag=")) {
+                continue;
+            }
+            let Some(attrs) = line.splitn(9, '\t').nth(8) else { continue };
+            let attrs = read_gff::parse_gff_attributes(attrs);
+            let names: BTreeSet<_> = ["ID", "Alias", "locus_tag"].into_iter()
+                .filter_map(|key| attrs.get(key))
+                .flat_map(|value| value.split(','))
+                .map(str::trim)
+                .filter(|name| !name.is_empty() && *name != ".")
+                .map(|name| if name.starts_with(&prefix) { name.to_owned() } else { format!("{prefix}{name}") })
+                .collect();
+            let mut targets = names.iter().filter(|name| gene_ids.contains(*name));
+            let Some(first) = targets.next() else { continue };
+            let target = targets.next().is_none().then(|| first.clone());
+            for alias in names.iter().filter(|name| !gene_ids.contains(*name)) {
+                let entry = candidates.entry(alias.clone()).or_insert_with(|| target.clone());
+                if *entry != target {
+                    *entry = None;
+                }
+            }
+        }
+    }
+    Ok(candidates.into_iter().filter_map(|(alias, target)| target.map(|id| (alias, id))).collect())
 }
 
 #[derive(Serialize)]
@@ -64,8 +129,11 @@ struct GeneLocus {
 fn category_gene_loci(
     gff_path: &Path,
     categories: &[OrthologGeneCategory],
+    gene_ids: &BTreeSet<String>,
 ) -> Result<Vec<GeneLocus>> {
-    let wanted: HashSet<_> = categories.iter().flat_map(|category| &category.genes).collect();
+    let wanted: HashSet<_> = gene_ids.iter()
+        .chain(categories.iter().flat_map(|category| &category.genes))
+        .collect();
     if wanted.is_empty() || !gff_path.is_file() {
         return Ok(Vec::new());
     }
@@ -324,7 +392,9 @@ pub fn process_ortholog_summaries(
     index_path: &Path,
     params: OrthoParams,
     gene_categories: Vec<OrthologGeneCategory>,
-    combined_gff_path: &Path) -> Result<()> {
+    combined_gff_path: &Path,
+    combined_fasta_path: &Path,
+    repo: &[RepoEntry]) -> Result<()> {
 
     let mut summaries: Vec<SummaryItem> = Vec::new();
 
@@ -374,9 +444,11 @@ pub fn process_ortholog_summaries(
     }
 
     // Serialize to JSON
-    let category_gene_loci = category_gene_loci(combined_gff_path, &gene_categories)?;
+    let gene_ids = fasta_gene_ids(combined_fasta_path)?;
+    let category_gene_loci = category_gene_loci(combined_gff_path, &gene_categories, &gene_ids)?;
+    let gene_aliases = report_gene_aliases(repo, &gene_ids)?;
     let json = serde_json::to_string(&OrthologSummary {
-        params, summaries, single_copy_orthologs: global_sco, gene_categories, category_gene_loci,
+        params, summaries, single_copy_orthologs: global_sco, gene_categories, category_gene_loci, gene_ids, gene_aliases,
     })?;
 
     // Inject into HTML

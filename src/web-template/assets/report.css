@@ -34,8 +34,9 @@
 .synima-nav-row {
   margin-top: 0.75rem;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 2rem;                 /* spacing between links */
+  gap: 0.5rem 2rem;
   font-size: 1.5rem;         /* ~ text-2xl */
   font-weight: 500;
 }
@@ -810,6 +811,232 @@ body {
   opacity: 0.6;
 }
 
+.synima-function-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.synima-function-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #fff;
+  min-width: 0;
+}
+
+.synima-function-controls input,
+.synima-function-controls select {
+  max-width: 100%;
+  background: #111827;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.synima-function-controls select:disabled {
+  color: #94a3b8;
+}
+
+.synima-function-description-label {
+  color: #fff;
+}
+
+.synima-function-browse-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.synima-function-browse-scroll {
+  max-width: 100%;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.synima-function-browse-scroll .ortho-table {
+  width: max-content;
+  min-width: 100%;
+  margin-bottom: 0;
+}
+
+.synima-function-browse-scroll th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+.synima-function-browse-scroll td {
+  max-width: 24rem;
+  overflow-wrap: anywhere;
+}
+
+#app .synima-function-browse-header h2 {
+  margin: 0;
+}
+
+.synima-function-download {
+  position: relative;
+}
+
+.synima-function-download > button {
+  padding: 2px 6px;
+  margin: 0;
+}
+
+.synima-function-download-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 1000;
+  width: max-content;
+  margin-top: 2px;
+  background: white;
+  color: black;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.synima-function-download-menu button {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.synima-function-download-menu button:enabled:hover {
+  background: #e5e5e5;
+}
+
+.synima-function-download button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+#app p.synima-function-error {
+  color: #fca5a5;
+}
+
+.synima-function-controls[hidden] {
+  display: none;
+}
+
+.synima-enrichment-controls label[hidden] {
+  display: none;
+}
+
+#function-enrichment-feature {
+  color: #fff;
+  padding-bottom: 0.5rem;
+  text-align: left;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+#function-enrichment-code-details {
+  margin-top: 0.5rem;
+}
+
+#function-enrichment-code {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  background: #111827;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 0.4rem;
+  font-family: ui-monospace, monospace;
+  resize: vertical;
+}
+
+.synima-function-import {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.65fr) minmax(0, 2fr);
+  align-items: start;
+}
+
+#app .synima-function-import p,
+#app .synima-function-import pre {
+  margin: 0.25rem 0 0;
+}
+
+.synima-function-controls button:disabled,
+#function-import-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.synima-signalp-key {
+  display: inline-block;
+  margin-left: 0.25rem;
+  padding: 0 0.35rem;
+  border: 1px solid #94a3b8;
+  border-radius: 0.4rem;
+  font-weight: normal;
+  cursor: help;
+}
+
+.synima-signalp-tooltip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  width: max-content;
+  max-width: min(22rem, calc(100vw - 16px));
+  padding: 0.5rem;
+  background: #111827;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 0.4rem;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.synima-function-delete {
+  background: #b91c1c;
+}
+
+.synima-function-delete:hover {
+  background: #dc2626;
+}
+
+.synima-function-dialog {
+  margin: auto;
+  width: min(32rem, calc(100vw - 2rem));
+  padding: 1rem;
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  border-radius: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.synima-function-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.75);
+}
+
+.synima-function-dialog .synima-function-controls {
+  justify-content: flex-end;
+  margin: 0.75rem 0 0;
+}
+
+@media (max-width: 760px) {
+  .synima-function-import {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .synima-data-note {
   display: inline-block;
   max-width: 760px;
@@ -921,46 +1148,58 @@ body {
   pointer-events: none;
 }
 
-.synima-gene-card textarea {
-  min-height: 9rem;
-  width: min(44rem, 100%);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 0.92rem;
-  line-height: 1.35;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-  white-space: pre;
-  overflow-x: auto;
+.synima-gene-card .synima-functional-category-field[hidden] {
+  display: none;
 }
 
-.synima-gene-status-list {
-  border: 1px solid #334155;
-  border-radius: 0.4rem;
-  padding: 0.5rem 0.55rem;
-  background: #111827;
-  min-width: 18rem;
-  max-height: 14.5rem;
-  overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 0.92rem;
-  line-height: 1.35;
-}
-
-.synima-gene-status-row {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin: 0;
-  min-height: 1.35em;
-  line-height: 1.35;
-}
-
-.synima-gene-status-line {
-  width: 2.1rem;
-  text-align: right;
+.synima-gene-card select[data-functional-category]:disabled {
   color: #94a3b8;
+}
+
+.synima-gene-editor {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin-top: 0.25rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  font-size: 0.82rem;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.synima-gene-editor textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 9rem;
+  padding: 0.5rem 0.55rem;
+  border-left: 0;
+  border-radius: 0 0.4rem 0.4rem 0;
+  font: inherit;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+}
+
+.synima-gene-gutter {
+  position: relative;
+  overflow: hidden;
+  width: calc(var(--synima-gene-number-width, 1ch) + 2.4rem);
+  border: 1px solid #334155;
+  border-radius: 0.4rem 0 0 0.4rem;
+  background: #0b1220;
+  color: #94a3b8;
+}
+
+.synima-gene-gutter > div {
+  position: absolute;
+  inset: 0 0 auto;
+  padding: 0.5rem 0.35rem;
+}
+
+.synima-gene-gutter-line {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.35rem;
+  height: 1.35em;
 }
 
 .synima-gene-status-icon {
@@ -982,43 +1221,4 @@ body {
 .synima-gene-empty {
   color: #94a3b8;
   margin: 0;
-}
-
-.synima-gene-status-row-muted {
-  opacity: 0.75;
-}
-
-.synima-gene-io-row {
-  display: flex;
-  gap: 0.8rem;
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-
-.synima-gene-io-label {
-  flex: 1 1 30rem;
-}
-
-.synima-gene-status-col {
-  flex: 1 1 22rem;
-  min-width: 18rem;
-}
-
-.synima-gene-status-title {
-  color: #ffffff;
-  font-size: 0.9rem;
-  margin-bottom: 0.25rem;
-}
-
-.synima-gene-status-gene {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  color: #e5e7eb;
-  white-space: pre;
-}
-
-@media (max-width: 980px) {
-  .synima-gene-status-list {
-    min-width: 100%;
-    max-height: 11rem;
-  }
 }

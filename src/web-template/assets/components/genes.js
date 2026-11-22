@@ -43,6 +43,10 @@ function synimaNormalizeGeneCategory(cat, idx) {
   out.id = (typeof out.id === "string" && out.id.trim()) ? out.id : synimaGeneUid();
   out.name = (typeof out.name === "string" && out.name.trim()) ? out.name.trim().slice(0, 80) : `Category ${idx + 1}`;
   out.genesText = typeof out.genesText === "string" ? out.genesText : "";
+  out.orthologCategoryName = typeof out.orthologCategoryName === "string" ? out.orthologCategoryName : null;
+  out.functionalType = ["signalp", "d2go", "eggnog", "other"].includes(out.functionalType) ? out.functionalType : "";
+  out.functionalField = typeof out.functionalField === "string" ? out.functionalField : "GOs";
+  out.functionalSelection = typeof out.functionalSelection === "string" ? out.functionalSelection : "";
 
   const shape = String(out.shape || base.shape).toLowerCase();
   out.shape = (shape === "circle" || shape === "square" || shape === "triangle") ? shape : base.shape;
@@ -166,8 +170,8 @@ function synimaOrthologCategoryPresets(categories) {
     }
   }
   for (const { genome, kind, genes } of specific) {
-    const name = kind === "unique" ? `unique in ${genome}` : `uniquely lost in ${genome}`;
-    presets.push({ name, genesText: genes.join("\n") });
+    const name = kind === "unique" ? `Unique in ${genome}` : `Uniquely lost in ${genome}`;
+    presets.push({ name, genome, kind, genesText: genes.join("\n") });
   }
   return presets;
 }
@@ -255,32 +259,42 @@ function synimaEscapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+function synimaGeneStatusLines(genesText, idx) {
+  return synimaParseGeneLinesDetailed(genesText).map(line => {
+    if (line.isBlank || line.isComment) return { ...line, found: false, genomes: [], hits: [] };
+    // Qualified queries must not match a gene with the same ID in another genome.
+    const hits = idx[line.query.toLowerCase()]?.hits || [];
+    const genomes = Array.from(new Set(hits.map(h => h.genome))).sort();
+    return { ...line, found: hits.length > 0, genomes, hits };
+  });
+}
+
+function synimaGeneGutterRows(lines) {
+  return lines.map(line => {
+    let icon = "·";
+    let css = "";
+    let status = "Blank line";
+    if (line.isComment) {
+      icon = "#";
+      status = "Comment line";
+    } else if (!line.isBlank) {
+      icon = line.found ? "✓" : "✗";
+      css = line.found ? "synima-gene-found" : "synima-gene-missing";
+      status = line.found ? `Gene found in ${line.genomes.join(", ")}` : "Gene not found";
+    }
+    return `<div class="synima-gene-gutter-line" title="${synimaEscapeHtml(status)}">
+      <span>${line.lineNo}</span>
+      <span class="synima-gene-status-icon ${css}" aria-label="${synimaEscapeHtml(status)}">${icon}</span>
+    </div>`;
+  }).join("");
+}
+
 SYNIMA.getGeneCategoryStatuses = function (aligncoordsText) {
   synimaLoadGeneCategories();
   const idx = synimaParseAligncoordsGeneIndex(aligncoordsText);
-
   return (window.SYNIMA_STATE.geneCategories || []).map((cat, i) => {
-    const c = synimaNormalizeGeneCategory(cat, i);
-    const lines = synimaParseGeneLinesDetailed(c.genesText).map((line) => {
-      if (line.isBlank || line.isComment) {
-        return Object.assign({}, line, {
-          found: false,
-          genomes: [],
-          hits: []
-        });
-      }
-
-      // Qualified queries must not match a gene with the same ID in another genome.
-      const hits = idx[line.query.toLowerCase()]?.hits || [];
-      const genomes = Array.from(new Set(hits.map((h) => h.genome))).sort();
-      return Object.assign({}, line, {
-        found: hits.length > 0,
-        genomes,
-        hits
-      });
-    });
-
-    return { category: c, lines };
+    const category = synimaNormalizeGeneCategory(cat, i);
+    return { category, lines: synimaGeneStatusLines(category.genesText, idx) };
   });
 };
 
@@ -317,12 +331,8 @@ SYNIMA.getGeneMarkersForSynteny = function (aligncoordsText) {
   return markers;
 };
 
-function synimaCanUseOrthologCategories() {
-  return Boolean(SYNIMA.getCloudBaseUrl() && SYNIMA.getCloudApiKey());
-}
-
-function synimaUpdateOrthologCategoryControls() {
-  const loggedIn = synimaCanUseOrthologCategories();
+function synimaUpdateGeneCategoryControls() {
+  const loggedIn = SYNIMA.hasCloudAuth();
   document.querySelectorAll("[data-ortholog-category]").forEach((select) => {
     const hasCategories = select.options.length > 1;
     select.disabled = !loggedIn || !hasCategories;
@@ -331,14 +341,89 @@ function synimaUpdateOrthologCategoryControls() {
     select.options[0].textContent = message;
     select.parentElement.title = select.disabled ? message : "";
   });
+  const controls = document.querySelectorAll("[data-functional-category]");
+  if (!controls.length) return;
+  const annotations = SYNIMA.getFunctionalAnnotations?.() || new Map();
+  const initial = annotations.size ? "Choose a category" : "Import annotations on the Function tab";
+  const options = `<option value="">${initial}</option>` +
+    Array.from(annotations, ([key, annotation]) =>
+      `<option value="${key}">${synimaEscapeHtml(annotation.type.label)}</option>`
+    ).join("");
+  const categories = new Map((window.SYNIMA_STATE.geneCategories || []).map(category => [category.id, category]));
+  controls.forEach(select => {
+    const card = select.closest("[data-gene-category-id]");
+    const category = categories.get(card.getAttribute("data-gene-category-id"));
+    const type = category?.functionalType;
+    select.innerHTML = options;
+    select.value = annotations.has(type) ? type : "";
+    select.disabled = !loggedIn || annotations.size === 0;
+    select.parentElement.hidden = !loggedIn;
+    const isEggnog = loggedIn && select.value === "eggnog";
+    const fieldSelect = card.querySelector("[data-gene-field='functionalField']");
+    const fields = annotations.get("eggnog")?.type.fields.filter(field => field.selectionLabel) || [];
+    fieldSelect.innerHTML = fields.map(field =>
+      `<option value="${field.key}">${synimaEscapeHtml(field.selectionLabel)}</option>`
+    ).join("");
+    fieldSelect.value = synimaFunctionalField(category, annotations.get("eggnog"))?.key || "";
+    fieldSelect.parentElement.hidden = !isEggnog;
+    const selection = card.querySelector("[data-functional-selection]");
+    selection.hidden = !loggedIn || !select.value || select.value === "signalp";
+    selection.querySelector("input").placeholder = select.value === "d2go" || (isEggnog && fieldSelect.value === "GOs")
+      ? "GO:0005737" : "Exact value";
+  });
 }
 
-window.addEventListener("synima-cloud-auth-changed", synimaUpdateOrthologCategoryControls);
+window.addEventListener("synima-cloud-auth-changed", synimaUpdateGeneCategoryControls);
 window.addEventListener("storage", (event) => {
   if (event.key === null || event.key === window.SYNIMA_CLOUD_KEYS.apiKey) {
-    synimaUpdateOrthologCategoryControls();
+    synimaUpdateGeneCategoryControls();
   }
 });
+
+function synimaSelectedOrthologCategory(category, presets) {
+  if (typeof category.orthologCategoryName === "string") {
+    return presets.find(preset => preset.name === category.orthologCategoryName);
+  }
+  // Recover selections from cards saved before the selection was stored explicitly.
+  return presets.find(preset =>
+    preset.name.toLowerCase() === category.name.toLowerCase() && preset.genesText === category.genesText
+  );
+}
+
+function synimaFunctionalField(category, annotation) {
+  const fields = annotation?.type.fields.filter(field => field.selectionLabel) || [];
+  return fields.find(field => field.key === category?.functionalField) || fields[0];
+}
+
+function synimaApplyGeneCategoryFilters(category, presets) {
+  const ortholog = synimaSelectedOrthologCategory(category, presets);
+  category.orthologCategoryName = ortholog?.name || "";
+  const annotation = SYNIMA.getFunctionalAnnotations?.().get(category.functionalType);
+  const value = category.functionalType === "signalp" ? "Y" : category.functionalSelection;
+  const eggnogField = category.functionalType === "eggnog" ? synimaFunctionalField(category, annotation) : null;
+  if (!annotation || !value) {
+    if (ortholog) {
+      category.name = ortholog.name;
+      category.genesText = ortholog.genesText;
+    }
+    return;
+  }
+
+  const allowed = ortholog ? new Set(ortholog.genesText.split("\n")) : null;
+  const field = eggnogField?.key || annotation.type.fields[0].key;
+  const query = value.toUpperCase();
+  const genes = [];
+  for (const [id, row] of annotation.byId) {
+    if (allowed && !allowed.has(id)) continue;
+    const values = row.get(field);
+    if (values && [...values].some(item => item.toUpperCase() === query)) genes.push(id);
+  }
+  const name = eggnogField ? `eggNOG ${eggnogField.selectionLabel}: ${value}`
+    : category.functionalType === "signalp" ? "SignalP prediction"
+    : category.functionalType === "other" ? `Other: ${value}` : `D2GO: ${value}`;
+  category.name = ortholog ? `${name} (${ortholog.name})` : name;
+  category.genesText = genes.sort().join("\n");
+}
 
 SYNIMA.showGenes = function () {
   const app = document.getElementById("app");
@@ -375,43 +460,16 @@ SYNIMA.showGenes = function () {
     const items = SYNIMA.getGeneCategoryStatuses(aligncoords);
 
     host.innerHTML = items.map(({ category, lines }) => {
-      const options = orthologCategories.map(({ name, genesText }, i) =>
-        `<option value="${i}" ${category.name === name && category.genesText === genesText ? "selected" : ""}>${synimaEscapeHtml(name)}</option>`
+      const ortholog = synimaSelectedOrthologCategory(category, orthologCategories);
+      const options = orthologCategories.map((preset, i) =>
+        `<option value="${i}" ${preset === ortholog ? "selected" : ""}>${synimaEscapeHtml(preset.name)}</option>`
       ).join("");
-      const rows = lines.length ? lines.map((st) => {
-        if (st.isBlank) {
-          return `
-            <div class="synima-gene-status-row synima-gene-status-row-muted">
-              <span class="synima-gene-status-line">${st.lineNo}</span>
-              <span class="synima-gene-status-icon" title="Blank line" aria-label="Blank line">·</span>
-              <span class="synima-gene-status-gene">&nbsp;</span>
-            </div>
-          `;
-        }
-
-        if (st.isComment) {
-          return `
-            <div class="synima-gene-status-row synima-gene-status-row-muted">
-              <span class="synima-gene-status-line">${st.lineNo}</span>
-              <span class="synima-gene-status-icon" title="Comment line" aria-label="Comment line">#</span>
-              <span class="synima-gene-status-gene">${synimaEscapeHtml(st.raw)}</span>
-            </div>
-          `;
-        }
-
-        const tip = st.found
-          ? `Gene found in genome(s): ${st.genomes.join(", ")}`
-          : "Gene not found";
-        const symbol = st.found ? "&#10003;" : "&#10007;";
-        const iconClass = st.found ? "synima-gene-found" : "synima-gene-missing";
-        return `
-          <div class="synima-gene-status-row">
-            <span class="synima-gene-status-line">${st.lineNo}</span>
-            <span class="synima-gene-status-icon ${iconClass}" title="${synimaEscapeHtml(tip)}" aria-label="${synimaEscapeHtml(tip)}">${symbol}</span>
-            <span class="synima-gene-status-gene">${synimaEscapeHtml(st.raw)}</span>
-          </div>
-        `;
-      }).join("") : `<p class="synima-gene-empty">No genes entered yet.</p>`;
+      const combined = ortholog && (category.functionalType === "signalp" || category.functionalSelection);
+      const emptyStatus = combined ? "No genes match both categories."
+        : category.functionalSelection ? `No genes match ${category.functionalSelection}.`
+        : category.functionalType === "signalp" ? "No genes have a positive SignalP call."
+        : ortholog ? "No genes in this ortholog category." : "No genes entered yet.";
+      const textareaId = `synima-genes-${synimaEscapeHtml(category.id)}`;
 
       return `
         <div class="section synima-gene-card" data-gene-category-id="${synimaEscapeHtml(category.id)}">
@@ -424,6 +482,16 @@ SYNIMA.showGenes = function () {
                 <option value="">Choose a category</option>
                 ${options}
               </select>
+            </label>
+            <label class="synima-functional-category-field" hidden>Functional Category
+              <select data-gene-field="functionalCategory" data-functional-category></select>
+            </label>
+            <label class="synima-functional-category-field" hidden>Annotation field
+              <select data-gene-field="functionalField"></select>
+            </label>
+            <label class="synima-functional-category-field" data-functional-selection hidden>Selection
+              <input type="text" data-gene-field="functionalSelection" placeholder="GO:0005737"
+                title="Press Enter to apply a selection" value="${synimaEscapeHtml(category.functionalSelection)}" />
             </label>
             <label>Glyph
               <select data-gene-field="shape">
@@ -444,22 +512,17 @@ SYNIMA.showGenes = function () {
             <button type="button" class="copy-btn" data-gene-action="remove">Remove</button>
           </div>
 
-          <div class="synima-gene-io-row">
-            <label class="synima-gene-io-label">Genes (one per line)
-              <textarea data-gene-field="genesText" rows="8" wrap="off" placeholder="geneA\ngeneB\ngeneC">${synimaEscapeHtml(category.genesText)}</textarea>
-            </label>
-
-            <div class="synima-gene-status-col">
-              <div class="synima-gene-status-title">Status</div>
-              <div class="synima-gene-status-list">
-                ${rows}
-              </div>
-            </div>
+          <label for="${textareaId}">Genes (one per line)</label>
+          <div class="synima-gene-editor" style="--synima-gene-number-width:${String(lines.length).length}ch">
+            <div class="synima-gene-gutter"><div data-gene-gutter>${synimaGeneGutterRows(lines)}</div></div>
+            <textarea id="${textareaId}" data-gene-field="genesText" rows="8" wrap="off" placeholder="geneA\ngeneB\ngeneC">
+${synimaEscapeHtml(category.genesText)}</textarea>
           </div>
+          <p class="synima-gene-empty" data-gene-empty${category.genesText ? " hidden" : ""}>${synimaEscapeHtml(emptyStatus)}</p>
         </div>
       `;
     }).join("");
-    synimaUpdateOrthologCategoryControls();
+    synimaUpdateGeneCategoryControls();
   }
 
   const debouncedInput = (() => {
@@ -480,19 +543,65 @@ SYNIMA.showGenes = function () {
     cb(arr, idx);
   }
 
+  function applyFunctionalSelection(input, commit) {
+    if (!SYNIMA.hasCloudAuth()) return;
+    withCategoryFromTarget(input, (arr, idx) => {
+      const category = arr[idx];
+      const annotation = SYNIMA.getFunctionalAnnotations?.().get(category.functionalType);
+      if (!annotation || category.functionalType === "signalp") return;
+      const go = category.functionalType === "d2go" || synimaFunctionalField(category, annotation)?.key === "GOs";
+      if (!go && !commit) return;
+      const raw = input.value.trim();
+      const term = go ? raw.toUpperCase() : raw;
+      if ((go && term && !/^GO:\d{7}$/.test(term)) || category.functionalSelection === term) return;
+      category.functionalSelection = term;
+      synimaApplyGeneCategoryFilters(category, orthologCategories);
+      const hadFocus = document.activeElement === input;
+      synimaSaveGeneCategories();
+      renderCategories();
+      if (hadFocus) {
+        host.querySelector(
+          `[data-gene-category-id="${CSS.escape(category.id)}"] [data-gene-field="functionalSelection"]`
+        )?.focus({ preventScroll: true });
+      }
+      rerenderSyntenyIfReady();
+    });
+  }
+
   host.addEventListener("change", (e) => {
     const fieldEl = e.target.closest("[data-gene-field]");
     if (!fieldEl) return;
+    const field = fieldEl.getAttribute("data-gene-field");
+    if (field === "functionalSelection") {
+      applyFunctionalSelection(fieldEl, true);
+      return;
+    }
+    if (field === "genesText") return; // Input already saves the text without resetting the editor.
 
     withCategoryFromTarget(fieldEl, (arr, idx) => {
-      const field = fieldEl.getAttribute("data-gene-field");
       if (field === "orthologCategory") {
-        if (fieldEl.disabled || !synimaCanUseOrthologCategories() || fieldEl.value === "") return;
-        const preset = orthologCategories[Number(fieldEl.value)];
-        if (!preset) return;
-        arr[idx].name = preset.name;
-        arr[idx].genesText = preset.genesText;
-      } else if (field === "name" || field === "genesText" || field === "shape" || field === "color") {
+        if (fieldEl.disabled || !SYNIMA.hasCloudAuth()) return;
+        const preset = fieldEl.value === "" ? null : orthologCategories[Number(fieldEl.value)];
+        if (fieldEl.value !== "" && !preset) return;
+        arr[idx].orthologCategoryName = preset?.name || "";
+        synimaApplyGeneCategoryFilters(arr[idx], orthologCategories);
+      } else if (field === "functionalCategory") {
+        if (fieldEl.disabled || !SYNIMA.hasCloudAuth()) return;
+        const type = fieldEl.value;
+        const annotation = SYNIMA.getFunctionalAnnotations?.().get(type);
+        if (type && !annotation) return;
+        arr[idx].functionalType = type;
+        arr[idx].functionalField = "GOs";
+        arr[idx].functionalSelection = "";
+        synimaApplyGeneCategoryFilters(arr[idx], orthologCategories);
+      } else if (field === "functionalField") {
+        if (!SYNIMA.hasCloudAuth() || arr[idx].functionalType !== "eggnog") return;
+        const annotation = SYNIMA.getFunctionalAnnotations?.().get("eggnog");
+        if (!annotation?.type.fields.some(item => item.selectionLabel && item.key === fieldEl.value)) return;
+        arr[idx].functionalField = fieldEl.value;
+        arr[idx].functionalSelection = "";
+        synimaApplyGeneCategoryFilters(arr[idx], orthologCategories);
+      } else if (field === "name" || field === "shape" || field === "color") {
         arr[idx][field] = fieldEl.value;
       } else if (field === "size" || field === "yOffset") {
         arr[idx][field] = Number(fieldEl.value);
@@ -505,18 +614,44 @@ SYNIMA.showGenes = function () {
   });
 
   host.addEventListener("input", (e) => {
+    const selection = e.target.closest("[data-gene-field='functionalSelection']");
+    if (selection) {
+      applyFunctionalSelection(selection, false);
+      return;
+    }
+
     const fieldEl = e.target.closest("[data-gene-field='genesText']");
     if (!fieldEl) return;
 
     withCategoryFromTarget(fieldEl, (arr, idx) => {
       arr[idx].genesText = fieldEl.value;
-      debouncedInput(() => {
-        arr[idx] = synimaNormalizeGeneCategory(arr[idx], idx);
-        synimaSaveGeneCategories();
-        renderCategories();
-        rerenderSyntenyIfReady();
-      });
+      synimaSaveGeneCategories();
+
+      const lines = synimaGeneStatusLines(fieldEl.value, synimaParseAligncoordsGeneIndex(aligncoords));
+      const editor = fieldEl.parentElement;
+      const gutter = editor.querySelector("[data-gene-gutter]");
+      editor.style.setProperty("--synima-gene-number-width", `${String(lines.length).length}ch`);
+      gutter.innerHTML = synimaGeneGutterRows(lines);
+      gutter.style.transform = `translateY(${-fieldEl.scrollTop}px)`;
+      const empty = editor.parentElement.querySelector("[data-gene-empty]");
+      empty.hidden = Boolean(fieldEl.value);
+      empty.textContent = "No genes entered yet.";
+      debouncedInput(rerenderSyntenyIfReady);
     });
+  });
+
+  host.addEventListener("scroll", (event) => {
+    const input = event.target;
+    if (input.matches?.("[data-gene-field='genesText']")) {
+      input.parentElement.querySelector("[data-gene-gutter]").style.transform = `translateY(${-input.scrollTop}px)`;
+    }
+  }, true);
+
+  host.addEventListener("keydown", (e) => {
+    const input = e.target.closest("[data-gene-field='functionalSelection']");
+    if (!input || e.key !== "Enter") return;
+    e.preventDefault();
+    applyFunctionalSelection(input, true);
   });
 
   host.addEventListener("click", (e) => {

@@ -5,6 +5,7 @@ SYNIMA.routes = {
   tree: SYNIMA.showTree,
   genes: SYNIMA.showGenes,
   synteny: SYNIMA.showSynteny,
+  function: SYNIMA.showFunction,
   cloud: SYNIMA.showCloud,
   methods: SYNIMA.showMethods,
   about: SYNIMA.showAbout
@@ -22,6 +23,7 @@ SYNIMA.updateActiveNav = function (page) {
 };
 
 SYNIMA.router = function (page) {
+  if (page === "function" && !SYNIMA.hasCloudAuth()) page = "orthologs";
   const view = SYNIMA.routes[page] || SYNIMA.showOrthologs;
   SYNIMA.currentPage = page;       // track which tab is active
   view();
@@ -29,6 +31,19 @@ SYNIMA.router = function (page) {
 };
 
 SYNIMA.routerInit = function () {
+  function updateFunctionAccess() {
+    const available = SYNIMA.hasCloudAuth();
+    document.querySelectorAll('a[data-page="function"]').forEach(link => {
+      link.hidden = !available;
+    });
+    if (!available && SYNIMA.currentPage === "function") SYNIMA.router("orthologs");
+  }
+
+  updateFunctionAccess();
+  window.addEventListener("synima-cloud-auth-changed", updateFunctionAccess);
+  window.addEventListener("storage", event => {
+    if (event.key === null || event.key === window.SYNIMA_CLOUD_KEYS.apiKey) updateFunctionAccess();
+  });
 
   // Attach click handlers to all nav links
   document.addEventListener("click", function (e) {
