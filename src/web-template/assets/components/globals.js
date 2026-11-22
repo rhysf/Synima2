@@ -287,6 +287,7 @@ window.SYNIMA_PERSIST_KEYS = window.SYNIMA_PERSIST_KEYS || {
 	genesCategories: "synima_genes_categories",
 
 	// orthologs tab appearance
+	orthologTheme: "synima_ortholog_theme",
 	orthologBgColor: "synima_ortholog_bg_color",
 	orthologTextColor: "synima_ortholog_text_color",
 	orthologCatCore1to1Color: "synima_ortholog_cat_core_1to1_color",
@@ -392,11 +393,3 @@ window.SYNIMA_STATE.syntenyScaleLineWidth = window.SYNIMA_STATE.syntenyScaleLine
 
 // genes tab defaults
 window.SYNIMA_STATE.geneCategories = window.SYNIMA_STATE.geneCategories ?? [];
-
-// orthologs tab defaults
-window.SYNIMA_STATE.orthologBgColor = window.SYNIMA_STATE.orthologBgColor ?? "#0f1b30";
-window.SYNIMA_STATE.orthologTextColor = window.SYNIMA_STATE.orthologTextColor ?? "#ffffff";
-window.SYNIMA_STATE.orthologCatCore1to1Color = window.SYNIMA_STATE.orthologCatCore1to1Color ?? "#66C2A5";
-window.SYNIMA_STATE.orthologCatCoreMultiColor = window.SYNIMA_STATE.orthologCatCoreMultiColor ?? "#FC8D62";
-window.SYNIMA_STATE.orthologCatAuxColor = window.SYNIMA_STATE.orthologCatAuxColor ?? "#8DA0CB";
-window.SYNIMA_STATE.orthologCatUniqueColor = window.SYNIMA_STATE.orthologCatUniqueColor ?? "#E78AC3";

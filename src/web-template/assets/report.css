@@ -420,28 +420,13 @@ body {
   cursor: pointer;
 }
 
-.orthologs-page {
+.tree-view.ortholog-plot {
+  background: var(--synima-ortho-bg, #0f1b30);
+}
+
+#app .ortholog-plot p {
   color: var(--synima-ortho-text, #ffffff);
 }
-
-.orthologs-page .ortho-table th,
-.orthologs-page .param-table th {
-  background: var(--synima-ortho-bg, #0f1b30);
-  background: color-mix(in srgb, var(--synima-ortho-bg, #0f1b30) 65%, #334155 35%);
-  color: var(--synima-ortho-text, #ffffff) !important;
-}
-
-.orthologs-page .ortho-table td,
-.orthologs-page .param-table td {
-  background: var(--synima-ortho-bg, #0f1b30);
-  background: color-mix(in srgb, var(--synima-ortho-bg, #0f1b30) 80%, #1e293b 20%);
-  color: var(--synima-ortho-text, #ffffff) !important;
-}
-
-.orthologs-page .tree-view {
-  background: var(--synima-ortho-bg, #0f1b30);
-}
-
 
 /* Force content headings to white */
 #app h1,
