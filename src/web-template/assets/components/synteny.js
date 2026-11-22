@@ -2488,7 +2488,7 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identit
     const trackHeight = layout.trackHeight;
 
     // fallback if tip positions not available
-    const topPad = 20;
+    const topPad = 20 + SYNIMA_SYNTENY_TOP_PADDING;
     const rowSpacing = 30;
     const yFallback = (gName) => {
         const idx = config.genomes.findIndex(g => g.name === gName);
@@ -2694,19 +2694,18 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identit
     // ----------------------------
     // Gene markers (optional)
     // ----------------------------
-    let geneMarkersSvg = "";
-    if (typeof SYNIMA.getGeneMarkersForSynteny === "function") {
-        const markers = SYNIMA.getGeneMarkersForSynteny(aligncoordsText || "");
-        geneMarkersSvg = renderGeneMarkersSvg(markers, config, maps, layout, yFor, trackHeight);
-    }
+    const markers = SYNIMA.getGeneMarkersForSynteny?.(aligncoordsText || "") || [];
+    const geneMarkers = renderGeneMarkersSvg(markers, config, maps, layout, yFor, trackHeight);
+    const plotBottom = config.genomes.reduce(
+        (bottom, g) => Math.max(bottom, yFor(g.name) + trackHeight), geneMarkers.bottom
+    );
+    let legendBottom = plotBottom;
 
     // ----------------------------
     // Scale bar (optional)
     // ----------------------------
     const showScale = (window.SYNIMA_STATE.syntenyScaleShow !== false);
     let scaleBarSvg = "";
-    let extraBottom = 0;
-    let scaleBottom = null; // bottom of the scale bar label, for placing the identity legend
 
     if (showScale) {
         const { factor, label, intervals, max, step } = getSyntenyScale(config.max_length);
@@ -2714,15 +2713,7 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identit
         const pxPerUnit = factor * layout.scaleX;
         const axisX2 = Math.min(xStart + max * pxPerUnit, svgW);
 
-        // find bottom of plotted contigs so the bar sits underneath
-        let maxY = 0;
-        for (let i = 0; i < config.genomes.length; i++) {
-          const y = yFor(config.genomes[i].name, i);
-          if (y > maxY) maxY = y;
-        }
-        const plotBottom = maxY + trackHeight + 10;
-
-        const axisY = plotBottom + 25;
+        const axisY = plotBottom + 35;
         const tickH = 6;
         const axisFont = parseInt(window.SYNIMA_STATE.syntenyScaleAxisFont, 10) || 12;
         const labelFont = parseInt(window.SYNIMA_STATE.syntenyScaleLabelFont, 10) || axisFont;
@@ -2747,7 +2738,7 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identit
 
         const labelY = axisY + tickH + axisFont + 2 + labelFont + 8;
         const axisLabel = `${labelText} (${label})`;
-        scaleBottom = labelY + 12;
+        const scaleBottom = labelY + 12;
 
         // Keep an explicit viewport when the export moves this scale into a different SVG.
         scaleBarSvg = `
@@ -2758,46 +2749,45 @@ function renderSyntenySvg(blocks, config, maps, layout, aligncoordsText, identit
           </svg>
         `;
 
-        extraBottom = scaleBottom - svgH;
-        if (!isFinite(extraBottom) || extraBottom < 0) extraBottom = 0;
+        legendBottom = scaleBottom;
     }
-
-    // bump svgH so the scale bar is visible
-    svgH = Math.max(svgH, svgH + extraBottom);
 
     // ----------------------------
     // % identity legend (identity mode only), below the scale bar or the tracks
     // ----------------------------
     let identityLegendSvg = "";
     if (identityOpts) {
-        let maxY = 0;
-        for (const g of config.genomes) {
-            const y = yFor(g.name);
-            if (y > maxY) maxY = y;
-        }
-        const top = (scaleBottom !== null) ? scaleBottom + 16 : maxY + trackHeight + 20;
-        const legend = renderIdentityLegendSvg(identityOpts, layout.xStart, top, svgW - layout.xStart, {
+        const legend = renderIdentityLegendSvg(identityOpts, layout.xStart, legendBottom + 16, svgW - layout.xStart, {
             text: labelColor,
             missing: polyColor,
             opacity: polyFillOpacity,
             strokeOpacity: polyStrokeOpacity
         });
         identityLegendSvg = legend.svg;
-        svgH = Math.max(svgH, legend.bottom + 4);
+        legendBottom = legend.bottom;
     }
+
+    let geneLegendSvg = "";
+    if (geneMarkers.categories.size > 0) {
+        const legend = renderGeneCategoryLegendSvg(geneMarkers.categories, layout.xStart, legendBottom + 16, svgW, labelColor);
+        geneLegendSvg = legend.svg;
+        legendBottom = legend.bottom;
+    }
+    svgH = Math.max(svgH, legendBottom + 4);
 
     return `
         <svg width="100%" height="${svgH}" viewBox="0 0 ${svgW} ${svgH}" style="display:block;">
         ${polys}
         ${tracks}
-        ${geneMarkersSvg}
-        ${scaleBarSvg}${identityLegendSvg}
+        ${geneMarkers.svg}
+        ${scaleBarSvg}${identityLegendSvg}${geneLegendSvg}
       </svg>
     `;
 }
 
 function renderGeneMarkersSvg(markers, config, maps, layout, yFor, trackHeight) {
-    if (!Array.isArray(markers) || markers.length === 0) return "";
+    const categories = new Map();
+    if (!markers.length) return { svg: "", categories, bottom: 0 };
 
     const flips = window.SYNIMA_STATE.syntenyContigFlips || {};
     const rankByGenomeContig = {};
@@ -2809,6 +2799,7 @@ function renderGeneMarkersSvg(markers, config, maps, layout, yFor, trackHeight) 
     }
 
     let out = "";
+    let bottom = 0;
     for (const m of markers) {
         const yBase = yFor(m.genome);
         if (yBase == null) continue;
@@ -2836,10 +2827,44 @@ function renderGeneMarkersSvg(markers, config, maps, layout, yFor, trackHeight) 
         const shape = renderGeneMarkerShape(String(m.shape || "circle"), x, y, size, color);
         if (!shape) continue;
 
+        categories.set(m.categoryId, m);
+        bottom = Math.max(bottom, y + size);
         out += `<g class="synima-gene-marker" data-tip="${escapeAttr(title)}">${shape}</g>`;
     }
 
-    return out;
+    return { svg: out, categories, bottom };
+}
+
+function renderGeneCategoryLegendSvg(categories, x, top, width, labelColor) {
+    const font = 16;
+    const lineHeight = 20;
+    const labelX = x + 30;
+    const maxLabelWidth = Math.max(1, width - labelX - 10);
+    const measure = getMeasureCtx(font);
+    let y = top + font;
+    let rows = "";
+
+    for (const marker of categories.values()) {
+        const glyph = renderGeneMarkerShape(marker.shape, x + 12, y - 5, 9, marker.color);
+        // Wrap labels to keep their full text inside narrow plots and exports.
+        let line = "";
+        const lines = [];
+        for (const char of marker.categoryName) {
+            if (line && measure.measureText(line + char).width > maxLabelWidth) {
+                lines.push(line);
+                line = "";
+            }
+            line += char;
+        }
+        lines.push(line);
+        const text = lines.map((value, i) =>
+            `<tspan x="${labelX}" dy="${i === 0 ? 0 : lineHeight}">${escapeHtml(value)}</tspan>`
+        ).join("");
+        rows += `<g>${glyph}<text x="${labelX}" y="${y}" font-family="sans-serif" font-size="${font}" fill="${labelColor}">${text}</text></g>`;
+        y += (lines.length - 1) * lineHeight + 26;
+    }
+
+    return { svg: `<g class="synteny-gene-legend">${rows}</g>`, bottom: y };
 }
 
 function renderGeneMarkerShape(shape, x, y, size, color) {

@@ -42,10 +42,12 @@ SYNIMA.getCloudApiKey = function () {
 };
 
 SYNIMA.setCloudAuth = function (email, apiKey) {
+	const hadKey = Boolean(SYNIMA.getCloudApiKey());
 	try {
 		localStorage.setItem(window.SYNIMA_CLOUD_KEYS.userEmail, (email || "").trim());
 		localStorage.setItem(window.SYNIMA_CLOUD_KEYS.apiKey, (apiKey || "").trim());
 	} catch (e) {}
+	if (hadKey !== Boolean(SYNIMA.getCloudApiKey())) window.dispatchEvent(new Event("synima-cloud-auth-changed"));
 };
 
 SYNIMA.clearCloudAuth = function () {
@@ -53,6 +55,7 @@ SYNIMA.clearCloudAuth = function () {
 		localStorage.removeItem(window.SYNIMA_CLOUD_KEYS.userEmail);
 		localStorage.removeItem(window.SYNIMA_CLOUD_KEYS.apiKey);
 	} catch (e) {}
+	window.dispatchEvent(new Event("synima-cloud-auth-changed"));
 };
 
 SYNIMA.syncCloudSession = async function () {
@@ -97,7 +100,6 @@ SYNIMA.cloudState = window.SYNIMA.cloudState || {
 	baseUrl: "",
 	enabled: false,
 	online: navigator.onLine !== false,
-	reachable: false,
 	userEmail: "",
 	statusLabel: "Offline mode"
 };
@@ -106,28 +108,6 @@ SYNIMA.refreshCloudState = async function () {
 	const baseUrl = SYNIMA.getCloudBaseUrl();
 	const online = navigator.onLine !== false;
 	const enabled = Boolean(baseUrl);
-	let reachable = false;
-
-	if (enabled && online) {
-		let timer = null;
-		try {
-			const controller = new AbortController();
-			timer = setTimeout(() => controller.abort(), 2500);
-			await fetch(baseUrl, {
-				method: "GET",
-				mode: "no-cors",
-				cache: "no-store",
-				signal: controller.signal
-			});
-			reachable = true;
-		} catch (e) {
-			reachable = false;
-		} finally {
-			if (timer) clearTimeout(timer);
-		}
-	}
-
-	const userEmail = enabled ? SYNIMA.getCloudUserEmail() : "";
 	const apiKey = enabled ? SYNIMA.getCloudApiKey() : "";
 
 	if (enabled && online && !apiKey) {
@@ -145,15 +125,12 @@ SYNIMA.refreshCloudState = async function () {
 		? "Offline mode"
 		: !online
 			? "Offline"
-			: reachable
-				? "Cloud connected"
-				: "Cloud unavailable";
+			: apiKeyFinal ? "" : "Not logged in";
 
 	SYNIMA.cloudState = {
 		baseUrl,
 		enabled,
 		online,
-		reachable,
 		userEmail: userEmailFinal,
 		apiKey: apiKeyFinal,
 		statusLabel
@@ -317,6 +294,7 @@ const SYNIMA_TREE_THEME_PRESETS = {
 	dark: { treeBgColor: "#0f1b30", treeLabelColor: "#ffffff", treeBranchColor: "#ffffff" },
 	light: { treeBgColor: "#ffffff", treeLabelColor: "#000000", treeBranchColor: "#000000" }
 };
+const SYNIMA_SYNTENY_TOP_PADDING = 38;
 
 window.SYNIMA_STATE.treeYScale = window.SYNIMA_STATE.treeYScale ?? 1.0;
 window.SYNIMA_STATE.treeBgColor = window.SYNIMA_STATE.treeBgColor ?? SYNIMA_TREE_THEME_PRESETS.dark.treeBgColor;

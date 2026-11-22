@@ -10,7 +10,103 @@ use std::process;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self};
 use std::io::{BufRead, Write};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use serde::Serialize;
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+enum OrthologGeneCategoryKind {
+    Unique,
+    Lost,
+}
+
+#[derive(Serialize)]
+pub struct OrthologGeneCategory {
+    kind: OrthologGeneCategoryKind,
+    genome: String,
+    pub genes: BTreeSet<String>,
+}
+
+pub fn gene_categories(
+    combined_clusters_path: &Path,
+    current_genomes: &HashSet<String>,
+) -> anyhow::Result<Vec<OrthologGeneCategory>> {
+    use anyhow::Context;
+
+    let text = fs::read_to_string(combined_clusters_path)
+        .with_context(|| format!("Cannot read {}", combined_clusters_path.display()))?;
+    let mut by_genome: BTreeMap<_, (BTreeSet<_>, BTreeSet<_>)> = current_genomes
+        .iter()
+        .map(String::as_str)
+        .filter(|&genome| genome != "synima_all")
+        .map(|genome| (genome, Default::default()))
+        .collect();
+    let mut clusters: HashMap<&str, Vec<(&str, &str)>> = HashMap::new();
+    for (i, line) in text.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let mut cols = line.split('\t');
+        let (Some(cluster), Some(genome), Some(_), Some(gene)) =
+            (cols.next(), cols.next(), cols.next(), cols.next())
+        else {
+            anyhow::bail!("Expected four columns in {} at line {}", combined_clusters_path.display(), i + 1);
+        };
+        if by_genome.contains_key(genome) {
+            clusters.entry(cluster).or_default().push((genome, gene));
+        }
+    }
+
+    let genome_count = by_genome.len();
+    for members in clusters.values() {
+        let present: HashSet<_> = members.iter().map(|&(genome, _)| genome).collect();
+        if present.len() == 1 {
+            let genome = members[0].0;
+            by_genome.get_mut(genome).unwrap().0.extend(
+                members.iter().map(|&(genome, gene)| format!("{genome}|{gene}")),
+            );
+        }
+        if present.len() + 1 == genome_count {
+            if let Some(missing) = by_genome.keys().copied().find(|genome| !present.contains(genome)) {
+                by_genome.get_mut(missing).unwrap().1.extend(
+                    members.iter().map(|&(genome, gene)| format!("{genome}|{gene}")),
+                );
+            }
+        }
+    }
+
+    let mut categories = Vec::with_capacity(2 * genome_count);
+    for (genome, (unique, lost)) in by_genome {
+        categories.push(OrthologGeneCategory { kind: OrthologGeneCategoryKind::Unique, genome: genome.to_owned(), genes: unique });
+        if genome_count > 1 {
+            categories.push(OrthologGeneCategory { kind: OrthologGeneCategoryKind::Lost, genome: genome.to_owned(), genes: lost });
+        }
+    }
+    // Group the unique sections first, then the loss sections, each in genome order.
+    categories.sort_by_key(|category| matches!(category.kind, OrthologGeneCategoryKind::Lost));
+    Ok(categories)
+}
+
+pub fn write_gene_category_summary(
+    output_path: &Path,
+    categories: &[OrthologGeneCategory],
+    logger: &Logger,
+) -> std::io::Result<()> {
+    let mut writer = open_bufwrite(output_path, logger, "write_gene_category_summary");
+    for category in categories {
+        let header = match category.kind {
+            OrthologGeneCategoryKind::Unique => "unique_in",
+            OrthologGeneCategoryKind::Lost => "uniquely_lost_in",
+        };
+        writeln!(writer, "#{header}_{}", category.genome)?;
+        for gene in &category.genes {
+            writeln!(writer, "{gene}")?;
+        }
+    }
+    writer.flush()?;
+    logger.information(&format!("Wrote ortholog gene categories to {}", output_path.display()));
+    Ok(())
+}
 
 pub enum OrthologySource {
     OrthoFinder(PathBuf),

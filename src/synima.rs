@@ -1,6 +1,7 @@
 use crate::logger::Logger;
+use crate::ortholog_summary::OrthologGeneCategory;
 use crate::RepoEntry;
-use crate::read_fasta;
+use crate::{read_fasta, read_gff};
 
 use regex::Regex;
 use anyhow::{Result, Context};
@@ -12,7 +13,8 @@ use std::path::{Path, PathBuf};
 //use std::io::{BufRead, BufReader};
 //use std::io::{BufRead, BufReader};
 //use std::collections::HashSet;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::io::{BufRead, BufReader};
 //use anyhow::anyhow;
 //use anyhow::bail;
 
@@ -46,6 +48,58 @@ struct OrthologSummary {
     params: OrthoParams,
     summaries: Vec<SummaryItem>,
     single_copy_orthologs: usize,
+    gene_categories: Vec<OrthologGeneCategory>,
+    category_gene_loci: Vec<GeneLocus>,
+}
+
+#[derive(Serialize)]
+struct GeneLocus {
+    gene: String,
+    genome: String,
+    contig: String,
+    start: usize,
+    end: usize,
+}
+
+fn category_gene_loci(
+    gff_path: &Path,
+    categories: &[OrthologGeneCategory],
+) -> Result<Vec<GeneLocus>> {
+    let wanted: HashSet<_> = categories.iter().flat_map(|category| &category.genes).collect();
+    if wanted.is_empty() || !gff_path.is_file() {
+        return Ok(Vec::new());
+    }
+
+    let mut loci = Vec::new();
+    for line in BufReader::new(fs::File::open(gff_path)?).lines() {
+        let line = line?;
+        if line.starts_with('#') {
+            continue;
+        }
+        let mut cols = line.split('\t');
+        let (Some(contig), Some(start), Some(end), Some(attributes)) =
+            (cols.next(), cols.nth(2), cols.next(), cols.nth(3))
+        else {
+            continue;
+        };
+        let attributes = read_gff::parse_gff_attributes(attributes);
+        let Some(gene) = attributes.get("ID").filter(|id| wanted.contains(id)) else {
+            continue;
+        };
+        let (Some((genome, _)), Ok(start), Ok(end)) =
+            (gene.split_once('|'), start.parse::<usize>(), end.parse::<usize>())
+        else {
+            continue;
+        };
+        loci.push(GeneLocus {
+            gene: gene.clone(),
+            genome: genome.to_owned(),
+            contig: contig.to_owned(),
+            start,
+            end,
+        });
+    }
+    Ok(loci)
 }
 
 #[derive(Serialize)]
@@ -175,10 +229,10 @@ pub fn inject_json_into_html(path: &Path, id: &str, json: &str) -> Result<()> {
 
     let replacement = format!(
         r#"<script id="{}" type="application/json">{}</script>"#,
-        id, json
+        id, json.replace('<', "\\u003c")
     );
 
-    let new_html = re.replace(&html, replacement.as_str()).to_string();
+    let new_html = re.replace(&html, regex::NoExpand(&replacement)).to_string();
 
     std::fs::write(path, new_html)?;
     Ok(())
@@ -268,7 +322,9 @@ fn find_associated_files(dir: &Path, alignment: &str, method: &str) -> (Option<S
 pub fn process_ortholog_summaries(
     gene_clusters_out_dir: &Path,
     index_path: &Path,
-    params: OrthoParams) -> Result<()> {
+    params: OrthoParams,
+    gene_categories: Vec<OrthologGeneCategory>,
+    combined_gff_path: &Path) -> Result<()> {
 
     let mut summaries: Vec<SummaryItem> = Vec::new();
 
@@ -277,8 +333,7 @@ pub fn process_ortholog_summaries(
     {
         let path = entry?.path();
 
-        // Only *.summary files
-        if path.extension() != Some("summary".as_ref()) {
+        if !path.file_name().is_some_and(|name| name.to_string_lossy().ends_with(".cluster_dist_per_genome.summary")) {
             continue;
         }
 
@@ -319,7 +374,10 @@ pub fn process_ortholog_summaries(
     }
 
     // Serialize to JSON
-    let json = serde_json::to_string(&OrthologSummary { params, summaries, single_copy_orthologs: global_sco })?;
+    let category_gene_loci = category_gene_loci(combined_gff_path, &gene_categories)?;
+    let json = serde_json::to_string(&OrthologSummary {
+        params, summaries, single_copy_orthologs: global_sco, gene_categories, category_gene_loci,
+    })?;
 
     // Inject into HTML
     inject_json_into_html(index_path, "data-orthologs", &json)?;

@@ -10,28 +10,42 @@ function synimaGeneUid() {
   return `cat_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function synimaDefaultGeneCategory() {
+const SYNIMA_GENE_CATEGORY_STYLES = [
+  ["#f59e0b", "circle"],
+  ["#0ea5e9", "square"],
+  ["#ec4899", "triangle"],
+  ["#10b981", "circle"],
+  ["#8b5cf6", "square"],
+  ["#f97316", "triangle"],
+  ["#84cc16", "square"],
+  ["#ef4444", "circle"],
+  ["#14b8a6", "triangle"],
+  ["#a855f7", "circle"]
+];
+
+function synimaDefaultGeneCategory(idx = 0, styleIndex = idx) {
+  const [color, shape] = SYNIMA_GENE_CATEGORY_STYLES[styleIndex % SYNIMA_GENE_CATEGORY_STYLES.length];
   return {
     id: synimaGeneUid(),
-    name: "Category 1",
+    name: `Category ${idx + 1}`,
     genesText: "",
-    shape: "circle",
+    shape,
     size: 10,
-    color: "#f59e0b",
+    color,
     yOffset: -8
   };
 }
 
 function synimaNormalizeGeneCategory(cat, idx) {
-  const base = synimaDefaultGeneCategory();
+  const base = synimaDefaultGeneCategory(idx);
   const out = Object.assign({}, base, (cat && typeof cat === "object") ? cat : {});
 
   out.id = (typeof out.id === "string" && out.id.trim()) ? out.id : synimaGeneUid();
   out.name = (typeof out.name === "string" && out.name.trim()) ? out.name.trim().slice(0, 80) : `Category ${idx + 1}`;
   out.genesText = typeof out.genesText === "string" ? out.genesText : "";
 
-  const shape = String(out.shape || "circle").toLowerCase();
-  out.shape = (shape === "circle" || shape === "square" || shape === "triangle") ? shape : "circle";
+  const shape = String(out.shape || base.shape).toLowerCase();
+  out.shape = (shape === "circle" || shape === "square" || shape === "triangle") ? shape : base.shape;
 
   const size = Number(out.size);
   out.size = Number.isFinite(size) ? Math.min(30, Math.max(4, size)) : 10;
@@ -40,7 +54,7 @@ function synimaNormalizeGeneCategory(cat, idx) {
   out.yOffset = Number.isFinite(yOffset) ? Math.min(100, Math.max(-100, yOffset)) : -8;
 
   const c = String(out.color || "").trim();
-  out.color = /^#([0-9a-fA-F]{6})$/.test(c) ? c : "#f59e0b";
+  out.color = /^#([0-9a-fA-F]{6})$/.test(c) ? c : base.color;
 
   return out;
 }
@@ -106,15 +120,33 @@ function synimaGeneLookupKeys(name) {
   const keys = new Set();
   keys.add(raw.toLowerCase());
   if (raw.includes("|")) {
-    const bare = raw.split("|").pop().trim().toLowerCase();
+    const bare = raw.slice(raw.indexOf("|") + 1).trim().toLowerCase();
     if (bare) keys.add(bare);
   }
   return Array.from(keys);
 }
 
+let orthologGeneDataCache;
+function synimaOrthologGeneData() {
+  const raw = document.getElementById("data-orthologs")?.textContent || "";
+  if (orthologGeneDataCache?.raw === raw) return orthologGeneDataCache;
+  let data = {};
+  try { data = JSON.parse(raw) || {}; } catch (e) {}
+  orthologGeneDataCache = {
+    raw,
+    categories: Array.isArray(data.gene_categories)
+      ? data.gene_categories.filter(c => c && typeof c.genome === "string" && Array.isArray(c.genes)
+        && (c.kind === "unique" || c.kind === "lost"))
+      : [],
+    loci: Array.isArray(data.category_gene_loci) ? data.category_gene_loci : []
+  };
+  return orthologGeneDataCache;
+}
+
 function synimaParseAligncoordsGeneIndex(aligncoordsText) {
   const text = String(aligncoordsText || "");
-  if (SYNIMA._geneAligncoordsIndexCache && SYNIMA._geneAligncoordsIndexCache.raw === text) {
+  const { loci } = synimaOrthologGeneData();
+  if (SYNIMA._geneAligncoordsIndexCache?.raw === text && SYNIMA._geneAligncoordsIndexCache.loci === loci) {
     return SYNIMA._geneAligncoordsIndexCache.index;
   }
 
@@ -134,6 +166,8 @@ function synimaParseAligncoordsGeneIndex(aligncoordsText) {
       index[k].hits.push(hit);
     }
   };
+
+  for (const locus of loci) addHit(locus.gene, locus);
 
   for (const line of lines) {
     const t = line.trim();
@@ -179,7 +213,7 @@ function synimaParseAligncoordsGeneIndex(aligncoordsText) {
     delete entry._seen;
   });
 
-  SYNIMA._geneAligncoordsIndexCache = { raw: text, index };
+  SYNIMA._geneAligncoordsIndexCache = { raw: text, loci, index };
   return index;
 }
 
@@ -207,17 +241,8 @@ SYNIMA.getGeneCategoryStatuses = function (aligncoordsText) {
         });
       }
 
-      const keys = synimaGeneLookupKeys(line.query);
-      const hitMap = new Map();
-      for (const key of keys) {
-        const entry = idx[key];
-        if (!entry || !Array.isArray(entry.hits)) continue;
-        for (const h of entry.hits) {
-          const hk = `${h.genome}|${h.contig}|${h.start}|${h.end}`;
-          if (!hitMap.has(hk)) hitMap.set(hk, h);
-        }
-      }
-      const hits = Array.from(hitMap.values());
+      // Qualified queries must not match a gene with the same ID in another genome.
+      const hits = idx[line.query.toLowerCase()]?.hits || [];
       const genomes = Array.from(new Set(hits.map((h) => h.genome))).sort();
       return Object.assign({}, line, {
         found: hits.length > 0,
@@ -263,6 +288,29 @@ SYNIMA.getGeneMarkersForSynteny = function (aligncoordsText) {
   return markers;
 };
 
+function synimaCanUseOrthologCategories() {
+  return Boolean(SYNIMA.getCloudBaseUrl() && SYNIMA.getCloudApiKey());
+}
+
+function synimaUpdateOrthologCategoryControls() {
+  const loggedIn = synimaCanUseOrthologCategories();
+  document.querySelectorAll("[data-ortholog-category]").forEach((select) => {
+    const hasCategories = select.options.length > 1;
+    select.disabled = !loggedIn || !hasCategories;
+    const message = !loggedIn ? "Log in to use ortholog categories"
+      : hasCategories ? "Choose a category" : "No categories in this report";
+    select.options[0].textContent = message;
+    select.parentElement.title = select.disabled ? message : "";
+  });
+}
+
+window.addEventListener("synima-cloud-auth-changed", synimaUpdateOrthologCategoryControls);
+window.addEventListener("storage", (event) => {
+  if (event.key === null || event.key === window.SYNIMA_CLOUD_KEYS.apiKey) {
+    synimaUpdateOrthologCategoryControls();
+  }
+});
+
 SYNIMA.showGenes = function () {
   const app = document.getElementById("app");
   if (!app) return;
@@ -270,6 +318,10 @@ SYNIMA.showGenes = function () {
   const raw = document.getElementById("data-synteny");
   const data = raw ? JSON.parse(raw.textContent || "{}") : {};
   const aligncoords = data.aligncoords || "";
+  const orthologCategories = synimaOrthologGeneData().categories.map(({ genome, kind, genes }) => ({
+    name: kind === "unique" ? `unique in ${genome}` : `uniquely lost in ${genome}`,
+    genesText: genes.join("\n")
+  }));
 
   app.classList.add("max-w-6xl", "mx-auto");
   app.style.maxWidth = "";
@@ -297,6 +349,9 @@ SYNIMA.showGenes = function () {
     const items = SYNIMA.getGeneCategoryStatuses(aligncoords);
 
     host.innerHTML = items.map(({ category, lines }) => {
+      const options = orthologCategories.map(({ name, genesText }, i) =>
+        `<option value="${i}" ${category.name === name && category.genesText === genesText ? "selected" : ""}>${synimaEscapeHtml(name)}</option>`
+      ).join("");
       const rows = lines.length ? lines.map((st) => {
         if (st.isBlank) {
           return `
@@ -338,6 +393,12 @@ SYNIMA.showGenes = function () {
             <label>Name
               <input type="text" data-gene-field="name" value="${synimaEscapeHtml(category.name)}" maxlength="80" />
             </label>
+            <label>Ortholog Category
+              <select data-gene-field="orthologCategory" data-ortholog-category disabled>
+                <option value="">Choose a category</option>
+                ${options}
+              </select>
+            </label>
             <label>Glyph
               <select data-gene-field="shape">
                 <option value="circle" ${category.shape === "circle" ? "selected" : ""}>Circle</option>
@@ -372,6 +433,7 @@ SYNIMA.showGenes = function () {
         </div>
       `;
     }).join("");
+    synimaUpdateOrthologCategoryControls();
   }
 
   const debouncedInput = (() => {
@@ -398,7 +460,13 @@ SYNIMA.showGenes = function () {
 
     withCategoryFromTarget(fieldEl, (arr, idx) => {
       const field = fieldEl.getAttribute("data-gene-field");
-      if (field === "name" || field === "genesText" || field === "shape" || field === "color") {
+      if (field === "orthologCategory") {
+        if (fieldEl.disabled || !synimaCanUseOrthologCategories() || fieldEl.value === "") return;
+        const preset = orthologCategories[Number(fieldEl.value)];
+        if (!preset) return;
+        arr[idx].name = preset.name;
+        arr[idx].genesText = preset.genesText;
+      } else if (field === "name" || field === "genesText" || field === "shape" || field === "color") {
         arr[idx][field] = fieldEl.value;
       } else if (field === "size" || field === "yOffset") {
         arr[idx][field] = Number(fieldEl.value);
@@ -443,9 +511,10 @@ SYNIMA.showGenes = function () {
 
   document.getElementById("synima-gene-add-category")?.addEventListener("click", () => {
     const arr = window.SYNIMA_STATE.geneCategories || [];
-    const next = synimaDefaultGeneCategory();
-    next.name = `Category ${arr.length + 1}`;
-    arr.push(next);
+    const unusedStyle = SYNIMA_GENE_CATEGORY_STYLES.findIndex(([color, shape]) =>
+      !arr.some(category => category.color.toLowerCase() === color && category.shape === shape)
+    );
+    arr.push(synimaDefaultGeneCategory(arr.length, unusedStyle < 0 ? arr.length : unusedStyle));
     synimaSaveGeneCategories();
     renderCategories();
     rerenderSyntenyIfReady();

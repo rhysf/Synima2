@@ -349,6 +349,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
 
+        let categories = ortholog_summary::gene_categories(&clusters_and_unique, &current_genomes)?;
+        let category_path = clusters_and_unique.with_extension("clusters_and_unique.summary");
+        ortholog_summary::write_gene_category_summary(&category_path, &categories, &logger)?;
+
         // Write cluster dist per genome
         let cluster_dist_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.{}.cluster_dist_per_genome.txt", &args.alignment_type, method_label));
         ortholog_summary::write_cluster_dist_per_genome(&clusters_and_unique, &cluster_dist_path, &logger);
@@ -499,7 +503,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             dagchainer_chains: args.dagchainer_chains,
             genetic_code: args.genetic_code,
         };
-        synima::process_ortholog_summaries(&gene_clusters_out_dir, &index_path, params)?;
+        let source = ortholog_summary::detect_orthology_source(preferred_method, &orthofinder_out_dir, &omcl_out_dir, &rbh_out_dir, &logger);
+        let method_label = source.method_label();
+        let clusters_path = gene_clusters_out_dir.join(format!("GENE_CLUSTERS_SUMMARIES.{}.{}.clusters_and_uniques", args.alignment_type, method_label));
+        let categories = if clusters_path.is_file() {
+            ortholog_summary::gene_categories(&clusters_path, &current_genomes)?
+        } else {
+            Vec::new()
+        };
+        synima::process_ortholog_summaries(&gene_clusters_out_dir, &index_path, params, categories, &combined_gff_path)?;
 
         // update tree
         if tree_out_dir.is_dir() {
@@ -513,8 +525,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         synima::inject_json_into_html(&index_path, "data-methods", &json)?;
 
         // Determine the genome order from the tree
-        let source = ortholog_summary::detect_orthology_source(preferred_method, &orthofinder_out_dir, &omcl_out_dir, &rbh_out_dir, &logger);
-        let method_label = source.method_label();
         let tree_file = tree_out_dir.join(format!("SC_core_concat.{}.{}.mfa.tree", args.alignment_type, method_label));
         let newick = fs::read_to_string(tree_file)?;
         let leaf_order = tree::extract_leaf_order_from_newick(&newick);

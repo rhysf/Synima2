@@ -415,7 +415,7 @@ function renderTreeSvg(root, containerId, opts={}) {
   // Horizontal scaling
   let scaleX = isMini ? 250 / (maxX || 1) : 500 / (maxX || 1);
   let offsetX = isMini ? 40 : 20;
-  let offsetY = isMini ? 40 : 20;
+  const offsetY = isMini ? 40 + SYNIMA_SYNTENY_TOP_PADDING : 20;
 
   let lines = [];
   let labels = [];

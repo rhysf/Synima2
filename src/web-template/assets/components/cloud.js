@@ -13,7 +13,7 @@ SYNIMA.showCloud = async function () {
   app.innerHTML = `
     <h1 class="text-3xl font-bold mb-6">Cloud Reports</h1>
     <div class="section">
-      <p class="mb-3">Cloud status: <strong>${state.statusLabel}</strong></p>
+      ${!state.enabled || !state.online ? `<p class="mb-3"><strong>${state.statusLabel}</strong></p>` : ""}
       <p class="mb-5">${connected ? `Connected as <strong>${state.userEmail || "user"}</strong>.` : "Not connected yet."}</p>
 
       <div class="section" style="margin-top: 1rem;">

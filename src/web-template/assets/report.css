@@ -916,6 +916,11 @@ body {
   min-width: 12rem;
 }
 
+.synima-gene-card select[data-ortholog-category]:disabled {
+  color: #94a3b8;
+  pointer-events: none;
+}
+
 .synima-gene-card textarea {
   min-height: 9rem;
   width: min(44rem, 100%);

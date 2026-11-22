@@ -200,17 +200,10 @@ SYNIMA.renderHeader = function () {
 
     const statusNodes = document.querySelectorAll("[data-cloud-status]");
     statusNodes.forEach((node) => {
-      let text = cloudState.statusLabel;
-      if (cloudState.enabled && cloudState.online && cloudState.reachable) {
-        text = hasAuth ? "" : "Not logged in";
-      }
+      const text = cloudState.statusLabel;
       node.textContent = text;
       node.hidden = !text;
-      if (cloudState.enabled && cloudState.online && cloudState.reachable) {
-        node.classList.add("synima-cloud-status-ok");
-      } else {
-        node.classList.remove("synima-cloud-status-ok");
-      }
+      node.classList.toggle("synima-cloud-status-ok", text === "Not logged in");
     });
 
     setCloudAction("login", cloudState.enabled, "#");
@@ -233,7 +226,6 @@ SYNIMA.renderHeader = function () {
       baseUrl: "",
       enabled: false,
       online: navigator.onLine !== false,
-      reachable: false,
       userEmail: "",
       statusLabel: "Offline mode"
     }));
