@@ -14,16 +14,51 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Serialize;
 
 #[derive(Serialize)]
-#[serde(rename_all = "lowercase")]
-enum OrthologGeneCategoryKind {
+#[serde(rename_all = "snake_case")]
+pub(crate) enum OrthologGeneCategoryKind {
     Unique,
+    Aux,
+    CoreMulti,
+    #[serde(rename = "core_1to1")]
+    CoreOneToOne,
     Lost,
+}
+
+impl OrthologGeneCategoryKind {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unique => "unique",
+            Self::Aux => "aux",
+            Self::CoreMulti => "core_multi",
+            Self::CoreOneToOne => "core_1to1",
+            Self::Lost => "lost",
+        }
+    }
+}
+
+pub(crate) fn classify_ortholog_group(
+    genome_count: usize,
+    present: usize,
+    single_copy: bool,
+) -> OrthologGeneCategoryKind {
+    if genome_count > 0 && present == genome_count {
+        if single_copy {
+            OrthologGeneCategoryKind::CoreOneToOne
+        } else {
+            OrthologGeneCategoryKind::CoreMulti
+        }
+    } else if present == 1 {
+        OrthologGeneCategoryKind::Unique
+    } else {
+        OrthologGeneCategoryKind::Aux
+    }
 }
 
 #[derive(Serialize)]
 pub struct OrthologGeneCategory {
     kind: OrthologGeneCategoryKind,
-    genome: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    genome: Option<String>,
     pub genes: BTreeSet<String>,
 }
 
@@ -42,6 +77,7 @@ pub fn gene_categories(
         .map(|genome| (genome, Default::default()))
         .collect();
     let mut clusters: HashMap<&str, Vec<(&str, &str)>> = HashMap::new();
+    let mut represented_genomes = HashSet::new();
     for (i, line) in text.lines().enumerate() {
         if line.trim().is_empty() {
             continue;
@@ -54,36 +90,65 @@ pub fn gene_categories(
         };
         if by_genome.contains_key(genome) {
             clusters.entry(cluster).or_default().push((genome, gene));
+            represented_genomes.insert(genome);
         }
     }
 
     let genome_count = by_genome.len();
+    let mut aux = BTreeSet::new();
+    let mut core_multi = BTreeSet::new();
+    let mut core_1to1 = BTreeSet::new();
     for members in clusters.values() {
         let present: HashSet<_> = members.iter().map(|&(genome, _)| genome).collect();
+        let qualified_genes = || members.iter().map(|&(genome, gene)| format!("{genome}|{gene}"));
+        match classify_ortholog_group(
+            represented_genomes.len(),
+            present.len(),
+            members.len() == present.len(),
+        ) {
+            OrthologGeneCategoryKind::Aux => aux.extend(qualified_genes()),
+            OrthologGeneCategoryKind::CoreMulti => core_multi.extend(qualified_genes()),
+            OrthologGeneCategoryKind::CoreOneToOne => core_1to1.extend(qualified_genes()),
+            _ => {}
+        }
+
         if present.len() == 1 {
             let genome = members[0].0;
-            by_genome.get_mut(genome).unwrap().0.extend(
-                members.iter().map(|&(genome, gene)| format!("{genome}|{gene}")),
-            );
+            by_genome.get_mut(genome).unwrap().0.extend(qualified_genes());
         }
         if present.len() + 1 == genome_count {
             if let Some(missing) = by_genome.keys().copied().find(|genome| !present.contains(genome)) {
-                by_genome.get_mut(missing).unwrap().1.extend(
-                    members.iter().map(|&(genome, gene)| format!("{genome}|{gene}")),
-                );
+                by_genome.get_mut(missing).unwrap().1.extend(qualified_genes());
             }
         }
     }
 
-    let mut categories = Vec::with_capacity(2 * genome_count);
+    let unique = by_genome.values().flat_map(|(genes, _)| genes.iter().cloned()).collect();
+    let mut categories: Vec<_> = [
+        (OrthologGeneCategoryKind::Unique, unique),
+        (OrthologGeneCategoryKind::Aux, aux),
+        (OrthologGeneCategoryKind::CoreMulti, core_multi),
+        (OrthologGeneCategoryKind::CoreOneToOne, core_1to1),
+    ]
+    .into_iter()
+    .map(|(kind, genes)| OrthologGeneCategory { kind, genome: None, genes })
+    .collect();
+    let mut losses = Vec::with_capacity(genome_count);
     for (genome, (unique, lost)) in by_genome {
-        categories.push(OrthologGeneCategory { kind: OrthologGeneCategoryKind::Unique, genome: genome.to_owned(), genes: unique });
+        categories.push(OrthologGeneCategory {
+            kind: OrthologGeneCategoryKind::Unique,
+            genome: Some(genome.to_owned()),
+            genes: unique,
+        });
         if genome_count > 1 {
-            categories.push(OrthologGeneCategory { kind: OrthologGeneCategoryKind::Lost, genome: genome.to_owned(), genes: lost });
+            losses.push(OrthologGeneCategory {
+                kind: OrthologGeneCategoryKind::Lost,
+                genome: Some(genome.to_owned()),
+                genes: lost,
+            });
         }
     }
-    // Group the unique sections first, then the loss sections, each in genome order.
-    categories.sort_by_key(|category| matches!(category.kind, OrthologGeneCategoryKind::Lost));
+    categories.extend(losses);
     Ok(categories)
 }
 
@@ -94,11 +159,11 @@ pub fn write_gene_category_summary(
 ) -> std::io::Result<()> {
     let mut writer = open_bufwrite(output_path, logger, "write_gene_category_summary");
     for category in categories {
-        let header = match category.kind {
-            OrthologGeneCategoryKind::Unique => "unique_in",
-            OrthologGeneCategoryKind::Lost => "uniquely_lost_in",
-        };
-        writeln!(writer, "#{header}_{}", category.genome)?;
+        match (&category.kind, &category.genome) {
+            (OrthologGeneCategoryKind::Unique, Some(genome)) => writeln!(writer, "#unique_in_{genome}")?,
+            (OrthologGeneCategoryKind::Lost, Some(genome)) => writeln!(writer, "#uniquely_lost_in_{genome}")?,
+            (kind, _) => writeln!(writer, "#{}", kind.as_str())?,
+        }
         for gene in &category.genes {
             writeln!(writer, "{gene}")?;
         }

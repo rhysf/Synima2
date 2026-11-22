@@ -1,4 +1,5 @@
 use crate::logger::Logger;
+use crate::ortholog_summary::classify_ortholog_group;
 use crate::util::{open_bufwrite};
 
 use std::collections::{HashMap, HashSet};
@@ -299,22 +300,9 @@ fn write_cluster_dist_summary(cluster_counts_file: &Path, logger: &Logger) -> Pa
             counts_for_cluster.push((genome.clone(), count));
         }
 
-        let counts_gt_zero: Vec<&(String, u64)> = counts_for_cluster.iter().filter(|(_, c)| *c > 0).collect();
-
-        let classification = if !counts_for_cluster.is_empty() && counts_gt_zero.len() == counts_for_cluster.len() {
-            // CORE (present in all genomes)
-            let all_one = counts_for_cluster.iter().all(|(_, c)| *c == 1);
-
-            if all_one {
-                "core_1to1"
-            } else {
-                "core_multi"
-            }
-        } else if counts_gt_zero.len() == 1 {
-            "unique"
-        } else {
-            "aux"
-        };
+        let present = counts_for_cluster.iter().filter(|(_, count)| *count > 0).count();
+        let single_copy = counts_for_cluster.iter().all(|(_, count)| *count == 1);
+        let classification = classify_ortholog_group(genomes.len(), present, single_copy).as_str();
 
         for (genome, count) in counts_for_cluster {
             if count == 0 {

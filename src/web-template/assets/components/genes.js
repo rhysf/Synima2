@@ -126,6 +126,13 @@ function synimaGeneLookupKeys(name) {
   return Array.from(keys);
 }
 
+const ORTHOLOG_SUMMARY_CATEGORY_NAMES = new Map([
+  ["unique", "Unique"],
+  ["aux", "Aux"],
+  ["core_multi", "Core (multi)"],
+  ["core_1to1", "Core (1:1)"]
+]);
+
 let orthologGeneDataCache;
 function synimaOrthologGeneData() {
   const raw = document.getElementById("data-orthologs")?.textContent || "";
@@ -135,12 +142,34 @@ function synimaOrthologGeneData() {
   orthologGeneDataCache = {
     raw,
     categories: Array.isArray(data.gene_categories)
-      ? data.gene_categories.filter(c => c && typeof c.genome === "string" && Array.isArray(c.genes)
-        && (c.kind === "unique" || c.kind === "lost"))
+      ? data.gene_categories.filter(c => c && Array.isArray(c.genes)
+        && (typeof c.genome === "string"
+          ? c.kind === "unique" || c.kind === "lost"
+          : c.genome == null && ORTHOLOG_SUMMARY_CATEGORY_NAMES.has(c.kind)))
       : [],
     loci: Array.isArray(data.category_gene_loci) ? data.category_gene_loci : []
   };
   return orthologGeneDataCache;
+}
+
+function synimaOrthologCategoryPresets(categories) {
+  const specific = categories.filter(category => typeof category.genome === "string");
+  const presets = [];
+  for (const [kind, name] of ORTHOLOG_SUMMARY_CATEGORY_NAMES) {
+    const summary = categories.find(category => category.genome == null && category.kind === kind);
+    if (summary) {
+      presets.push({ name, genesText: summary.genes.join("\n") });
+    } else if (kind === "unique" && specific.some(category => category.kind === "unique")) {
+      // Older reports contain only per-genome categories.
+      const genes = specific.filter(category => category.kind === "unique").flatMap(category => category.genes);
+      presets.push({ name, genesText: [...new Set(genes)].sort().join("\n") });
+    }
+  }
+  for (const { genome, kind, genes } of specific) {
+    const name = kind === "unique" ? `unique in ${genome}` : `uniquely lost in ${genome}`;
+    presets.push({ name, genesText: genes.join("\n") });
+  }
+  return presets;
 }
 
 function synimaParseAligncoordsGeneIndex(aligncoordsText) {
@@ -318,10 +347,7 @@ SYNIMA.showGenes = function () {
   const raw = document.getElementById("data-synteny");
   const data = raw ? JSON.parse(raw.textContent || "{}") : {};
   const aligncoords = data.aligncoords || "";
-  const orthologCategories = synimaOrthologGeneData().categories.map(({ genome, kind, genes }) => ({
-    name: kind === "unique" ? `unique in ${genome}` : `uniquely lost in ${genome}`,
-    genesText: genes.join("\n")
-  }));
+  const orthologCategories = synimaOrthologCategoryPresets(synimaOrthologGeneData().categories);
 
   app.classList.add("max-w-6xl", "mx-auto");
   app.style.maxWidth = "";

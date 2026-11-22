@@ -221,7 +221,7 @@ Synima -r Repo_spec.txt -s ortholog-summary
 The ortholog-summary step will:
 
 * detect which orthology output is present (OrthoFinder first, then OrthoMCL, then RBH)
-* write a `*.clusters_and_unique.summary` file with one gene ID per line under `#unique_in_<genome>` and `#uniquely_lost_in_<genome>` headings. A unique group occurs in just one genome. A group listed as uniquely lost occurs in every other genome, and its entries are the genes observed in those genomes. Gene IDs use `genome|gene` to distinguish IDs shared between genomes.
+* write a `*.clusters_and_unique.summary` file with one gene ID per line under `#unique`, `#aux`, `#core_multi`, and `#core_1to1`, followed by the per-genome `#unique_in_<genome>` and `#uniquely_lost_in_<genome>` sections. A unique group occurs in just one genome. A group listed as uniquely lost occurs in every other genome, and its entries are the genes observed in those genomes. Gene IDs use `genome|gene` to distinguish IDs shared between genomes.
 * parse the corresponding orthogroup or cluster files
 * produce a set of summary tables and basic plots in a GENE_CLUSTERS_SUMMARIES.* output directory, suitable for phylogenetic and synteny analysis
 
@@ -247,7 +247,7 @@ Synima -r Repo_spec.txt -s synima
 * There are 5 tabs at the top, which take you different pages (Orthologs, Tree, Synteny, Methods, About).
 
 * The orthologs tab gives details about the methods used to compute orthologs, and a javascript generated stacked barchart, that can be downloaded at SVG or PNG. Note: If R is installed, there will also be an R generated plot in the synima_step4-ortholog-summary/ folder. The R code to generate that plot is also provided.
-* After signing in, use **Ortholog Category** on the Genes tab to fill a category's name and gene list from the report. With parsed gene coordinates available, these genes can be marked on the Synteny plot.
+* After signing in, use **Ortholog Category** on the Genes tab to fill a category's name and gene list from the report. Choose **Unique**, **Aux**, **Core (multi)**, **Core (1:1)**, or a per-genome category. With parsed gene coordinates available, these genes can be marked on the Synteny plot.
 
 * The tree tab gives details about how the phylogenetic tree was generated, the tree in newick format, and a tree generated in javascript. Default settings are midpoint rooted. The tree can be downloaded as an external SVG or PNG. There are various options below, which include
 
